@@ -1,16 +1,15 @@
 mod io;
-use io::read_hashmap_from_file;
-use mutators::random_mutate;
+use io::{read_hashmap_from_file, dump_hashmap_to_file};
+use problem::ElementPlacementProblem;
 use std::{collections::HashMap, convert::identity};
+use time::Duration;
 
 mod metrics;
-use metrics::{
-    evaluate, make_dummy_result, merge_elements_and_frequency, RankedData,
+use metrics::{merge_elements_and_frequency, RankedData, MetricWeights,
 };
 
-use crate::{metrics::is_better, io::dump_hashmap_to_file};
-
 mod mutators;
+mod problem;
 
 fn parse_element_list(raw: String) -> Vec<String> {
     raw.chars().map(|x| x.to_string()).collect()
@@ -20,40 +19,6 @@ pub struct Assets {
     characters: Vec<RankedData>,
     words: Vec<RankedData>,
     equivalence: HashMap<String, f64>,
-}
-
-pub fn tanxin_optimize(
-    initial: &HashMap<String, String>,
-    mutatable_keys: &Vec<String>,
-    assets: &Assets,
-) {
-    let mut best_combined_result = (make_dummy_result(1), make_dummy_result(2));
-    let mut best_map = initial.clone();
-    let mut j = 0;
-    while j < 100 {
-        let next = random_mutate(&best_map, mutatable_keys);
-        let characters_result = evaluate(
-            &assets.characters,
-            &next,
-            &&assets.equivalence,
-            &vec![1500_usize],
-        );
-        let words_result = evaluate(
-            &&assets.words,
-            &next,
-            &assets.equivalence,
-            &vec![2000_usize, 10000_usize],
-        );
-        let combined_result = (characters_result, words_result);
-        if is_better(&combined_result, &best_combined_result) {
-            best_combined_result = combined_result;
-            best_map = next;
-            println!("{:?}", &best_combined_result);
-            let name = format!("output/{}.txt", j);
-            dump_hashmap_to_file(&name, &best_map);
-        }
-        j += 1;
-    }
 }
 
 fn preprocess() -> Assets {
@@ -77,13 +42,17 @@ fn preprocess() -> Assets {
 }
 
 fn main() {
-    let map = read_hashmap_from_file("assets/map.txt", identity);
+    let initial = read_hashmap_from_file("assets/map.txt", identity);
     let fixed_map = read_hashmap_from_file("assets/fixed_map.txt", identity);
     let assets = preprocess();
-    let mutatable_keys: Vec<String> = map
+    let mutable_keys: Vec<String> = initial
         .iter()
         .map(|(k, _)| k.to_string())
         .filter(|k| fixed_map.get(k).is_some())
         .collect();
-    tanxin_optimize(&map, &mutatable_keys, &assets);
+    let adjoint_metric = MetricWeights::new();
+    let mut problem = ElementPlacementProblem::new(initial, mutable_keys, assets, adjoint_metric);
+    let runtime = Duration::new(10, 0);
+    let solution = metaheuristics::hill_climbing::solve(&mut problem, runtime);
+    dump_hashmap_to_file("solution.txt", &solution);
 }
