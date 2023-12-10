@@ -1,58 +1,32 @@
-mod io;
-use io::{read_hashmap_from_file, dump_hashmap_to_file};
-use problem::ElementPlacementProblem;
-use std::{collections::HashMap, convert::identity};
 use time::Duration;
-
+mod io;
+use io::{preprocess, read_and_simplify_elements};
+mod config;
+use config::Config;
 mod metrics;
-use metrics::{merge_elements_and_frequency, RankedData, MetricWeights,
-};
-
+use metrics::MetricWeights;
 mod mutators;
 mod problem;
+use problem::ElementPlacementProblem;
+mod cli;
+use cli::Args;
+use clap::Parser;
 
-fn parse_element_list(raw: String) -> Vec<String> {
-    raw.chars().map(|x| x.to_string()).collect()
-}
-
-pub struct Assets {
-    characters: Vec<RankedData>,
-    words: Vec<RankedData>,
-    equivalence: HashMap<String, f64>,
-}
-
-fn preprocess() -> Assets {
-    let character_elements =
-        read_hashmap_from_file("assets/character_elements.txt", parse_element_list);
-    let character_frequency = read_hashmap_from_file("assets/character_frequency.txt", |x| {
-        x.parse::<i32>().unwrap()
-    });
-    let characters = merge_elements_and_frequency(&character_elements, &character_frequency);
-    let word_elements = read_hashmap_from_file("assets/word_elements.txt", parse_element_list);
-    let word_frequency =
-        read_hashmap_from_file("assets/word_frequency.txt", |x| x.parse::<i32>().unwrap());
-    let words = merge_elements_and_frequency(&word_elements, &word_frequency);
-    let equivalence =
-        read_hashmap_from_file("assets/equivalence.txt", |x| x.parse::<f64>().unwrap());
-    Assets {
-        characters,
-        words,
-        equivalence,
-    }
-}
+use crate::encoder::Encoder;
+mod encoder;
 
 fn main() {
-    let initial = read_hashmap_from_file("assets/map.txt", identity);
-    let fixed_map = read_hashmap_from_file("assets/fixed_map.txt", identity);
+    let args = Args::parse();
+    let config = Config::new(&args.config);
     let assets = preprocess();
-    let mutable_keys: Vec<String> = initial
-        .iter()
-        .map(|(k, _)| k.to_string())
-        .filter(|k| fixed_map.get(k).is_some())
-        .collect();
-    let adjoint_metric = MetricWeights::new();
-    let mut problem = ElementPlacementProblem::new(initial, mutable_keys, assets, adjoint_metric);
-    let runtime = Duration::new(10, 0);
+    let elements = read_and_simplify_elements(&args.elements, &config);
+    let encoder = Encoder::new(&config);
+    // let (initial, mutable_keys) = read_keymap("assets/map.txt");
+    // 这里要测试使用 YAML 配置文件提供输入，暂时把原来的屏蔽了，所以不能定义 mutable_keys。后面会修正。
+    let mutable_keys = vec![];
+    let weights = MetricWeights::new();
+    let mut problem = ElementPlacementProblem::new(config.form.mapping, mutable_keys, assets, elements, weights, encoder);
+    let runtime = Duration::new(1, 0);
     let solution = metaheuristics::hill_climbing::solve(&mut problem, runtime);
-    dump_hashmap_to_file("solution.txt", &solution);
+    ElementPlacementProblem::write_solution("solution.txt", &solution);
 }

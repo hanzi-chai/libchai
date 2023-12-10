@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 pub struct RankedData {
-    elements: Vec<String>,
+    code: String,
     frequency: i32,
 }
 
@@ -14,15 +14,15 @@ fn calculate_total_equivalence(code: &String, equivalence_map: &HashMap<String, 
     total
 }
 
-pub fn merge_elements_and_frequency(
-    elements: &HashMap<String, Vec<String>>,
+pub fn merge_codes_and_frequency(
+    codes: &HashMap<String, String>,
     frequency: &HashMap<String, i32>,
 ) -> Vec<RankedData> {
     let mut rank: Vec<RankedData> = Vec::new();
-    for (key, this_elements) in elements {
+    for (key, code) in codes {
         let this_frequency = frequency.get(key).unwrap_or(&0);
         let data = RankedData {
-            elements: this_elements.to_vec(),
+            code: code.to_string(),
             frequency: *this_frequency,
         };
         rank.push(data);
@@ -89,12 +89,12 @@ impl MetricWeights {
 }
 
 pub fn evaluate(
-    ranked: &Vec<RankedData>,
-    keymap: &HashMap<String, String>,
+    codes: &HashMap<String, String>,
+    frequency: &HashMap<String, i32>,
     equivalence_map: &HashMap<String, f64>,
     tiers: &Vec<usize>,
 ) -> PartialMetric {
-    let mut codes: Vec<String> = Vec::new();
+    let ranked = merge_codes_and_frequency(codes, frequency);
     let ntier = tiers.len();
     let mut tiered_duplication: Vec<i32> = tiers.iter().map(|_| 0).collect();
     tiered_duplication.push(0);
@@ -104,14 +104,8 @@ pub fn evaluate(
     let mut total_duplication = 0;
     for (index, data) in ranked.iter().enumerate() {
         total_frequency += data.frequency;
-        let mut code = String::new();
-        for element in &data.elements {
-            if let Some(zone) = keymap.get(element) {
-                code.push_str(zone);
-            }
-        }
-        total_equivalence += calculate_total_equivalence(&code, equivalence_map) * data.frequency as f64;
-        if let Some(_) = occupied_codes.get(&code) {
+        total_equivalence += calculate_total_equivalence(&data.code, equivalence_map) * data.frequency as f64;
+        if let Some(_) = occupied_codes.get(&data.code) {
             for (itier, tier) in tiers.iter().enumerate() {
                 if index <= *tier {
                     tiered_duplication[itier] += 1;
@@ -120,8 +114,7 @@ pub fn evaluate(
             tiered_duplication[ntier] += 1;
             total_duplication += data.frequency;
         }
-        occupied_codes.insert(code.clone());
-        codes.push(code);
+        occupied_codes.insert(data.code.clone());
     }
     let equivalence = total_equivalence / total_frequency as f64;
     let duplication_rate = total_duplication as f64 / total_frequency as f64;
