@@ -1,14 +1,30 @@
-use crate::{config::{Config, WordRule, KeyMap}, io::Elements};
-use std::{collections::HashMap, fmt::Debug};
+use crate::{
+    assets::Assets,
+    config::{Config, KeyMap, WordRule},
+};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    fs::File,
+    io::BufRead,
+    io::BufReader,
+    path::PathBuf,
+};
 
 const MAX_WORD_LENGTH: usize = 20;
 
+pub type Entry = (char, Vec<String>);
+pub type Elements = Vec<Entry>;
 #[derive(Debug)]
 pub struct Encoder {
+    characters: Vec<Entry>,
+    words: Vec<String>,
     // 支持二字词直到十字词
     auto_select_length: usize,
     quick_lookup: [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1],
 }
+
+pub type Code<T> = HashMap<T, String>;
 
 impl Encoder {
     fn parse_formula(s: &String) -> Vec<(isize, isize)> {
@@ -27,7 +43,10 @@ impl Encoder {
         ret
     }
 
-    pub fn new(config: &Config) -> Encoder {
+    pub fn new(config: &Config, mut characters: Elements, assets: &Assets) -> Encoder {
+        let words: Vec<String> = assets.words.keys().map(|x| x.to_string()).collect();
+        let cf = &assets.characters;
+        characters.sort_by(|a, b| cf.get(&a.0).unwrap_or(&0).cmp(&cf.get(&b.0).unwrap_or(&0)));
         let mut quick_lookup: [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] = Default::default();
         for i in 2..=MAX_WORD_LENGTH {
             // 尝试从规则列表中找到一个能符合当前长度的规则
@@ -53,16 +72,17 @@ impl Encoder {
                 panic!("没有找到造 {} 字词的规则", i);
             }
         }
-        Encoder { auto_select_length: config.encoder.auto_select_length, quick_lookup }
+        Encoder {
+            characters,
+            words,
+            auto_select_length: config.encoder.auto_select_length,
+            quick_lookup,
+        }
     }
 
-    pub fn encode_characters(
-        &self,
-        character_elements: &Elements,
-        keymap: &KeyMap,
-    ) -> HashMap<String, String> {
-        let mut codes: HashMap<String, String> = HashMap::new();
-        for (key, elements) in character_elements {
+    pub fn encode_characters(&self, keymap: &KeyMap) -> Code<char> {
+        let mut codes: Code<char> = HashMap::new();
+        for (key, elements) in &self.characters {
             let mut code = String::new();
             for element in elements {
                 if let Some(key) = keymap.get(element) {
@@ -72,9 +92,31 @@ impl Encoder {
             if code.len() < self.auto_select_length {
                 code.push('_');
             }
-            codes.insert(key.to_string(), code);
+            codes.insert(*key, code);
         }
         return codes;
+    }
+
+    pub fn encode_characters_reduced(&self, character_codes: &Code<char>) -> Code<char> {
+        let mut reduced_codes: Code<char> = HashMap::new();
+        let mut known_reduced_codes: HashSet<String> = HashSet::new();
+        for (character, code) in character_codes {
+            for i in 1..code.len() {
+                let mut reduced_code = code[0..i].to_string();
+                if reduced_code.len() < self.auto_select_length {
+                    reduced_code.push('_');
+                }
+                if let None = known_reduced_codes.get(&reduced_code) {
+                    reduced_codes.insert(*character, reduced_code.clone());
+                    known_reduced_codes.insert(reduced_code);
+                    break;
+                }
+                if i + 1 == code.len() {
+                    reduced_codes.insert(*character, code.to_string());
+                }
+            }
+        }
+        reduced_codes
     }
 
     fn negative_index<T: Debug>(vector: &Vec<T>, index: isize) -> &T {
@@ -85,20 +127,16 @@ impl Encoder {
         };
     }
 
-    pub fn encode_words(
-        &self,
-        character_codes: &HashMap<String, String>,
-        word_list: &Vec<String>,
-    ) -> HashMap<String, String> {
-        let mut codes: HashMap<String, String> = HashMap::new();
-        for word in word_list {
+    pub fn encode_words(&self, character_codes: &Code<char>) -> Code<String> {
+        let mut codes: Code<String> = HashMap::new();
+        for word in &self.words {
             let characters: Vec<char> = word.chars().collect();
             let length = characters.len();
             let rule = &self.quick_lookup[length - 2];
             let mut code = String::new();
             for (chi, coi) in rule {
                 let character = Self::negative_index(&characters, *chi);
-                if let Some(character_code) = character_codes.get(&character.to_string()) {
+                if let Some(character_code) = character_codes.get(character) {
                     let keys = character_code.clone().chars().collect();
                     let key = Self::negative_index(&keys, *coi);
                     code.push(*key);
@@ -108,4 +146,24 @@ impl Encoder {
         }
         return codes;
     }
+
+    pub fn encode(&self, keymap: &KeyMap) -> (Code<char>, Code<String>) {
+        let character_codes = self.encode_characters(keymap);
+        let word_codes = self.encode_words(&character_codes);
+        (character_codes, word_codes)
+    }
+}
+
+pub fn read_elements(name: &PathBuf) -> Vec<Entry> {
+    let mut elements: Vec<Entry> = Vec::new();
+    let file = File::open(name).expect("Failed to open file");
+    let reader = BufReader::new(file);
+    for line in reader.lines() {
+        let line = line.expect("cannot read line");
+        let fields: Vec<&str> = line.trim().split('\t').collect();
+        let char = fields[0].chars().next().unwrap();
+        let elems = fields[1].split(' ').map(|x| x.to_string()).collect();
+        elements.push((char, elems));
+    }
+    elements
 }

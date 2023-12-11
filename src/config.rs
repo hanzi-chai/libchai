@@ -68,7 +68,13 @@ impl Config {
         for (_element, _mapped) in _mapping {
             let element = _element.as_str().unwrap();
             let mapped: Vec<char> = _mapped.as_str().unwrap().chars().collect();
-            mapping.insert(element.to_string(), mapped[0]);
+            if mapped.len() == 1 {
+                mapping.insert(element.to_string(), mapped[0]);
+            } else {
+                for (index, key) in mapped.iter().enumerate() {
+                    mapping.insert(format!("{}.{}", element.to_string(), index), *key);
+                }
+            }
         }
         for (_element, _mapped) in _grouping {
             let element = _element.as_str().unwrap();
