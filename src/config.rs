@@ -1,6 +1,5 @@
 use std::{fs, vec, collections::HashMap};
-use linked_hash_map::LinkedHashMap;
-use yaml_rust::{Yaml, YamlLoader, YamlEmitter};
+use yaml_rust::{Yaml, YamlLoader};
 use crate::encoder::Elements;
 
 pub type KeyMap = HashMap<String, char>;
@@ -94,6 +93,7 @@ pub struct OptimizationConfig {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub yaml: Yaml,
     pub form: FormConfig,
     pub encoder: EncoderConfig,
     pub optimization: OptimizationConfig,
@@ -102,9 +102,12 @@ pub struct Config {
 impl Config {
     pub fn new(name: &String) -> Self {
         let content = fs::read_to_string(name).expect("Should have been able to read the file");
-        let raw = YamlLoader::load_from_str(&content).unwrap();
-        let yaml = raw[0].clone();
-        Self::build_config(&yaml)
+        let mut multi = YamlLoader::load_from_str(&content).unwrap();
+        let yaml = multi.pop().unwrap();
+        let encoder = Self::build_config_encoder(&yaml["encoder"]);
+        let form = Self::build_config_form(&yaml["form"]);
+        let optimization = Self::build_config_optimization(&yaml["optimization"]);
+        Config { yaml, form, encoder, optimization }
     }
 
     fn build_config_form(yaml: &Yaml) -> FormConfig {
@@ -218,13 +221,6 @@ impl Config {
         OptimizationConfig { objective, constraints, metaheuristic }
     }
 
-    pub fn build_config(yaml: &Yaml) -> Config {
-        let encoder = Self::build_config_encoder(&yaml["encoder"]);
-        let form = Self::build_config_form(&yaml["form"]);
-        let optimization = Self::build_config_optimization(&yaml["optimization"]);
-        Config { form, encoder, optimization }
-    }
-
     pub fn validate_elements(&self, elements: &Elements) {
         let mapping = &self.form.mapping;
         for (_, elems) in elements {
@@ -234,21 +230,5 @@ impl Config {
                 }
             }
         }
-    }
-
-    pub fn dump_config(&self) -> Yaml {
-        let mut map: LinkedHashMap<Yaml, Yaml> = LinkedHashMap::new();
-        for (key, value) in &self.form.mapping {
-            map.insert(Yaml::String(key.to_string()), Yaml::String(value.to_string()));
-        }
-        Yaml::Hash(map)
-    }
-
-    pub fn write_config(&self, path: &String) {
-        let yaml = self.dump_config();
-        let mut dump = String::new();
-        let mut emitter = YamlEmitter::new(&mut dump);
-        emitter.dump(&yaml).unwrap();
-        fs::write(path, dump).unwrap();
     }
 }

@@ -1,5 +1,6 @@
 use crate::assets::Assets;
 use crate::assets::Frequency;
+use crate::config::Config;
 use crate::config::ObjectiveConfig;
 use crate::config::PartialMetricWeights;
 use crate::encoder::Code;
@@ -30,10 +31,10 @@ pub fn merge_codes_and_frequency<T: Eq + Hash>(
     return rank;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TieredMetric {
     pub top: Option<usize>,
-    pub duplication: usize
+    pub duplication: usize,
 }
 
 impl Display for TieredMetric {
@@ -43,12 +44,13 @@ impl Display for TieredMetric {
         } else {
             String::from("全部：")
         };
-        f.write_str(&format!("{} 选重数 {}\n", leading, self.duplication)).unwrap();
+        f.write_str(&format!("{} 选重数 {}\n", leading, self.duplication))
+            .unwrap();
         Ok(())
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PartialMetric {
     pub tiered: Vec<TieredMetric>,
     pub duplication: Option<f64>,
@@ -58,10 +60,12 @@ pub struct PartialMetric {
 impl Display for PartialMetric {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(duplication) = self.duplication {
-            f.write_str(&format!("\t动态选重率：{:.2}%\n", duplication * 100.0)).unwrap();
+            f.write_str(&format!("\t动态选重率：{:.2}%\n", duplication * 100.0))
+                .unwrap();
         }
         if let Some(equivalence) = self.equivalence {
-            f.write_str(&format!("\t当量：{:.2}\n", equivalence)).unwrap();
+            f.write_str(&format!("\t当量：{:.2}\n", equivalence))
+                .unwrap();
         }
         for tier in &self.tiered {
             f.write_str(&format!("\t{}", tier)).unwrap();
@@ -70,7 +74,7 @@ impl Display for PartialMetric {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Metric {
     pub characters: Option<PartialMetric>,
     pub words: Option<PartialMetric>,
@@ -94,9 +98,10 @@ pub struct Objective {
 }
 
 impl Objective {
-    pub fn new(assets: Assets, config: ObjectiveConfig) -> Objective {
+    pub fn new(config: &Config, assets: Assets) -> Objective {
         Objective {
-            assets, config
+            assets,
+            config: config.optimization.objective.clone(),
         }
     }
 
@@ -158,15 +163,38 @@ impl Objective {
                 real += tiered_duplication[itier] as f64 * duplication_weight / total as f64;
             }
         }
-        let tiered = weights.tiered.iter().enumerate().map(|(itier, tier)| TieredMetric { top: tier.top, duplication: tiered_duplication[itier] }).collect();
-        return (PartialMetric { tiered, duplication, equivalence }, real);
+        let tiered = weights
+            .tiered
+            .iter()
+            .enumerate()
+            .map(|(itier, tier)| TieredMetric {
+                top: tier.top,
+                duplication: tiered_duplication[itier],
+            })
+            .collect();
+        return (
+            PartialMetric {
+                tiered,
+                duplication,
+                equivalence,
+            },
+            real,
+        );
     }
 
-    pub fn evaluate(&self, character_codes: &Code<char>, word_codes: &Code<String>) -> (Metric, f64) {
+    pub fn evaluate(
+        &self,
+        character_codes: &Code<char>,
+        word_codes: &Code<String>,
+    ) -> (Metric, f64) {
         let mut loss = 0.0;
-        let mut metric = Metric { characters: None, words: None };
+        let mut metric = Metric {
+            characters: None,
+            words: None,
+        };
         if let Some(characters) = &self.config.characters {
-            let (partial, accum) = self.evaluate_partial(character_codes, &self.assets.characters, characters);
+            let (partial, accum) =
+                self.evaluate_partial(character_codes, &self.assets.characters, characters);
             loss += accum;
             metric.characters = Some(partial);
         }

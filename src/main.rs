@@ -6,7 +6,7 @@ use config::Config;
 mod objective;
 use objective::Objective;
 mod problem;
-use problem::{ElementPlacementProblem, generic_solve};
+use problem::{generic_solve, ElementPlacementProblem};
 mod cli;
 use clap::Parser;
 use cli::Args;
@@ -23,9 +23,9 @@ fn main() {
     let elements = read_elements(&args.elements);
     config.validate_elements(&elements);
     let encoder = Encoder::new(&config, elements, &assets);
-    let objective = Objective::new(assets, config.optimization.objective.clone());
+    let objective = Objective::new(&config, assets);
     let constraints = Constraints::new(&config);
-    let mut problem = ElementPlacementProblem::new(config, constraints, objective, encoder);
+    let mut problem = ElementPlacementProblem::new(&config, constraints, objective, encoder);
     let runtime = Duration::new(1, 0);
-    let _solution = generic_solve(&mut problem, runtime);
+    let _solution = generic_solve(&config, &mut problem, runtime);
 }

@@ -34,15 +34,19 @@ use time::{Duration, Instant};
 ///```ignore
 ///let solution = metaheuristics::hill_climbing::solve(&mut problem, runtime);
 ///```
-pub fn solve<T>(problem: &mut dyn Metaheuristics<T>, runtime: Duration) -> T {
+pub fn solve<T: Clone, M: Clone>(problem: &mut dyn Metaheuristics<T, M>, runtime: Duration) -> T {
     let mut best_candidate = problem.generate_candidate();
+    let mut best_rank = problem.rank_candidate(&best_candidate);
     let start_time = Instant::now();
 
     while start_time.elapsed() < runtime {
         let next_candidate = problem.tweak_candidate(&best_candidate);
+        let next_rank = problem.rank_candidate(&next_candidate);
 
-        if problem.rank_candidate(&next_candidate) < problem.rank_candidate(&best_candidate) {
+        if next_rank.1 < best_rank.1 {
             best_candidate = next_candidate;
+            best_rank = next_rank;
+            problem.save_candidate(&best_candidate, &best_rank);
         }
     }
 

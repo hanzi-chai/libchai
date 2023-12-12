@@ -70,7 +70,7 @@ pub mod hill_climbing;
 pub mod simulated_annealing;
 
 /// Implement this simple trait to apply metaheuristics to your optimisation problems
-pub trait Metaheuristics<T> {
+pub trait Metaheuristics<T, M> {
     /// Clone the supplied candidate solution
     ///
     ///```ignore
@@ -92,7 +92,7 @@ pub trait Metaheuristics<T> {
     ///     ...
     /// }
     ///```
-    fn rank_candidate(&mut self, candidate: &T) -> f64;
+    fn rank_candidate(&mut self, candidate: &T) -> (M, f64);
 
     /// Clone the supplied candidate solution, then make a small (but random) modification
     ///
@@ -101,5 +101,5 @@ pub trait Metaheuristics<T> {
     ///```
     fn tweak_candidate(&mut self, candidate: &T) -> T;
 
-    fn save_candidate(&self, candidate: &T);
+    fn save_candidate(&self, candidate: &T, rank: &(M, f64));
 }

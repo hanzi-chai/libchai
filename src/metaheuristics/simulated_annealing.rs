@@ -61,9 +61,11 @@ use time::{Duration, Instant};
 ///```ignore
 ///let solution = metaheuristics::simulated_annealing::solve(&mut problem, runtime);
 ///```
-pub fn solve<T>(problem: &mut dyn Metaheuristics<T>, runtime: Duration) -> T {
+pub fn solve<T: Clone, M: Clone>(problem: &mut dyn Metaheuristics<T, M>, runtime: Duration) -> T {
     let mut best_candidate = problem.generate_candidate();
-    let mut annealing_candidate = problem.tweak_candidate(&best_candidate);
+    let mut best_rank = problem.rank_candidate(&best_candidate);
+    let mut annealing_candidate = problem.clone_candidate(&best_candidate);
+    let mut annealing_rank = best_rank.clone();
     let start_time = Instant::now();
     let runtime_in_milliseconds = runtime.whole_milliseconds() as f64;
 
@@ -76,19 +78,20 @@ pub fn solve<T>(problem: &mut dyn Metaheuristics<T>, runtime: Duration) -> T {
         }
 
         let next_candidate = problem.tweak_candidate(&annealing_candidate);
-        let next_is_better =
-            problem.rank_candidate(&next_candidate) < problem.rank_candidate(&annealing_candidate);
+        let next_rank = problem.rank_candidate(&next_candidate);
+        let improvement = next_rank.1 - annealing_rank.1;
         let replacement_threshold = 1.0f64.exp().powf(-10.0 * portion_elapsed.powf(3.0));
 
-        if next_is_better || (thread_rng().gen_range(0.0..1.0) < replacement_threshold) {
+        if improvement < 0.0 || (thread_rng().gen_range(0.0..1.0) < replacement_threshold) {
             annealing_candidate = next_candidate;
+            annealing_rank = next_rank;
         }
 
-        if problem.rank_candidate(&annealing_candidate) < problem.rank_candidate(&best_candidate) {
+        if annealing_rank.1 < best_rank.1 {
+            best_rank = annealing_rank.clone();
             best_candidate = problem.clone_candidate(&annealing_candidate);
-            problem.save_candidate(&best_candidate);
+            problem.save_candidate(&best_candidate, &best_rank);
         }
     }
-    problem.save_candidate(&best_candidate);
     best_candidate
 }
