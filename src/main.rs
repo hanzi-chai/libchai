@@ -6,12 +6,12 @@ use config::Config;
 mod objective;
 use objective::Objective;
 mod problem;
-use problem::ElementPlacementProblem;
+use problem::{ElementPlacementProblem, generic_solve};
 mod cli;
-use cli::Args;
 use clap::Parser;
+use cli::Args;
 mod encoder;
-use encoder::{Encoder, read_elements};
+use encoder::{read_elements, Encoder};
 mod constraints;
 use constraints::Constraints;
 mod metaheuristics;
@@ -21,16 +21,11 @@ fn main() {
     let config = Config::new(&args.config);
     let assets = Assets::new();
     let elements = read_elements(&args.elements);
+    config.validate_elements(&elements);
     let encoder = Encoder::new(&config, elements, &assets);
-    let objective = Objective::new(assets);
+    let objective = Objective::new(assets, config.optimization.objective.clone());
     let constraints = Constraints::new(vec![]);
-    let mut problem = ElementPlacementProblem::new(
-        config.form.mapping,
-        constraints,
-        objective,
-        encoder,
-    );
+    let mut problem = ElementPlacementProblem::new(config, constraints, objective, encoder);
     let runtime = Duration::new(1, 0);
-    let solution = metaheuristics::hill_climbing::solve(&mut problem, runtime);
-    ElementPlacementProblem::write_solution("solution.txt", &solution);
+    let _solution = generic_solve(&mut problem, runtime);
 }

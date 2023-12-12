@@ -77,17 +77,18 @@ pub fn solve<T>(problem: &mut dyn Metaheuristics<T>, runtime: Duration) -> T {
 
         let next_candidate = problem.tweak_candidate(&annealing_candidate);
         let next_is_better =
-            problem.rank_candidate(&next_candidate) > problem.rank_candidate(&annealing_candidate);
+            problem.rank_candidate(&next_candidate) < problem.rank_candidate(&annealing_candidate);
         let replacement_threshold = 1.0f64.exp().powf(-10.0 * portion_elapsed.powf(3.0));
 
         if next_is_better || (thread_rng().gen_range(0.0..1.0) < replacement_threshold) {
             annealing_candidate = next_candidate;
         }
 
-        if problem.rank_candidate(&annealing_candidate) > problem.rank_candidate(&best_candidate) {
+        if problem.rank_candidate(&annealing_candidate) < problem.rank_candidate(&best_candidate) {
             best_candidate = problem.clone_candidate(&annealing_candidate);
+            problem.save_candidate(&best_candidate);
         }
     }
-
+    problem.save_candidate(&best_candidate);
     best_candidate
 }

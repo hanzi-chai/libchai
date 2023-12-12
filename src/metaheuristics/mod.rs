@@ -67,7 +67,6 @@ extern crate rand;
 extern crate time;
 
 pub mod hill_climbing;
-pub mod random_search;
 pub mod simulated_annealing;
 
 /// Implement this simple trait to apply metaheuristics to your optimisation problems
@@ -101,4 +100,6 @@ pub trait Metaheuristics<T> {
     /// let new_candidate = problem.tweak_candidate(&old_candidate);
     ///```
     fn tweak_candidate(&mut self, candidate: &T) -> T;
+
+    fn save_candidate(&self, candidate: &T);
 }

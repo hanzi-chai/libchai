@@ -1,8 +1,11 @@
 use crate::assets::Assets;
 use crate::assets::Frequency;
+use crate::config::ObjectiveConfig;
+use crate::config::PartialMetricWeights;
 use crate::encoder::Code;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::hash::Hash;
 
 pub struct RankedData {
@@ -23,90 +26,77 @@ pub fn merge_codes_and_frequency<T: Eq + Hash>(
         };
         rank.push(data);
     }
-    rank.sort_by(|a, b| a.frequency.cmp(&b.frequency));
+    rank.sort_by(|a, b| b.frequency.cmp(&a.frequency));
     return rank;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TieredMetric {
-    duplication: usize,
-    capacity: [usize; 4],
+    pub top: Option<usize>,
+    pub duplication: usize
 }
 
-pub struct TieredMetricWeights {
-    duplication: f64,
-    capacity: [f64; 4],
+impl Display for TieredMetric {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let leading = if let Some(top) = self.top {
+            format!("前 {}：", top)
+        } else {
+            String::from("全部：")
+        };
+        f.write_str(&format!("{} 选重数 {}\n", leading, self.duplication)).unwrap();
+        Ok(())
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PartialMetric {
-    tiered: Vec<TieredMetric>,
-    length: f64,
-    duplication_rate: f64,
-    equivalence: f64,
+    pub tiered: Vec<TieredMetric>,
+    pub duplication: Option<f64>,
+    pub equivalence: Option<f64>,
 }
 
-pub struct PartialMetricWeights {
-    tiers: Vec<usize>,
-    tiered: Vec<TieredMetricWeights>,
-    length: f64,
-    duplication_rate: f64,
-    equivalence: f64,
+impl Display for PartialMetric {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(duplication) = self.duplication {
+            f.write_str(&format!("\t动态选重率：{:.2}%\n", duplication * 100.0)).unwrap();
+        }
+        if let Some(equivalence) = self.equivalence {
+            f.write_str(&format!("\t当量：{:.2}\n", equivalence)).unwrap();
+        }
+        for tier in &self.tiered {
+            f.write_str(&format!("\t{}", tier)).unwrap();
+        }
+        Ok(())
+    }
 }
 
+#[derive(Debug)]
 pub struct Metric {
-    pub characters: PartialMetric,
-    pub characters_reduced: PartialMetric,
-    pub words: PartialMetric,
-    pub words_reduced: PartialMetric,
+    pub characters: Option<PartialMetric>,
+    pub words: Option<PartialMetric>,
+}
+
+impl Display for Metric {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(characters) = &self.characters {
+            f.write_str(&format!("单字：\n{}", characters)).unwrap();
+        }
+        if let Some(words) = &self.words {
+            f.write_str(&format!("词组：\n{}", words)).unwrap();
+        }
+        Ok(())
+    }
 }
 
 pub struct Objective {
-    characters: PartialMetricWeights,
-    words: PartialMetricWeights,
+    config: ObjectiveConfig,
     assets: Assets,
 }
 
 impl Objective {
-    pub fn new(assets: Assets) -> Objective {
+    pub fn new(assets: Assets, config: ObjectiveConfig) -> Objective {
         Objective {
-            characters: PartialMetricWeights {
-                tiers: vec![1500],
-                tiered: vec![
-                    TieredMetricWeights {
-                        duplication: 10.0,
-                        capacity: [0.0, 5.0, 3.0, 0.0],
-                    },
-                    TieredMetricWeights {
-                        duplication: 10.0,
-                        capacity: [0.0, 5.0, 3.0, 0.0],
-                    },
-                ],
-                length: 1.0,
-                duplication_rate: 10.0,
-                equivalence: 1.0,
-            },
-            words: PartialMetricWeights {
-                tiers: vec![2000, 10000],
-                tiered: vec![
-                    TieredMetricWeights {
-                        duplication: 0.3,
-                        capacity: [0.0, 5.0, 3.0, 0.0],
-                    },
-                    TieredMetricWeights {
-                        duplication: 0.2,
-                        capacity: [0.0, 5.0, 3.0, 0.0],
-                    },
-                    TieredMetricWeights {
-                        duplication: 0.1,
-                        capacity: [0.0, 5.0, 3.0, 0.0],
-                    },
-                ],
-                length: 1.0,
-                duplication_rate: 5.0,
-                equivalence: 1.0,
-            },
-            assets,
+            assets, config
         }
     }
 
@@ -121,90 +111,70 @@ impl Objective {
         total
     }
 
-    pub fn evaluate_partial_metric<T: Eq + Hash>(
+    pub fn evaluate_partial<T: Eq + Hash>(
         &self,
         codes: &HashMap<T, String>,
         frequency: &Frequency<T>,
         weights: &PartialMetricWeights,
-    ) -> PartialMetric {
+    ) -> (PartialMetric, f64) {
         let ranked = merge_codes_and_frequency(codes, frequency);
-        let ntier = weights.tiers.len();
-        let initial_tiered = TieredMetric {
-            duplication: 0,
-            capacity: [0; 4],
-        };
-        let mut tiered: Vec<TieredMetric> = vec![initial_tiered; ntier + 1];
         let mut occupied_codes: HashSet<String> = HashSet::new();
         let mut total_frequency = 0;
-        let mut total_length = 0;
         let mut total_duplication = 0;
+        let mut tiered_duplication = vec![0; weights.tiered.len()];
         let mut total_equivalence = 0.0;
         for (index, data) in ranked.iter().enumerate() {
             total_frequency += data.frequency;
-            total_length += data.code.len() * data.frequency;
             total_equivalence +=
                 self.calculate_total_equivalence(&data.code) * data.frequency as f64;
+            // 重码相关
             if let Some(_) = occupied_codes.get(&data.code) {
                 total_duplication += data.frequency;
-                for (itier, tier) in weights.tiers.iter().enumerate() {
-                    if index <= *tier {
-                        tiered[itier].duplication += 1;
+                for (itier, tier) in weights.tiered.iter().enumerate() {
+                    let top = tier.top.unwrap_or(std::usize::MAX);
+                    if index <= top {
+                        tiered_duplication[itier] += 1;
                     }
                 }
-                tiered[ntier].duplication += 1;
             }
             occupied_codes.insert(data.code.clone());
         }
         let total_frequency = total_frequency as f64;
-        PartialMetric {
-            duplication_rate: total_duplication as f64 / total_frequency,
-            equivalence: total_equivalence / total_frequency,
-            length: total_length as f64 / total_frequency,
-            tiered,
+        let mut equivalence: Option<f64> = None;
+        let mut duplication: Option<f64> = None;
+
+        let mut real = 0.0;
+        if let Some(equivalence_weight) = weights.equivalence {
+            equivalence = Some(total_equivalence / total_frequency);
+            real += equivalence.unwrap() * equivalence_weight;
         }
+        if let Some(duplication_weight) = weights.duplication {
+            duplication = Some(total_duplication as f64 / total_frequency);
+            real += duplication.unwrap() * duplication_weight;
+        }
+        for (itier, twights) in weights.tiered.iter().enumerate() {
+            let total = twights.top.unwrap_or(ranked.len());
+            if let Some(duplication_weight) = twights.duplication {
+                real += tiered_duplication[itier] as f64 * duplication_weight / total as f64;
+            }
+        }
+        let tiered = weights.tiered.iter().enumerate().map(|(itier, tier)| TieredMetric { top: tier.top, duplication: tiered_duplication[itier] }).collect();
+        return (PartialMetric { tiered, duplication, equivalence }, real);
     }
 
-    pub fn evaluate_metric(
-        &self,
-        character_codes: &Code<char>,
-        word_codes: &Code<String>,
-    ) -> Metric {
-        let characters_result =
-            self.evaluate_partial_metric(&character_codes, &self.assets.characters, &self.characters);
-        let words_result =
-            self.evaluate_partial_metric(&word_codes, &self.assets.words, &self.words);
-        Metric {
-            characters: characters_result.clone(),
-            characters_reduced: characters_result.clone(),
-            words: words_result.clone(),
-            words_reduced: words_result.clone(),
+    pub fn evaluate(&self, character_codes: &Code<char>, word_codes: &Code<String>) -> (Metric, f64) {
+        let mut loss = 0.0;
+        let mut metric = Metric { characters: None, words: None };
+        if let Some(characters) = &self.config.characters {
+            let (partial, accum) = self.evaluate_partial(character_codes, &self.assets.characters, characters);
+            loss += accum;
+            metric.characters = Some(partial);
         }
-    }
-
-    fn scalarize_tiered_metric(this: &TieredMetric, adjoint: &TieredMetricWeights) -> f64 {
-        let mut real = this.duplication as f64 * adjoint.duplication;
-        for (c, cw) in this.capacity.iter().zip(adjoint.capacity.iter()) {
-            real += *c as f64 * cw;
+        if let Some(words) = &self.config.words {
+            let (partial, accum) = self.evaluate_partial(word_codes, &self.assets.words, words);
+            loss += accum;
+            metric.words = Some(partial);
         }
-        return real;
-    }
-
-    fn scalarize_common_metric(this: &PartialMetric, adjoint: &PartialMetricWeights) -> f64 {
-        let mut real = this.equivalence * adjoint.equivalence
-            + this.duplication_rate * adjoint.duplication_rate
-            + this.length * adjoint.length;
-        for (tm, tmw) in this.tiered.iter().zip(adjoint.tiered.iter()) {
-            real += Self::scalarize_tiered_metric(tm, tmw);
-        }
-        return real;
-    }
-
-    pub fn evaluate(&self, character_codes: &Code<char>, word_codes: &Code<String>) -> f64 {
-        let metric = self.evaluate_metric(character_codes, word_codes);
-        let Metric {
-            characters, words, ..
-        } = metric;
-        return Self::scalarize_common_metric(&characters, &self.characters)
-            + Self::scalarize_common_metric(&words, &self.words);
+        (metric, loss)
     }
 }

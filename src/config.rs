@@ -1,9 +1,12 @@
-use std::{fs, path::PathBuf, vec, collections::HashMap};
-use yaml_rust::{Yaml, YamlLoader};
+use std::{fs, vec, collections::HashMap};
+use linked_hash_map::LinkedHashMap;
+use yaml_rust::{Yaml, YamlLoader, YamlEmitter};
+
+use crate::{encoder::Elements, metaheuristics::Metaheuristics};
 
 pub type KeyMap = HashMap<String, char>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum WordRule {
     EqualRule {
         length_equal: usize,
@@ -32,7 +35,7 @@ fn get_default_rules() -> Vec<WordRule> {
     ]
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FormConfig {
     // pub alphabet: String,
     // pub maxcodelen: usize,
@@ -40,20 +43,53 @@ pub struct FormConfig {
     pub mapping: HashMap<String, char>
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EncoderConfig {
     pub auto_select_length: usize,
     pub rules: Vec<WordRule>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct TieredMetricWeights {
+    pub top: Option<usize>,
+    pub duplication: Option<f64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PartialMetricWeights {
+    pub tiered: Vec<TieredMetricWeights>,
+    pub duplication: Option<f64>,
+    pub equivalence: Option<f64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectiveConfig {
+    pub characters: Option<PartialMetricWeights>,
+    pub words: Option<PartialMetricWeights>,
+}
+
+#[derive(Debug, Clone)]
+pub enum MetaheuristicConfig {
+    HillClimbing,
+    SimulatedAnnealing
+}
+
+#[derive(Debug, Clone)]
+pub struct OptimizationConfig {
+    pub objective: ObjectiveConfig,
+    pub metaheuristic: MetaheuristicConfig
+}
+
+#[derive(Debug, Clone)]
 pub struct Config {
     pub form: FormConfig,
+    pub pronunciation: FormConfig,
     pub encoder: EncoderConfig,
+    pub optimization: OptimizationConfig,
 }
 
 impl Config {
-    pub fn new(name: &PathBuf) -> Config {
+    pub fn new(name: &String) -> Self {
         let content = fs::read_to_string(name).expect("Should have been able to read the file");
         let raw = YamlLoader::load_from_str(&content).unwrap();
         let yaml = raw[0].clone();
@@ -109,10 +145,85 @@ impl Config {
         };
     }
     
+    fn build_tiered_metric_weights(yaml: &Yaml) -> TieredMetricWeights {
+        let top = yaml["top"].as_i64().and_then(|x| Some(x as usize));
+        let duplication = yaml["duplication"].as_f64();
+        TieredMetricWeights { top, duplication }
+    }
+
+    fn build_partial_metric_weights(yaml: &Yaml) -> Option<PartialMetricWeights> {
+        if yaml.is_badvalue() {
+            None
+        } else {
+            let duplication = yaml["duplication"].as_f64();
+            let equivalence = yaml["equivalence"].as_f64();
+            let tiered: Vec<TieredMetricWeights> = if let Some(raw) = yaml["tiered"].as_vec() {
+                raw.iter().map(|x| Self::build_tiered_metric_weights(x)).collect()
+            } else {
+                vec![]
+            };
+            Some(PartialMetricWeights { tiered, duplication, equivalence })
+        }
+    }
+
+    fn build_objective(yaml: &Yaml) -> ObjectiveConfig {
+        let characters = Self::build_partial_metric_weights(&yaml["characters"]);
+        let words = Self::build_partial_metric_weights(&yaml["words"]);
+        ObjectiveConfig { characters, words }
+    }
+
+    fn build_metaheuristic(yaml: &Yaml) -> MetaheuristicConfig {
+        let algorithm = yaml["algorithm"].as_str().unwrap();
+        match algorithm {
+            "simulated_annealing" => MetaheuristicConfig::SimulatedAnnealing,
+            _ => panic!("Unknown algorithm")
+        }
+    }
+
+    fn build_config_optimization(yaml: &Yaml) -> OptimizationConfig {
+        let objective = Self::build_objective(&yaml["objective"]);
+        let metaheuristic = Self::build_metaheuristic(&yaml["metaheuristic"]);
+        OptimizationConfig { objective, metaheuristic }
+    }
+
     pub fn build_config(yaml: &Yaml) -> Config {
         let encoder = Self::build_config_encoder(&yaml["encoder"]);
         let form = Self::build_config_form(&yaml["form"]);
-        Config { form, encoder }
+        let pronunciation = Self::build_config_form(&yaml["pronunciation"]);
+        let optimization = Self::build_config_optimization(&yaml["optimization"]);
+        Config { form, pronunciation, encoder, optimization }
+    }
+
+    pub fn mapping(&self) -> HashMap<String, char> {
+        let fmap = &self.form.mapping;
+        let pmap = &self.pronunciation.mapping;
+        fmap.into_iter().chain(pmap).map(|(k, v)| (k.clone(), *v)).collect()
     }
     
+    pub fn validate_elements(&self, elements: &Elements) {
+        let mapping = self.mapping();
+        for (_, elems) in elements {
+            for element in elems {
+                if let None = mapping.get(element) {
+                    panic!("Invalid element: {}", element);
+                }
+            }
+        }
+    }
+
+    pub fn dump_config(&self) -> Yaml {
+        let mut map: LinkedHashMap<Yaml, Yaml> = LinkedHashMap::new();
+        for (key, value) in self.mapping() {
+            map.insert(Yaml::String(key), Yaml::String(value.to_string()));
+        }
+        Yaml::Hash(map)
+    }
+
+    pub fn write_config(&self, path: &String) {
+        let yaml = self.dump_config();
+        let mut dump = String::new();
+        let mut emitter = YamlEmitter::new(&mut dump);
+        emitter.dump(&yaml).unwrap();
+        fs::write(path, dump).unwrap();
+    }
 }

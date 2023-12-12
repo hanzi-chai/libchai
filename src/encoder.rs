@@ -7,8 +7,7 @@ use std::{
     fmt::Debug,
     fs::File,
     io::BufRead,
-    io::BufReader,
-    path::PathBuf,
+    io::BufReader
 };
 
 const MAX_WORD_LENGTH: usize = 20;
@@ -119,7 +118,7 @@ impl Encoder {
         reduced_codes
     }
 
-    fn negative_index<T: Debug>(vector: &Vec<T>, index: isize) -> &T {
+    fn signed_index<T: Debug>(vector: &Vec<T>, index: isize) -> &T {
         return if index >= 0 {
             &vector[index as usize]
         } else {
@@ -135,10 +134,10 @@ impl Encoder {
             let rule = &self.quick_lookup[length - 2];
             let mut code = String::new();
             for (chi, coi) in rule {
-                let character = Self::negative_index(&characters, *chi);
+                let character = Self::signed_index(&characters, *chi);
                 if let Some(character_code) = character_codes.get(character) {
                     let keys = character_code.clone().chars().collect();
-                    let key = Self::negative_index(&keys, *coi);
+                    let key = Self::signed_index(&keys, *coi);
                     code.push(*key);
                 }
             }
@@ -154,7 +153,7 @@ impl Encoder {
     }
 }
 
-pub fn read_elements(name: &PathBuf) -> Vec<Entry> {
+pub fn read_elements(name: &String) -> Vec<Entry> {
     let mut elements: Vec<Entry> = Vec::new();
     let file = File::open(name).expect("Failed to open file");
     let reader = BufReader::new(file);

@@ -41,7 +41,7 @@ pub fn solve<T>(problem: &mut dyn Metaheuristics<T>, runtime: Duration) -> T {
     while start_time.elapsed() < runtime {
         let next_candidate = problem.tweak_candidate(&best_candidate);
 
-        if problem.rank_candidate(&next_candidate) > problem.rank_candidate(&best_candidate) {
+        if problem.rank_candidate(&next_candidate) < problem.rank_candidate(&best_candidate) {
             best_candidate = next_candidate;
         }
     }
