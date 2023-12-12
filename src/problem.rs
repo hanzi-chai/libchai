@@ -5,6 +5,7 @@ use crate::encoder::Encoder;
 use crate::metaheuristics::{Metaheuristics, simulated_annealing, hill_climbing};
 use crate::objective::Objective;
 use chrono::prelude::*;
+use rand::random;
 use time::Duration;
 
 // 未来可能会有更加通用的解定义
@@ -39,7 +40,7 @@ impl Metaheuristics<Solution> for ElementPlacementProblem {
     }
 
     fn generate_candidate(&mut self) -> Solution {
-        return self.config.mapping();
+        return self.config.form.mapping.clone();
     }
 
     fn rank_candidate(&mut self, candidate: &Solution) -> f64 {
@@ -49,8 +50,11 @@ impl Metaheuristics<Solution> for ElementPlacementProblem {
     }
 
     fn tweak_candidate(&mut self, candidate: &Solution) -> Solution {
-        let next = self.constraints.constrained_random_move(candidate);
-        return next;
+        if random::<f64>() < 0.9 {
+            self.constraints.constrained_random_move(candidate)
+        } else {
+            self.constraints.constrained_random_swap(candidate)
+        }
     }
 
     fn save_candidate(&self, candidate: &Solution) {
@@ -61,9 +65,6 @@ impl Metaheuristics<Solution> for ElementPlacementProblem {
         let metric_path = format!("output/{}.txt", prefix);
         let mut new_config = self.config.clone();
         for key in self.config.form.mapping.keys() {
-            new_config.form.mapping.insert(key.clone(), *candidate.get(key).unwrap());
-        }
-        for key in self.config.pronunciation.mapping.keys() {
             new_config.form.mapping.insert(key.clone(), *candidate.get(key).unwrap());
         }
         new_config.write_config(&config_path);

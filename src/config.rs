@@ -1,8 +1,7 @@
 use std::{fs, vec, collections::HashMap};
 use linked_hash_map::LinkedHashMap;
 use yaml_rust::{Yaml, YamlLoader, YamlEmitter};
-
-use crate::{encoder::Elements, metaheuristics::Metaheuristics};
+use crate::encoder::Elements;
 
 pub type KeyMap = HashMap<String, char>;
 
@@ -37,7 +36,7 @@ fn get_default_rules() -> Vec<WordRule> {
 
 #[derive(Debug, Clone)]
 pub struct FormConfig {
-    // pub alphabet: String,
+    pub alphabet: Vec<char>,
     // pub maxcodelen: usize,
     pub grouping: HashMap<String, String>,
     pub mapping: HashMap<String, char>
@@ -69,6 +68,18 @@ pub struct ObjectiveConfig {
 }
 
 #[derive(Debug, Clone)]
+pub struct AtomicConstraint {
+    pub element: Option<String>,
+    pub index: Option<usize>,
+    pub keys: Option<Vec<char>>
+}
+
+#[derive(Debug, Clone)]
+pub struct ConstraintsConfig {
+    pub values: Vec<AtomicConstraint>
+}
+
+#[derive(Debug, Clone)]
 pub enum MetaheuristicConfig {
     HillClimbing,
     SimulatedAnnealing
@@ -77,13 +88,13 @@ pub enum MetaheuristicConfig {
 #[derive(Debug, Clone)]
 pub struct OptimizationConfig {
     pub objective: ObjectiveConfig,
+    pub constraints: ConstraintsConfig,
     pub metaheuristic: MetaheuristicConfig
 }
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub form: FormConfig,
-    pub pronunciation: FormConfig,
     pub encoder: EncoderConfig,
     pub optimization: OptimizationConfig,
 }
@@ -99,6 +110,7 @@ impl Config {
     fn build_config_form(yaml: &Yaml) -> FormConfig {
         let mut grouping: HashMap<String, String> = HashMap::new();
         let mut mapping: KeyMap = HashMap::new();
+        let alphabet = yaml["alphabet"].as_str().unwrap().to_string().chars().collect();
         let _mapping = yaml["mapping"].as_hash().unwrap();
         let _grouping = yaml["grouping"].as_hash().unwrap();
         for (_element, _mapped) in _mapping {
@@ -117,7 +129,7 @@ impl Config {
             let mapped = _mapped.as_str().unwrap();
             grouping.insert(element.to_string(), mapped.to_string());
         }
-        FormConfig { grouping, mapping }
+        FormConfig { alphabet, grouping, mapping }
     }
     
     fn build_config_encoder(yaml: &Yaml) -> EncoderConfig {
@@ -172,36 +184,49 @@ impl Config {
         ObjectiveConfig { characters, words }
     }
 
+    fn build_constraint(yaml: &Yaml) -> AtomicConstraint {
+        let element = yaml["element"].as_str().and_then(|x| Some(x.to_string()));
+        let index = yaml["index"].as_i64().and_then(|x| Some(x as usize));
+        let keys: Option<Vec<char>> = yaml["keys"].as_vec().and_then(|v| Some(v.iter().map(|x| x.as_str().unwrap().chars().next().unwrap()).collect()));
+        AtomicConstraint { element, index, keys }
+    }
+
+    fn build_constraints(yaml: &Yaml) -> ConstraintsConfig {
+        let elements = yaml["elements"].as_vec().unwrap().clone();
+        let mut indices = yaml["indices"].as_vec().unwrap().clone();
+        let mut element_indices = yaml["element_indices"].as_vec().unwrap().clone();
+        let mut all = elements;
+        all.append(&mut indices);
+        all.append(&mut element_indices);
+        let values = all.iter().map(Self::build_constraint).collect();
+        ConstraintsConfig { values }
+    }
+
     fn build_metaheuristic(yaml: &Yaml) -> MetaheuristicConfig {
         let algorithm = yaml["algorithm"].as_str().unwrap();
         match algorithm {
             "simulated_annealing" => MetaheuristicConfig::SimulatedAnnealing,
+            "hill_climbing" => MetaheuristicConfig::HillClimbing,
             _ => panic!("Unknown algorithm")
         }
     }
 
     fn build_config_optimization(yaml: &Yaml) -> OptimizationConfig {
         let objective = Self::build_objective(&yaml["objective"]);
+        let constraints = Self::build_constraints(&yaml["constraints"]);
         let metaheuristic = Self::build_metaheuristic(&yaml["metaheuristic"]);
-        OptimizationConfig { objective, metaheuristic }
+        OptimizationConfig { objective, constraints, metaheuristic }
     }
 
     pub fn build_config(yaml: &Yaml) -> Config {
         let encoder = Self::build_config_encoder(&yaml["encoder"]);
         let form = Self::build_config_form(&yaml["form"]);
-        let pronunciation = Self::build_config_form(&yaml["pronunciation"]);
         let optimization = Self::build_config_optimization(&yaml["optimization"]);
-        Config { form, pronunciation, encoder, optimization }
+        Config { form, encoder, optimization }
     }
 
-    pub fn mapping(&self) -> HashMap<String, char> {
-        let fmap = &self.form.mapping;
-        let pmap = &self.pronunciation.mapping;
-        fmap.into_iter().chain(pmap).map(|(k, v)| (k.clone(), *v)).collect()
-    }
-    
     pub fn validate_elements(&self, elements: &Elements) {
-        let mapping = self.mapping();
+        let mapping = &self.form.mapping;
         for (_, elems) in elements {
             for element in elems {
                 if let None = mapping.get(element) {
@@ -213,8 +238,8 @@ impl Config {
 
     pub fn dump_config(&self) -> Yaml {
         let mut map: LinkedHashMap<Yaml, Yaml> = LinkedHashMap::new();
-        for (key, value) in self.mapping() {
-            map.insert(Yaml::String(key), Yaml::String(value.to_string()));
+        for (key, value) in &self.form.mapping {
+            map.insert(Yaml::String(key.to_string()), Yaml::String(value.to_string()));
         }
         Yaml::Hash(map)
     }

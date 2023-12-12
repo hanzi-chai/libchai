@@ -24,7 +24,7 @@ fn main() {
     config.validate_elements(&elements);
     let encoder = Encoder::new(&config, elements, &assets);
     let objective = Objective::new(assets, config.optimization.objective.clone());
-    let constraints = Constraints::new(vec![]);
+    let constraints = Constraints::new(&config);
     let mut problem = ElementPlacementProblem::new(config, constraints, objective, encoder);
     let runtime = Duration::new(1, 0);
     let _solution = generic_solve(&mut problem, runtime);
