@@ -45,8 +45,15 @@
 //!```
 
 use super::Metaheuristics;
-use rand::{thread_rng, Rng};
-use time::{Duration, Instant};
+use rand::random;
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Parameters {
+    pub tmax: f64,
+    pub tmin: f64,
+    pub steps: usize,
+}
 
 /// Returns an approximate solution to your optimisation problem using Simulated Annealing
 ///
@@ -61,28 +68,20 @@ use time::{Duration, Instant};
 ///```ignore
 ///let solution = metaheuristics::simulated_annealing::solve(&mut problem, runtime);
 ///```
-pub fn solve<T: Clone, M: Clone>(problem: &mut dyn Metaheuristics<T, M>, runtime: Duration) -> T {
+pub fn solve<T: Clone, M: Clone>(problem: &mut dyn Metaheuristics<T, M>, parameters: Parameters) -> T {
     let mut best_candidate = problem.generate_candidate();
     let mut best_rank = problem.rank_candidate(&best_candidate);
     let mut annealing_candidate = problem.clone_candidate(&best_candidate);
     let mut annealing_rank = best_rank.clone();
-    let start_time = Instant::now();
-    let runtime_in_milliseconds = runtime.whole_milliseconds() as f64;
+    let tfactor = (parameters.tmin / parameters.tmax).ln();
 
-    loop {
-        let portion_elapsed =
-            (start_time.elapsed().whole_milliseconds() as f64) / runtime_in_milliseconds;
-
-        if portion_elapsed >= 1.0 {
-            break;
-        }
-
+    for step in 0..parameters.steps {
+        let progress = step as f64 / parameters.steps as f64;
+        let t = parameters.tmax * (tfactor * progress).exp();
         let next_candidate = problem.tweak_candidate(&annealing_candidate);
         let next_rank = problem.rank_candidate(&next_candidate);
         let improvement = next_rank.1 - annealing_rank.1;
-        let replacement_threshold = 1.0f64.exp().powf(-10.0 * portion_elapsed.powf(3.0));
-
-        if improvement < 0.0 || (thread_rng().gen_range(0.0..1.0) < replacement_threshold) {
+        if improvement < 0.0 || (random::<f64>() < (-improvement / t).exp()) {
             annealing_candidate = next_candidate;
             annealing_rank = next_rank;
         }

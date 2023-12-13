@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::convert::identity;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
 
 pub type Equivalence = HashMap<(char, char), f64>;
 pub type Frequency<T> = HashMap<T, usize>;
@@ -25,10 +24,10 @@ impl Assets {
             let second = it.next().unwrap();
             (first, second)
         };
-        let character_frequency = Self::read_hashmap_from_file(&PathBuf::from("assets/character_frequency.txt"), char_parser, frequency_parser);
-        let word_frequency = Self::read_hashmap_from_file(&PathBuf::from("assets/word_frequency.txt"), identity, frequency_parser);
+        let character_frequency = Self::read_hashmap_from_file(&String::from("assets/character_frequency.txt"), char_parser, frequency_parser);
+        let word_frequency = Self::read_hashmap_from_file(&String::from("assets/word_frequency.txt"), identity, frequency_parser);
         let equivalence =
-            Self::read_hashmap_from_file(&PathBuf::from("assets/equivalence.txt"), char_pair_parser, equivalence_parser);
+            Self::read_hashmap_from_file(&String::from("assets/equivalence.txt"), char_pair_parser, equivalence_parser);
         Assets {
             characters: character_frequency,
             words: word_frequency,
@@ -37,7 +36,7 @@ impl Assets {
     }
 
     pub fn read_hashmap_from_file<T: Eq + std::hash::Hash, S>(
-        name: &PathBuf,
+        name: &String,
         kparser: fn(String) -> T,
         vparser: fn(String) -> S,
     ) -> HashMap<T, S> {

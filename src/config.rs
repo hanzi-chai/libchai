@@ -1,99 +1,140 @@
-use std::{fs, vec, collections::HashMap};
-use yaml_rust::{Yaml, YamlLoader};
-use crate::encoder::Elements;
+use std::{fs, collections::{HashMap, BTreeMap}};
+use serde::{Serialize, Deserialize};
+use crate::{encoder::{Elements, RawElements}, data::{Glyph, Character}, metaheuristics::simulated_annealing};
 
-pub type KeyMap = HashMap<String, char>;
+pub type KeyMap = Vec<char>;
 
-#[derive(Debug, Clone)]
-pub enum WordRule {
-    EqualRule {
-        length_equal: usize,
-        formula: String,
-    },
-    RangeRule {
-        length_in_range: Vec<usize>,
-        formula: String,
-    },
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataConfig {
+    pub form: BTreeMap<String, Glyph>,
+    pub repertoire: BTreeMap<String, Character>,
+    pub classifier: BTreeMap<String, usize>,
 }
 
-fn get_default_rules() -> Vec<WordRule> {
-    vec![
-        WordRule::EqualRule {
-            length_equal: 2,
-            formula: String::from("AaAbBaBb"),
-        },
-        WordRule::EqualRule {
-            length_equal: 3,
-            formula: String::from("AaBaCaCb"),
-        },
-        WordRule::RangeRule {
-            length_in_range: vec![4],
-            formula: String::from("AaBaCaZa"),
-        },
-    ]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WordRule {
+    pub formula: String,
+    pub length_equal: Option<usize>,
+    pub length_in_range: Option<Vec<usize>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DegeneratorConfig {
+    pub feature: BTreeMap<String, String>,
+    pub nocross: bool
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisConfig {
+    pub degenerator: DegeneratorConfig,
+    pub selector: Vec<String>,
+    pub customize: BTreeMap<String, Vec<String>>
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormConfig {
-    pub alphabet: Vec<char>,
-    // pub maxcodelen: usize,
+    pub maxcodelen: usize,
+    pub alphabet: String,
+    pub analysis: AnalysisConfig,
     pub grouping: HashMap<String, String>,
-    pub mapping: HashMap<String, char>
+    pub mapping: HashMap<String, String>
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(non_snake_case)]
+pub struct CodableObjectConfig {
+    pub r#type: String,
+    pub subtype: Option<String>,
+    pub rootIndex: Option<i64>,
+    pub strokeIndex: Option<i64>
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeConfig {
+    pub object: CodableObjectConfig,
+    pub operator: String,
+    pub value: Option<String>,
+    pub positive: Option<String>,
+    pub negative: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeConfig {
+    pub object: Option<CodableObjectConfig>,
+    pub next: Option<String>
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncoderConfig {
+    pub sources: BTreeMap<String, NodeConfig>,
+    pub conditions: BTreeMap<String, EdgeConfig>,
+    pub maxlength: usize,
     pub auto_select_length: usize,
     pub rules: Vec<WordRule>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TieredMetricWeights {
     pub top: Option<usize>,
     pub duplication: Option<f64>,
+    pub levels: Option<Vec<f64>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartialMetricWeights {
-    pub tiered: Vec<TieredMetricWeights>,
+    pub tiered: Option<Vec<TieredMetricWeights>>,
     pub duplication: Option<f64>,
     pub equivalence: Option<f64>,
+    pub levels: Option<Vec<f64>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectiveConfig {
     pub characters: Option<PartialMetricWeights>,
     pub words: Option<PartialMetricWeights>,
+    pub characters_reduced: Option<PartialMetricWeights>,
+    pub words_reduced: Option<PartialMetricWeights>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomicConstraint {
     pub element: Option<String>,
     pub index: Option<usize>,
     pub keys: Option<Vec<char>>
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstraintsConfig {
-    pub values: Vec<AtomicConstraint>
+    pub elements: Vec<AtomicConstraint>,
+    pub indices: Vec<AtomicConstraint>,
+    pub element_indices: Vec<AtomicConstraint>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "algorithm")]
 pub enum MetaheuristicConfig {
-    HillClimbing,
-    SimulatedAnnealing
+    HillClimbing {
+        runtime: Option<i64>
+    },
+    SimulatedAnnealing {
+        runtime: Option<i64>,
+        parameters: Option<simulated_annealing::Parameters>
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OptimizationConfig {
     pub objective: ObjectiveConfig,
     pub constraints: ConstraintsConfig,
     pub metaheuristic: MetaheuristicConfig
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub yaml: Yaml,
+    pub version: String,
+    pub source: Option<String>,
+    pub info: BTreeMap<String, String>,
+    pub data: DataConfig,
     pub form: FormConfig,
     pub encoder: EncoderConfig,
     pub optimization: OptimizationConfig,
@@ -102,133 +143,79 @@ pub struct Config {
 impl Config {
     pub fn new(name: &String) -> Self {
         let content = fs::read_to_string(name).expect("Should have been able to read the file");
-        let mut multi = YamlLoader::load_from_str(&content).unwrap();
-        let yaml = multi.pop().unwrap();
-        let encoder = Self::build_config_encoder(&yaml["encoder"]);
-        let form = Self::build_config_form(&yaml["form"]);
-        let optimization = Self::build_config_optimization(&yaml["optimization"]);
-        Config { yaml, form, encoder, optimization }
+        let config: Config = serde_yaml::from_str(&content).unwrap();
+        config
+    }
+}
+
+pub struct Cache {
+    pub initial: KeyMap,
+    pub forward_converter: HashMap<String, usize>,
+    pub reverse_converter: Vec<String>,
+}
+
+impl Cache {
+    pub fn new(config: &Config) -> Self {
+        let (initial, forward_converter, reverse_converter) = Self::transform_keymap(&config);
+        Self { initial, forward_converter, reverse_converter }
     }
 
-    fn build_config_form(yaml: &Yaml) -> FormConfig {
-        let mut grouping: HashMap<String, String> = HashMap::new();
-        let mut mapping: KeyMap = HashMap::new();
-        let alphabet = yaml["alphabet"].as_str().unwrap().to_string().chars().collect();
-        let _mapping = yaml["mapping"].as_hash().unwrap();
-        let _grouping = yaml["grouping"].as_hash().unwrap();
-        for (_element, _mapped) in _mapping {
-            let element = _element.as_str().unwrap();
-            let mapped: Vec<char> = _mapped.as_str().unwrap().chars().collect();
-            if mapped.len() == 1 {
-                mapping.insert(element.to_string(), mapped[0]);
+    pub fn transform_keymap(config: &Config) -> (KeyMap, HashMap<String, usize>, Vec<String>) {
+        let mut keymap: KeyMap = Vec::new();
+        let mut forward_converter: HashMap<String, usize> = HashMap::new();
+        let mut reverse_converter: Vec<String> = Vec::new();
+        for (element, mapped) in &config.form.mapping {
+            let chars: Vec<char> = mapped.chars().collect();
+            if chars.len() == 1 {
+                forward_converter.insert(element.clone(), keymap.len());
+                reverse_converter.push(element.clone());
+                keymap.push(chars[0]);
             } else {
-                for (index, key) in mapped.iter().enumerate() {
-                    mapping.insert(format!("{}.{}", element.to_string(), index), *key);
+                for (index, key) in chars.iter().enumerate() {
+                    let name = format!("{}.{}", element.to_string(), index);
+                    forward_converter.insert(name.clone(), keymap.len());
+                    reverse_converter.push(name.clone());
+                    keymap.push(*key);
                 }
             }
         }
-        for (_element, _mapped) in _grouping {
-            let element = _element.as_str().unwrap();
-            let mapped = _mapped.as_str().unwrap();
-            grouping.insert(element.to_string(), mapped.to_string());
-        }
-        FormConfig { alphabet, grouping, mapping }
-    }
-    
-    fn build_config_encoder(yaml: &Yaml) -> EncoderConfig {
-        let auto_select_length = yaml["auto_select_length"].as_i64().unwrap() as usize;
-        let rules = if let Some(vec) = yaml["rules"].as_vec() {
-            let mut parsed_rules: Vec<WordRule> = vec![];
-            for content in vec {
-                let formula = content["formula"].as_str().unwrap().to_string();
-                let rule = if let Some(length_equal) = content["length_equal"].as_i64() {
-                    WordRule::EqualRule { length_equal: length_equal as usize, formula }
-                } else {
-                    let v = content["length_in_range"].as_vec().unwrap();
-                    let length_in_range = v.iter().map(|yaml| yaml.as_i64().unwrap() as usize).collect();
-                    WordRule::RangeRule { length_in_range, formula }
-                };
-                parsed_rules.push(rule);
-            }
-            parsed_rules
-        } else {
-            get_default_rules()
-        };
-        return EncoderConfig {
-            auto_select_length,
-            rules,
-        };
-    }
-    
-    fn build_tiered_metric_weights(yaml: &Yaml) -> TieredMetricWeights {
-        let top = yaml["top"].as_i64().and_then(|x| Some(x as usize));
-        let duplication = yaml["duplication"].as_f64();
-        TieredMetricWeights { top, duplication }
+        (keymap, forward_converter, reverse_converter)
     }
 
-    fn build_partial_metric_weights(yaml: &Yaml) -> Option<PartialMetricWeights> {
-        if yaml.is_badvalue() {
-            None
-        } else {
-            let duplication = yaml["duplication"].as_f64();
-            let equivalence = yaml["equivalence"].as_f64();
-            let tiered: Vec<TieredMetricWeights> = if let Some(raw) = yaml["tiered"].as_vec() {
-                raw.iter().map(|x| Self::build_tiered_metric_weights(x)).collect()
-            } else {
-                vec![]
-            };
-            Some(PartialMetricWeights { tiered, duplication, equivalence })
-        }
-    }
-
-    fn build_objective(yaml: &Yaml) -> ObjectiveConfig {
-        let characters = Self::build_partial_metric_weights(&yaml["characters"]);
-        let words = Self::build_partial_metric_weights(&yaml["words"]);
-        ObjectiveConfig { characters, words }
-    }
-
-    fn build_constraint(yaml: &Yaml) -> AtomicConstraint {
-        let element = yaml["element"].as_str().and_then(|x| Some(x.to_string()));
-        let index = yaml["index"].as_i64().and_then(|x| Some(x as usize));
-        let keys: Option<Vec<char>> = yaml["keys"].as_vec().and_then(|v| Some(v.iter().map(|x| x.as_str().unwrap().chars().next().unwrap()).collect()));
-        AtomicConstraint { element, index, keys }
-    }
-
-    fn build_constraints(yaml: &Yaml) -> ConstraintsConfig {
-        let elements = yaml["elements"].as_vec().unwrap().clone();
-        let mut indices = yaml["indices"].as_vec().unwrap().clone();
-        let mut element_indices = yaml["element_indices"].as_vec().unwrap().clone();
-        let mut all = elements;
-        all.append(&mut indices);
-        all.append(&mut element_indices);
-        let values = all.iter().map(Self::build_constraint).collect();
-        ConstraintsConfig { values }
-    }
-
-    fn build_metaheuristic(yaml: &Yaml) -> MetaheuristicConfig {
-        let algorithm = yaml["algorithm"].as_str().unwrap();
-        match algorithm {
-            "simulated_annealing" => MetaheuristicConfig::SimulatedAnnealing,
-            "hill_climbing" => MetaheuristicConfig::HillClimbing,
-            _ => panic!("Unknown algorithm")
-        }
-    }
-
-    fn build_config_optimization(yaml: &Yaml) -> OptimizationConfig {
-        let objective = Self::build_objective(&yaml["objective"]);
-        let constraints = Self::build_constraints(&yaml["constraints"]);
-        let metaheuristic = Self::build_metaheuristic(&yaml["metaheuristic"]);
-        OptimizationConfig { objective, constraints, metaheuristic }
-    }
-
-    pub fn validate_elements(&self, elements: &Elements) {
-        let mapping = &self.form.mapping;
-        for (_, elems) in elements {
+    pub fn transform_elements(&self, elements: &RawElements) -> Elements {
+        let mut new_elements: Elements = HashMap::new();
+        for (char, elems) in elements {
+            let mut converted_elems: Vec<usize> = Vec::new();
             for element in elems {
-                if let None = mapping.get(element) {
-                    panic!("Invalid element: {}", element);
+                if let Some(number) = self.forward_converter.get(element) {
+                    converted_elems.push(*number);
+                } else {
+                    panic!("不合法的码元：{}", element);
                 }
             }
+            new_elements.insert(*char, converted_elems);
         }
+        new_elements
+    }
+
+    pub fn update_config(&self, config: &Config, candidate: &KeyMap) -> Config {
+        let mut new_config = config.clone();
+        for (element, mapped) in &config.form.mapping {
+            if mapped.len() == 1 {
+                let number = *self.forward_converter.get(element).unwrap();
+                let current_mapped = candidate[number];
+                new_config.form.mapping.insert(element.to_string(), current_mapped.to_string());
+            } else {
+                let mut all_codes = String::new();
+                for index in 0..mapped.len() {
+                    let name = format!("{}.{}", element.to_string(), index);
+                    let number = *self.forward_converter.get(&name).unwrap();
+                    let current_mapped = &candidate[number];
+                    all_codes.push(*current_mapped);
+                }
+                new_config.form.mapping.insert(element.to_string(), all_codes);
+            }
+        }
+        new_config
     }
 }

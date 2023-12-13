@@ -16,9 +16,9 @@ console_error_panic_hook = { version = "0.1.7", optional = true }
 rand = "0.8.5"
 time = "0.3.30"
 clap = { version = "4.0", features = ["derive"] }
-yaml-rust = "0.4.5"
 chrono = "0.4.31"
-linked-hash-map = "0.5.6"
+serde = { version = "1.0.193", features = ["derive"] }
+serde_yaml = "0.9.27"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.34"
