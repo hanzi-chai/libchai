@@ -1,6 +1,13 @@
-use std::{fs, collections::{HashMap, BTreeMap}};
-use serde::{Serialize, Deserialize};
-use crate::{encoder::{Elements, RawElements}, data::{Glyph, Character}, metaheuristics::simulated_annealing};
+use crate::{
+    data::{Character, Glyph},
+    encoder::{Elements, RawElements},
+    metaheuristics::simulated_annealing,
+};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs, env,
+};
 
 pub type KeyMap = Vec<char>;
 
@@ -21,14 +28,14 @@ pub struct WordRule {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DegeneratorConfig {
     pub feature: BTreeMap<String, String>,
-    pub nocross: bool
+    pub nocross: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisConfig {
     pub degenerator: DegeneratorConfig,
     pub selector: Vec<String>,
-    pub customize: BTreeMap<String, Vec<String>>
+    pub customize: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,7 +44,7 @@ pub struct FormConfig {
     pub alphabet: String,
     pub analysis: AnalysisConfig,
     pub grouping: HashMap<String, String>,
-    pub mapping: HashMap<String, String>
+    pub mapping: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,7 +53,7 @@ pub struct CodableObjectConfig {
     pub r#type: String,
     pub subtype: Option<String>,
     pub rootIndex: Option<i64>,
-    pub strokeIndex: Option<i64>
+    pub strokeIndex: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,15 +68,15 @@ pub struct EdgeConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub object: Option<CodableObjectConfig>,
-    pub next: Option<String>
+    pub next: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncoderConfig {
     pub sources: BTreeMap<String, NodeConfig>,
     pub conditions: BTreeMap<String, EdgeConfig>,
-    pub maxlength: usize,
-    pub auto_select_length: usize,
+    pub maxlength: Option<usize>,
+    pub auto_select_length: Option<usize>,
     pub rules: Vec<WordRule>,
 }
 
@@ -100,7 +107,7 @@ pub struct ObjectiveConfig {
 pub struct AtomicConstraint {
     pub element: Option<String>,
     pub index: Option<usize>,
-    pub keys: Option<Vec<char>>
+    pub keys: Option<Vec<char>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,19 +121,19 @@ pub struct ConstraintsConfig {
 #[serde(tag = "algorithm")]
 pub enum MetaheuristicConfig {
     HillClimbing {
-        runtime: Option<i64>
+        runtime: u64,
     },
     SimulatedAnnealing {
-        runtime: Option<i64>,
-        parameters: Option<simulated_annealing::Parameters>
-    }
+        runtime: Option<u64>,
+        parameters: Option<simulated_annealing::Parameters>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OptimizationConfig {
     pub objective: ObjectiveConfig,
     pub constraints: ConstraintsConfig,
-    pub metaheuristic: MetaheuristicConfig
+    pub metaheuristic: MetaheuristicConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -142,7 +149,10 @@ pub struct Config {
 
 impl Config {
     pub fn new(name: &String) -> Self {
-        let content = fs::read_to_string(name).expect("Should have been able to read the file");
+        let mut dir = env::current_exe().unwrap();
+        dir.pop();
+        let content = fs::read_to_string(dir.join(name))
+            .expect("Should have been able to read the file");
         let config: Config = serde_yaml::from_str(&content).unwrap();
         config
     }
@@ -157,7 +167,11 @@ pub struct Cache {
 impl Cache {
     pub fn new(config: &Config) -> Self {
         let (initial, forward_converter, reverse_converter) = Self::transform_keymap(&config);
-        Self { initial, forward_converter, reverse_converter }
+        Self {
+            initial,
+            forward_converter,
+            reverse_converter,
+        }
     }
 
     pub fn transform_keymap(config: &Config) -> (KeyMap, HashMap<String, usize>, Vec<String>) {
@@ -204,7 +218,10 @@ impl Cache {
             if mapped.len() == 1 {
                 let number = *self.forward_converter.get(element).unwrap();
                 let current_mapped = candidate[number];
-                new_config.form.mapping.insert(element.to_string(), current_mapped.to_string());
+                new_config
+                    .form
+                    .mapping
+                    .insert(element.to_string(), current_mapped.to_string());
             } else {
                 let mut all_codes = String::new();
                 for index in 0..mapped.len() {
@@ -213,7 +230,10 @@ impl Cache {
                     let current_mapped = &candidate[number];
                     all_codes.push(*current_mapped);
                 }
-                new_config.form.mapping.insert(element.to_string(), all_codes);
+                new_config
+                    .form
+                    .mapping
+                    .insert(element.to_string(), all_codes);
             }
         }
         new_config

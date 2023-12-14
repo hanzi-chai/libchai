@@ -8,6 +8,7 @@ use crate::encoder::Code;
 use crate::encoder::Encoder;
 use crate::encoder::RawElements;
 use std::collections::HashSet;
+use std::env;
 use std::fmt::Display;
 
 #[derive(Debug, Clone)]
@@ -107,8 +108,10 @@ pub struct Objective {
 impl Objective {
     pub fn new(config: &Config, cache: &Cache, name: &String) -> Objective {
         let assets = Assets::new();
+        let mut dir = env::current_exe().unwrap();
+        dir.pop();
         let raw_elements: RawElements = Assets::read_hashmap_from_file(
-            name,
+            &dir.join(name),
             |x| x.chars().next().unwrap(),
             |x| x.split(' ').map(|x| x.to_string()).collect(),
         );
@@ -147,7 +150,7 @@ impl Objective {
             .unwrap_or(0);
         let mut tiered_duplication = vec![0; ntier];
         let mut total_equivalence = 0.0;
-        let mut total_levels = vec![0_usize; self.encoder.max_length];
+        let mut total_levels = vec![0_usize; 10];
         let mut tiered_levels = vec![total_levels.clone(); ntier];
         for (index, (code, frequency)) in codes.iter().enumerate() {
             total_frequency += frequency;
@@ -249,7 +252,6 @@ impl Objective {
             metric.characters = Some(partial);
             if let Some(character_reduced) = &self.config.characters_reduced {
                 let character_codes_reduced = self.encoder.encode_reduced(&character_codes);
-                // println!("{:?}", character_codes_reduced);
                 let (partial, accum) =
                     self.evaluate_partial(&character_codes_reduced, character_reduced);
                 loss += accum;

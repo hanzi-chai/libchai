@@ -1,11 +1,10 @@
 use std::fs;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use crate::config::{KeyMap, Config, Cache, MetaheuristicConfig};
 use crate::constraints::Constraints;
 use crate::metaheuristics::{Metaheuristics, simulated_annealing, hill_climbing};
 use crate::objective::{Objective, Metric};
 use rand::random;
-use time::Duration;
 use chrono::Local;
 
 // 未来可能会有更加通用的解定义
@@ -61,9 +60,10 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     fn save_candidate(&self, candidate: &Solution, rank: &(Metric, f64)) {
         let time = Local::now();
         let prefix = format!("{}", time.format("%m-%d+%H_%M_%S_%3f"));
-        let config_path = format!("output/{}.patch.yaml", prefix);
+        let config_path = format!("output/{}.yaml", prefix);
         let metric_path = format!("output/{}.txt", prefix);
-        print!("{}\n{}", prefix, rank.0);
+        println!("搜索到一个更好的方案，已为您保存在 {}.yaml 中", prefix);
+        print!("{}", rank.0);
         fs::write(metric_path, format!("{}", rank.0)).unwrap();
         let new_config = self.cache.update_config(&self.config, &candidate);
         let content = serde_yaml::to_string(&new_config).unwrap();
@@ -79,15 +79,17 @@ impl ElementPlacementProblem {
             MetaheuristicConfig::SimulatedAnnealing { runtime, parameters } => {
                 if let Some(parameters) = parameters {
                     simulated_annealing::solve(self, parameters.clone())
+                } else if let Some(runtime) = runtime {
+                    let duration = Duration::new(runtime * 60, 0);
+                    simulated_annealing::autosolve(self, duration)
                 } else {
-                    let _runtime = Duration::new(runtime.unwrap() * 60, 0);
-                    panic!("目前不支持自动寻找参数");
+                    panic!("退火算法无法执行，因为配置文件中既没有提供参数，也没有提供运行时间");
                 }
             
             }
             MetaheuristicConfig::HillClimbing { runtime } => {
-                let runtime = Duration::new(runtime.unwrap() * 60, 0);
-                hill_climbing::solve(self, runtime)
+                let duration = Duration::new(runtime * 60, 0);
+                hill_climbing::solve(self, duration)
             }
         }
     }

@@ -102,8 +102,8 @@ impl Encoder {
         Encoder {
             characters,
             words,
-            auto_select_length: config.encoder.auto_select_length,
-            max_length: config.encoder.maxlength
+            auto_select_length: config.encoder.auto_select_length.unwrap_or(0),
+            max_length: config.encoder.maxlength.unwrap_or(std::usize::MAX)
         }
     }
 

@@ -6,5 +6,6 @@ pkg/
 wasm-pack.log
 assets
 output
+package
 *.yaml
 *.txt
