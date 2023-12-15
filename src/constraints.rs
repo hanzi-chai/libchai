@@ -1,5 +1,5 @@
-use crate::config::{AtomicConstraint, KeyMap, Cache, Config};
-use rand::{thread_rng, Rng, seq::SliceRandom};
+use crate::config::{AtomicConstraint, Cache, Config, KeyMap};
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::{HashMap, HashSet};
 
 pub struct Constraints {
@@ -7,7 +7,7 @@ pub struct Constraints {
     pub elements: usize,
     pub fixed: HashSet<usize>,
     pub narrowed: HashMap<usize, Vec<char>>,
-    pub grouped: HashMap<usize, Vec<usize>>
+    pub grouped: HashMap<usize, Vec<usize>>,
 }
 
 impl Constraints {
@@ -25,11 +25,19 @@ impl Constraints {
             if let Some(grouping) = &constraints.grouping {
                 for group in grouping {
                     let mut vec: Vec<usize> = Vec::new();
-                    for AtomicConstraint { element, index, keys: _ } in group {
+                    for AtomicConstraint {
+                        element,
+                        index,
+                        keys: _,
+                    } in group
+                    {
                         let element = element.as_ref().unwrap();
                         let index = index.unwrap();
                         let name = format!("{}.{}", element.to_string(), index);
-                        let number = cache.forward_converter.get(&name).expect(&format!("{} 并不存在", name));
+                        let number = cache
+                            .forward_converter
+                            .get(&name)
+                            .expect(&format!("{} 并不存在", name));
                         vec.push(*number);
                     }
                     for number in &vec {
@@ -52,7 +60,8 @@ impl Constraints {
                     let p2 = vec[1].parse::<usize>().unwrap();
                     index.is_some_and(|x| x != p2) || element.clone().is_some_and(|x| x != p1)
                 } else {
-                    index.is_some_and(|x| x == 1) || element.clone().is_some_and(|x| x != *one_element)
+                    index.is_some_and(|x| x == 1)
+                        || element.clone().is_some_and(|x| x != *one_element)
                 };
                 if !excluded {
                     if let Some(keys) = keys {
@@ -86,7 +95,10 @@ impl Constraints {
         let mut rng = thread_rng();
         loop {
             let key = rng.gen_range(0..self.elements);
-            if !self.fixed.contains(&key) && !self.narrowed.contains_key(&key) && !self.grouped.contains_key(&key) {
+            if !self.fixed.contains(&key)
+                && !self.narrowed.contains_key(&key)
+                && !self.grouped.contains_key(&key)
+            {
                 return key;
             }
         }
@@ -105,7 +117,10 @@ impl Constraints {
         let mut rng = thread_rng();
         let mut next = map.clone();
         let movable_element = self.get_movable_element();
-        let destinations = self.narrowed.get(&movable_element).unwrap_or(&self.alphabet);
+        let destinations = self
+            .narrowed
+            .get(&movable_element)
+            .unwrap_or(&self.alphabet);
         let char = destinations.choose(&mut rng).unwrap();
         if let Some(group) = self.grouped.get(&movable_element) {
             for number in group {

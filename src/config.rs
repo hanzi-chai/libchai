@@ -27,7 +27,7 @@ pub enum WordRule {
     RangeRule {
         length_in_range: (usize, usize),
         formula: String,
-    }
+    },
 }
 
 #[skip_serializing_none]
@@ -52,7 +52,7 @@ pub struct FormConfig {
     pub mapping_type: Option<usize>,
     pub mapping: HashMap<String, String>,
     pub grouping: HashMap<String, String>,
-    pub analysis: Option<AnalysisConfig>
+    pub analysis: Option<AnalysisConfig>,
 }
 
 #[skip_serializing_none]
@@ -101,12 +101,12 @@ pub struct EncoderConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelMetricWeights {
     pub length: usize,
-    pub frequency: f64
+    pub frequency: f64,
 }
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TieredMetricWeights {
+pub struct TierMetricWeights {
     pub top: Option<usize>,
     pub duplication: Option<f64>,
     pub levels: Option<Vec<LevelMetricWeights>>,
@@ -115,9 +115,10 @@ pub struct TieredMetricWeights {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartialMetricWeights {
-    pub tiered: Option<Vec<TieredMetricWeights>>,
+    pub tiers: Option<Vec<TierMetricWeights>>,
     pub duplication: Option<f64>,
-    pub equivalence: Option<f64>,
+    pub key_equivalence: Option<f64>,
+    pub pair_equivalence: Option<f64>,
     pub levels: Option<Vec<LevelMetricWeights>>,
 }
 
@@ -144,7 +145,7 @@ pub struct ConstraintsConfig {
     pub elements: Option<Vec<AtomicConstraint>>,
     pub indices: Option<Vec<AtomicConstraint>>,
     pub element_indices: Option<Vec<AtomicConstraint>>,
-    pub grouping: Option<Vec<Vec<AtomicConstraint>>>
+    pub grouping: Option<Vec<Vec<AtomicConstraint>>>,
 }
 
 #[skip_serializing_none]

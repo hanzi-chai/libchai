@@ -11,7 +11,7 @@ use crate::metric::LevelMetric1;
 use crate::metric::LevelMetric2;
 use crate::metric::Metric;
 use crate::metric::PartialMetric;
-use crate::metric::TieredMetric;
+use crate::metric::TierMetric;
 use std::collections::HashSet;
 
 pub struct Objective {
@@ -21,7 +21,12 @@ pub struct Objective {
 }
 
 impl Objective {
-    pub fn new(config: &Config, cache: &Cache, raw_elements: RawElements, assets: Assets) -> Objective {
+    pub fn new(
+        config: &Config,
+        cache: &Cache,
+        raw_elements: RawElements,
+        assets: Assets,
+    ) -> Objective {
         let elements = cache.transform_elements(&raw_elements);
         let encoder = Encoder::new(&config, elements, &assets);
         Objective {
@@ -31,12 +36,24 @@ impl Objective {
         }
     }
 
-    fn calculate_total_equivalence(&self, code: &String) -> f64 {
+    fn calculate_total_key_equivalence(&self, code: &String) -> f64 {
+        let mut total = 0.0;
+        for char in code.chars() {
+            total += self.assets.key_equivalence.get(&char).unwrap_or(&0.0);
+        }
+        total
+    }
+
+    fn calculate_total_pair_equivalence(&self, code: &String) -> f64 {
         let mut total = 0.0;
         let mut it = code.chars();
         let mut this = it.next().unwrap();
         while let Some(next) = it.next() {
-            total += self.assets.equivalence.get(&(this, next)).unwrap_or(&0.0);
+            total += self
+                .assets
+                .pair_equivalence
+                .get(&(this, next))
+                .unwrap_or(&0.0);
             this = next;
         }
         total
@@ -47,35 +64,46 @@ impl Objective {
         codes: &Code,
         weights: &PartialMetricWeights,
     ) -> (PartialMetric, f64) {
-        let mut occupied_codes: HashSet<String> = HashSet::new();
+        // 处理总数据
         let mut total_frequency = 0;
+        let mut total_keys = 0;
         let mut total_pairs = 0;
         let mut total_duplication = 0;
-        let ntier = weights.tiered.as_ref().unwrap_or(&vec![]).len();
-        let mut tiered_duplication = vec![0; ntier];
-        let mut total_equivalence = 0.0;
+        let mut total_keys_equivalence = 0.0;
+        let mut total_pair_equivalence = 0.0;
         let mut total_levels = vec![0_usize; weights.levels.as_ref().unwrap_or(&vec![]).len()];
-        let mut tiered_levels: Vec<Vec<usize>> = vec![];
-        if let Some(tiered) = &weights.tiered {
-            for tier in tiered {
-                let vec = vec![0_usize, tier.levels.as_ref().unwrap_or(&vec![]).len()];
-                tiered_levels.push(vec);
+        // 处理分级的数据
+        let ntier = weights.tiers.as_ref().map_or(0, |v| v.len());
+        let mut tiers_duplication = vec![0; ntier];
+        let mut tiers_levels: Vec<Vec<usize>> = vec![];
+        if let Some(tiers) = &weights.tiers {
+            for tier in tiers {
+                let vec = vec![0_usize, tier.levels.as_ref().map_or(0, |v| v.len())];
+                tiers_levels.push(vec);
             }
         }
+        let mut occupied_codes: HashSet<String> = HashSet::new();
         for (index, (code, frequency)) in codes.iter().enumerate() {
             total_frequency += frequency;
-            if let Some(_) = weights.equivalence {
-                total_equivalence += self.calculate_total_equivalence(code) * *frequency as f64;
+            // 当量相关
+            if let Some(_) = weights.key_equivalence {
+                total_keys_equivalence +=
+                    self.calculate_total_key_equivalence(code) * *frequency as f64;
+                total_keys += code.len() * frequency;
+            }
+            if let Some(_) = weights.pair_equivalence {
+                total_pair_equivalence +=
+                    self.calculate_total_pair_equivalence(code) * *frequency as f64;
                 total_pairs += (code.len() - 1) * frequency;
             }
             // 重码相关
             if let Some(_) = occupied_codes.get(code) {
                 total_duplication += frequency;
-                if let Some(tiered) = &weights.tiered {
-                    for (itier, tier) in tiered.iter().enumerate() {
+                if let Some(tiers) = &weights.tiers {
+                    for (itier, tier) in tiers.iter().enumerate() {
                         let top = tier.top.unwrap_or(std::usize::MAX);
                         if index <= top {
-                            tiered_duplication[itier] += 1;
+                            tiers_duplication[itier] += 1;
                         }
                     }
                 }
@@ -88,14 +116,14 @@ impl Objective {
                     }
                 }
             }
-            if let Some(tiered) = &weights.tiered {
-                for (itier, tier) in tiered.iter().enumerate() {
+            if let Some(tiers) = &weights.tiers {
+                for (itier, tier) in tiers.iter().enumerate() {
                     let top = tier.top.unwrap_or(std::usize::MAX);
                     if index <= top {
                         if let Some(levels) = &tier.levels {
                             for (ilevel, level) in levels.iter().enumerate() {
                                 if level.length == code.len() {
-                                    tiered_levels[itier][ilevel] += 1;
+                                    tiers_levels[itier][ilevel] += 1;
                                 }
                             }
                         }
@@ -106,17 +134,24 @@ impl Objective {
         }
         let total_frequency = total_frequency as f64;
         let total_pairs = total_pairs as f64;
+        let total_keys = total_keys as f64;
         let mut partial_metric = PartialMetric {
-            tiered: None,
-            equivalence: None,
+            tiers: None,
+            key_equivalence: None,
+            pair_equivalence: None,
             duplication: None,
             levels: None,
         };
 
         let mut real = 0.0;
-        if let Some(equivalence_weight) = weights.equivalence {
-            let equivalence = total_equivalence / total_pairs;
-            partial_metric.equivalence = Some(equivalence);
+        if let Some(equivalence_weight) = weights.key_equivalence {
+            let equivalence = total_keys_equivalence / total_keys;
+            partial_metric.key_equivalence = Some(equivalence);
+            real += equivalence * equivalence_weight;
+        }
+        if let Some(equivalence_weight) = weights.pair_equivalence {
+            let equivalence = total_pair_equivalence / total_pairs;
+            partial_metric.pair_equivalence = Some(equivalence);
             real += equivalence * equivalence_weight;
         }
         if let Some(duplication_weight) = weights.duplication {
@@ -129,34 +164,46 @@ impl Objective {
             for (ilevel, level) in levels_weight.iter().enumerate() {
                 let value = total_levels[ilevel] as f64 / total_frequency;
                 real += value * level.frequency;
-                levels.push(LevelMetric2 { length: level.length, frequency: value })
+                levels.push(LevelMetric2 {
+                    length: level.length,
+                    frequency: value,
+                });
             }
             partial_metric.levels = Some(levels);
         }
-        if let Some(tiered_weight) = &weights.tiered {
-            let mut tiered: Vec<TieredMetric> = tiered_weight
+        if let Some(tiers_weight) = &weights.tiers {
+            let mut tiers: Vec<TierMetric> = tiers_weight
                 .iter()
-                .map(|x| TieredMetric {
+                .map(|x| TierMetric {
                     top: x.top,
                     duplication: None,
                     levels: None,
                 })
                 .collect();
-            for (itier, twights) in tiered_weight.iter().enumerate() {
+            for (itier, twights) in tiers_weight.iter().enumerate() {
                 let total = twights.top.unwrap_or(codes.len());
                 if let Some(duplication_weight) = twights.duplication {
-                    let duplication = tiered_duplication[itier];
+                    let duplication = tiers_duplication[itier];
                     real += duplication as f64 / total as f64 * duplication_weight;
-                    tiered[itier].duplication = Some(duplication);
+                    tiers[itier].duplication = Some(duplication);
                 }
                 if let Some(level_weight) = &twights.levels {
                     for (ilevel, level) in level_weight.iter().enumerate() {
-                        real += tiered_levels[itier][ilevel] as f64 / total as f64 * level.frequency;
+                        real += tiers_levels[itier][ilevel] as f64 / total as f64 * level.frequency;
                     }
-                    tiered[itier].levels = Some(level_weight.iter().enumerate().map(|(i, v)| LevelMetric1 { length: v.length, frequency: tiered_levels[itier][i] }).collect());
+                    tiers[itier].levels = Some(
+                        level_weight
+                            .iter()
+                            .enumerate()
+                            .map(|(i, v)| LevelMetric1 {
+                                length: v.length,
+                                frequency: tiers_levels[itier][i],
+                            })
+                            .collect(),
+                    );
                 }
             }
-            partial_metric.tiered = Some(tiered);
+            partial_metric.tiers = Some(tiers);
         }
         return (partial_metric, real);
     }

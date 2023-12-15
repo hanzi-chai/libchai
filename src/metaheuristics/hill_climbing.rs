@@ -18,8 +18,8 @@
 //!let solution = metaheuristics::hill_climbing::solve(&mut problem, runtime);
 //!```
 
-use std::time::{Duration, Instant};
 use super::Metaheuristics;
+use std::time::{Duration, Instant};
 
 /// Returns an approximate solution to your optimisation problem using Hill Climbing
 ///

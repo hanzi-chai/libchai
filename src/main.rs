@@ -9,8 +9,8 @@ use problem::ElementPlacementProblem;
 mod constraints;
 mod encoder;
 use constraints::Constraints;
-mod metaheuristics;
 mod cli;
+mod metaheuristics;
 use cli::prepare_file;
 
 fn main() {

@@ -1,12 +1,12 @@
-use std::fs;
-use std::time::{Instant, Duration};
-use crate::config::{KeyMap, Config, Cache, MetaheuristicConfig};
+use crate::config::{Cache, Config, KeyMap, MetaheuristicConfig};
 use crate::constraints::Constraints;
-use crate::metaheuristics::{Metaheuristics, simulated_annealing, hill_climbing};
+use crate::metaheuristics::{hill_climbing, simulated_annealing, Metaheuristics};
 use crate::metric::Metric;
 use crate::objective::Objective;
-use rand::random;
 use chrono::Local;
+use rand::random;
+use std::fs;
+use std::time::{Duration, Instant};
 
 // 未来可能会有更加通用的解定义
 type Solution = KeyMap;
@@ -77,7 +77,10 @@ impl ElementPlacementProblem {
         let _ = fs::create_dir_all("output").expect("should be able to create an output directory");
         let metaheuristic = self.config.optimization.metaheuristic.clone();
         match metaheuristic {
-            MetaheuristicConfig::SimulatedAnnealing { runtime, parameters } => {
+            MetaheuristicConfig::SimulatedAnnealing {
+                runtime,
+                parameters,
+            } => {
                 if let Some(parameters) = parameters {
                     simulated_annealing::solve(self, parameters.clone())
                 } else if let Some(runtime) = runtime {
@@ -86,7 +89,6 @@ impl ElementPlacementProblem {
                 } else {
                     panic!("退火算法无法执行，因为配置文件中既没有提供参数，也没有提供运行时间");
                 }
-            
             }
             MetaheuristicConfig::HillClimbing { runtime } => {
                 let duration = Duration::new(runtime * 60, 0);
@@ -94,5 +96,4 @@ impl ElementPlacementProblem {
             }
         }
     }
-
 }

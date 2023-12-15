@@ -3,23 +3,23 @@ use std::fmt::Display;
 #[derive(Debug, Clone)]
 pub struct LevelMetric1 {
     pub length: usize,
-    pub frequency: usize
+    pub frequency: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct LevelMetric2 {
     pub length: usize,
-    pub frequency: f64
+    pub frequency: f64,
 }
 
 #[derive(Debug, Clone)]
-pub struct TieredMetric {
+pub struct TierMetric {
     pub top: Option<usize>,
     pub duplication: Option<usize>,
     pub levels: Option<Vec<LevelMetric1>>,
 }
 
-impl Display for TieredMetric {
+impl Display for TierMetric {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let hanzi_numbers: Vec<char> = "一二三四五六七八九十".chars().collect();
         let specifier = if let Some(top) = self.top {
@@ -35,7 +35,9 @@ impl Display for TieredMetric {
             for LevelMetric1 { length, frequency } in levels {
                 f.write_str(&format!(
                     "{}{}键：{}；",
-                    specifier, hanzi_numbers[length - 1], frequency
+                    specifier,
+                    hanzi_numbers[length - 1],
+                    frequency
                 ))
                 .unwrap();
             }
@@ -46,9 +48,10 @@ impl Display for TieredMetric {
 
 #[derive(Debug, Clone)]
 pub struct PartialMetric {
-    pub tiered: Option<Vec<TieredMetric>>,
+    pub tiers: Option<Vec<TierMetric>>,
     pub duplication: Option<f64>,
-    pub equivalence: Option<f64>,
+    pub key_equivalence: Option<f64>,
+    pub pair_equivalence: Option<f64>,
     pub levels: Option<Vec<LevelMetric2>>,
 }
 
@@ -59,7 +62,10 @@ impl Display for PartialMetric {
             f.write_str(&format!("选重率：{:.2}%；", duplication * 100.0))
                 .unwrap();
         }
-        if let Some(equivalence) = self.equivalence {
+        if let Some(equivalence) = self.key_equivalence {
+            f.write_str(&format!("用指：{:.2}；", equivalence)).unwrap();
+        }
+        if let Some(equivalence) = self.pair_equivalence {
             f.write_str(&format!("当量：{:.2}；", equivalence)).unwrap();
         }
         if let Some(levels) = &self.levels {
@@ -72,8 +78,8 @@ impl Display for PartialMetric {
                 .unwrap();
             }
         }
-        if let Some(tiered) = &self.tiered {
-            for tier in tiered {
+        if let Some(tiers) = &self.tiers {
+            for tier in tiers {
                 f.write_str(&format!("{}", tier)).unwrap();
             }
         }

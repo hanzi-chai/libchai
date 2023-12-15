@@ -22,8 +22,11 @@ pub struct Args {
     #[arg(short, long, value_name = "FILE")]
     pub word_frequency: Option<PathBuf>,
 
-    #[arg(short = 'q', long, value_name = "FILE")]
-    pub equivalence: Option<PathBuf>,
+    #[arg(short, long, value_name = "FILE")]
+    pub key_equivalence: Option<PathBuf>,
+
+    #[arg(short, long, value_name = "FILE")]
+    pub pair_equivalence: Option<PathBuf>,
 }
 
 fn get_file(path: PathBuf) -> String {
@@ -57,14 +60,16 @@ fn parse_hashmap<T: Eq + std::hash::Hash, S>(
     hashmap
 }
 
-pub type Equivalence = HashMap<(char, char), f64>;
+pub type KeyEquivalence = HashMap<char, f64>;
+pub type PairEquivalence = HashMap<(char, char), f64>;
 pub type Frequency<T> = HashMap<T, usize>;
 
 #[derive(Debug)]
 pub struct Assets {
     pub character_frequency: Frequency<char>,
     pub word_frequency: Frequency<String>,
-    pub equivalence: Equivalence,
+    pub key_equivalence: KeyEquivalence,
+    pub pair_equivalence: PairEquivalence,
 }
 
 pub fn prepare_file() -> (Config, RawElements, Assets) {
@@ -97,14 +102,19 @@ pub fn prepare_file() -> (Config, RawElements, Assets) {
         .word_frequency
         .unwrap_or(assets_dir.join("word_frequency.txt"));
     let word_frequency = parse_hashmap(&get_file(wf_path), identity, to_usize);
-    let eq_path = args
-        .equivalence
-        .unwrap_or(assets_dir.join("equivalence.txt"));
-    let equivalence = parse_hashmap(&get_file(eq_path), to_char_pair, to_f64);
+    let keq_path = args
+        .key_equivalence
+        .unwrap_or(assets_dir.join("key_equivalence.txt"));
+    let key_equivalence = parse_hashmap(&get_file(keq_path), to_char, to_f64);
+    let peq_path = args
+        .pair_equivalence
+        .unwrap_or(assets_dir.join("pair_equivalence.txt"));
+    let pair_equivalence = parse_hashmap(&get_file(peq_path), to_char_pair, to_f64);
     let assets = Assets {
         character_frequency,
         word_frequency,
-        equivalence,
+        key_equivalence,
+        pair_equivalence,
     };
     return (config, elements, assets);
 }

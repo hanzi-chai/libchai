@@ -44,9 +44,18 @@ impl Encoder {
     fn build_lookup(config: &Config) -> [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] {
         let mut quick_lookup: [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] = Default::default();
         let default_rules: Vec<WordRule> = vec![
-            WordRule::EqualRule { length_equal: 2, formula: String::from("AaAbBaBb") },
-            WordRule::EqualRule { length_equal: 3, formula: String::from("AaBaCaCb") },
-            WordRule::RangeRule { length_in_range: (4, 20), formula: String::from("AaBaCaZa") }
+            WordRule::EqualRule {
+                length_equal: 2,
+                formula: String::from("AaAbBaBb"),
+            },
+            WordRule::EqualRule {
+                length_equal: 3,
+                formula: String::from("AaBaCaCb"),
+            },
+            WordRule::RangeRule {
+                length_in_range: (4, 20),
+                formula: String::from("AaBaCaZa"),
+            },
         ];
         for i in 2..=MAX_WORD_LENGTH {
             // 尝试从规则列表中找到一个能符合当前长度的规则

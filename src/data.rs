@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,9 +15,9 @@ pub enum Stroke {
     SVGStroke {
         feature: String,
         start: (i8, i8),
-        curveList: Vec<Draw>
+        curveList: Vec<Draw>,
     },
-    IndexedStroke(i8)
+    IndexedStroke(i8),
 }
 
 #[skip_serializing_none]
@@ -30,7 +30,7 @@ pub struct Component {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
     pub index: usize,
-    pub strokes: usize
+    pub strokes: usize,
 }
 
 #[skip_serializing_none]
@@ -54,7 +54,7 @@ pub struct Glyph {
     pub default_type: String,
     pub component: Option<Component>,
     pub compound: Option<Vec<Partition>>,
-    pub ambiguous: Option<bool>
+    pub ambiguous: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,5 +62,5 @@ pub struct Character {
     pub unicode: usize,
     pub pinyin: Vec<String>,
     pub tygf: u8,
-    pub gb2312: bool
+    pub gb2312: bool,
 }
