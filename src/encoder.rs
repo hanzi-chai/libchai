@@ -1,6 +1,6 @@
 use crate::{
-    assets::Assets,
-    config::{Config, KeyMap},
+    cli::Assets,
+    config::{Config, KeyMap, WordRule},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -43,16 +43,24 @@ impl Encoder {
 
     fn build_lookup(config: &Config) -> [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] {
         let mut quick_lookup: [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] = Default::default();
+        let default_rules: Vec<WordRule> = vec![
+            WordRule::EqualRule { length_equal: 2, formula: String::from("AaAbBaBb") },
+            WordRule::EqualRule { length_equal: 3, formula: String::from("AaBaCaCb") },
+            WordRule::RangeRule { length_in_range: (4, 20), formula: String::from("AaBaCaZa") }
+        ];
         for i in 2..=MAX_WORD_LENGTH {
             // 尝试从规则列表中找到一个能符合当前长度的规则
             let mut one_matched = false;
-            for rule in &config.encoder.rules {
-                let formula = &rule.formula;
-                let is_matched = if let Some(length_equal) = rule.length_equal {
-                    length_equal == i
-                } else {
-                    let length_in_range = &rule.length_in_range.clone().unwrap();
-                    length_in_range[0] <= i && length_in_range[1] >= i
+            for rule in config.encoder.rules.as_ref().unwrap_or(&default_rules) {
+                let (is_matched, formula) = match rule {
+                    WordRule::EqualRule {
+                        formula,
+                        length_equal,
+                    } => (*length_equal == i, formula),
+                    WordRule::RangeRule {
+                        formula,
+                        length_in_range,
+                    } => (length_in_range.0 <= i && length_in_range.1 >= i, formula),
                 };
                 if is_matched {
                     one_matched = true;
@@ -68,14 +76,15 @@ impl Encoder {
     }
 
     pub fn new(config: &Config, elements: Elements, assets: &Assets) -> Encoder {
-        let mut characters: Vec<RankedElements> = elements.iter().map(
-            |(k, v)| (v.clone(), *assets.characters.get(k).unwrap_or(&0))
-        ).collect();
+        let mut characters: Vec<RankedElements> = elements
+            .iter()
+            .map(|(k, v)| (v.clone(), *assets.character_frequency.get(k).unwrap_or(&0)))
+            .collect();
         characters.sort_by(|a, b| b.1.cmp(&a.1));
         // 词库中的字可能并没有在拆分表中
         let lookup = Self::build_lookup(config);
         let mut words: Vec<RankedElements> = Vec::new();
-        for (word, freq) in &assets.words {
+        for (word, freq) in &assets.word_frequency {
             let chars: Vec<char> = word.chars().collect();
             let rule_index = chars.len() - 2;
             if rule_index + 1 >= lookup.len() {
@@ -103,7 +112,7 @@ impl Encoder {
             characters,
             words,
             auto_select_length: config.encoder.auto_select_length.unwrap_or(0),
-            max_length: config.encoder.maxlength.unwrap_or(std::usize::MAX)
+            max_length: config.encoder.max_length.unwrap_or(std::usize::MAX),
         }
     }
 

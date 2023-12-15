@@ -3,7 +3,8 @@ use std::time::{Instant, Duration};
 use crate::config::{KeyMap, Config, Cache, MetaheuristicConfig};
 use crate::constraints::Constraints;
 use crate::metaheuristics::{Metaheuristics, simulated_annealing, hill_climbing};
-use crate::objective::{Objective, Metric};
+use crate::metric::Metric;
+use crate::objective::Objective;
 use rand::random;
 use chrono::Local;
 

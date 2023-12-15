@@ -4,97 +4,124 @@ use crate::{
     metaheuristics::simulated_annealing,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs, env,
-};
+use serde_with::skip_serializing_none;
+use std::collections::{BTreeMap, HashMap};
 
 pub type KeyMap = Vec<char>;
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataConfig {
-    pub form: BTreeMap<String, Glyph>,
-    pub repertoire: BTreeMap<String, Character>,
-    pub classifier: BTreeMap<String, usize>,
+    pub form: Option<BTreeMap<String, Glyph>>,
+    pub repertoire: Option<BTreeMap<String, Character>>,
+    pub classifier: Option<BTreeMap<String, usize>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WordRule {
-    pub formula: String,
-    pub length_equal: Option<usize>,
-    pub length_in_range: Option<Vec<usize>>,
+#[serde(untagged)]
+pub enum WordRule {
+    EqualRule {
+        length_equal: usize,
+        formula: String,
+    },
+    RangeRule {
+        length_in_range: (usize, usize),
+        formula: String,
+    }
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DegeneratorConfig {
-    pub feature: BTreeMap<String, String>,
-    pub nocross: bool,
+    pub feature: Option<BTreeMap<String, String>>,
+    pub no_cross: Option<bool>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisConfig {
-    pub degenerator: DegeneratorConfig,
-    pub selector: Vec<String>,
-    pub customize: BTreeMap<String, Vec<String>>,
+    pub degenerator: Option<DegeneratorConfig>,
+    pub selector: Option<Vec<String>>,
+    pub customize: Option<BTreeMap<String, Vec<String>>>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormConfig {
-    pub maxcodelen: usize,
     pub alphabet: String,
-    pub analysis: AnalysisConfig,
-    pub grouping: HashMap<String, String>,
+    pub mapping_type: Option<usize>,
     pub mapping: HashMap<String, String>,
+    pub grouping: HashMap<String, String>,
+    pub analysis: Option<AnalysisConfig>
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct CodableObjectConfig {
     pub r#type: String,
     pub subtype: Option<String>,
+    pub key: Option<String>,
     pub rootIndex: Option<i64>,
     pub strokeIndex: Option<i64>,
 }
 
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeConfig {
+    #[serialize_always] // JavaScript null
+    pub object: Option<CodableObjectConfig>,
+    pub index: Option<usize>,
+    #[serialize_always] // JavaScript null
+    pub next: Option<String>,
+}
+
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeConfig {
     pub object: CodableObjectConfig,
     pub operator: String,
     pub value: Option<String>,
+    #[serialize_always] // JavaScript null
     pub positive: Option<String>,
+    #[serialize_always] // JavaScript null
     pub negative: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeConfig {
-    pub object: Option<CodableObjectConfig>,
-    pub next: Option<String>,
-}
-
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncoderConfig {
-    pub sources: BTreeMap<String, NodeConfig>,
-    pub conditions: BTreeMap<String, EdgeConfig>,
-    pub maxlength: Option<usize>,
+    pub max_length: Option<usize>,
     pub auto_select_length: Option<usize>,
-    pub rules: Vec<WordRule>,
+    pub sources: Option<BTreeMap<String, NodeConfig>>,
+    pub conditions: Option<BTreeMap<String, EdgeConfig>>,
+    pub rules: Option<Vec<WordRule>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LevelMetricWeights {
+    pub length: usize,
+    pub frequency: f64
+}
+
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TieredMetricWeights {
     pub top: Option<usize>,
     pub duplication: Option<f64>,
-    pub levels: Option<Vec<f64>>,
+    pub levels: Option<Vec<LevelMetricWeights>>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartialMetricWeights {
     pub tiered: Option<Vec<TieredMetricWeights>>,
     pub duplication: Option<f64>,
     pub equivalence: Option<f64>,
-    pub levels: Option<Vec<f64>>,
+    pub levels: Option<Vec<LevelMetricWeights>>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectiveConfig {
     pub characters: Option<PartialMetricWeights>,
@@ -103,6 +130,7 @@ pub struct ObjectiveConfig {
     pub words_reduced: Option<PartialMetricWeights>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomicConstraint {
     pub element: Option<String>,
@@ -110,13 +138,16 @@ pub struct AtomicConstraint {
     pub keys: Option<Vec<char>>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstraintsConfig {
-    pub elements: Vec<AtomicConstraint>,
-    pub indices: Vec<AtomicConstraint>,
-    pub element_indices: Vec<AtomicConstraint>,
+    pub elements: Option<Vec<AtomicConstraint>>,
+    pub indices: Option<Vec<AtomicConstraint>>,
+    pub element_indices: Option<Vec<AtomicConstraint>>,
+    pub grouping: Option<Vec<Vec<AtomicConstraint>>>
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "algorithm")]
 pub enum MetaheuristicConfig {
@@ -129,33 +160,25 @@ pub enum MetaheuristicConfig {
     },
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OptimizationConfig {
     pub objective: ObjectiveConfig,
-    pub constraints: ConstraintsConfig,
+    pub constraints: Option<ConstraintsConfig>,
     pub metaheuristic: MetaheuristicConfig,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub version: String,
+    pub version: Option<String>,
+    #[serialize_always] // JavaScript null
     pub source: Option<String>,
-    pub info: BTreeMap<String, String>,
-    pub data: DataConfig,
+    pub info: Option<BTreeMap<String, String>>,
+    pub data: Option<DataConfig>,
     pub form: FormConfig,
     pub encoder: EncoderConfig,
     pub optimization: OptimizationConfig,
-}
-
-impl Config {
-    pub fn new(name: &String) -> Self {
-        let mut dir = env::current_exe().unwrap();
-        dir.pop();
-        let content = fs::read_to_string(dir.join(name))
-            .expect("Should have been able to read the file");
-        let config: Config = serde_yaml::from_str(&content).unwrap();
-        config
-    }
 }
 
 pub struct Cache {

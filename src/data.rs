@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use serde_with::skip_serializing_none;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]
@@ -9,16 +10,21 @@ pub struct Draw {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]
-pub struct SVGStroke {
-    pub feature: String,
-    pub start: (i8, i8),
-    pub curveList: Vec<Draw>,
+#[serde(untagged)]
+pub enum Stroke {
+    SVGStroke {
+        feature: String,
+        start: (i8, i8),
+        curveList: Vec<Draw>
+    },
+    IndexedStroke(i8)
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Component {
     pub source: Option<String>,
-    pub strokes: Vec<SVGStroke>,
+    pub strokes: Vec<Stroke>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +33,7 @@ pub struct Block {
     pub strokes: usize
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct Partition {
@@ -36,14 +43,18 @@ pub struct Partition {
     pub order: Option<Vec<Block>>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Glyph {
     pub unicode: usize,
+    #[serialize_always] // JavaScript null
     pub name: Option<String>,
+    #[serialize_always] // JavaScript null
     pub gf0014_id: Option<usize>,
+    pub default_type: String,
     pub component: Option<Component>,
     pub compound: Option<Vec<Partition>>,
-    pub ambiguous: bool
+    pub ambiguous: Option<bool>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

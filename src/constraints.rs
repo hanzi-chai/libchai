@@ -7,6 +7,7 @@ pub struct Constraints {
     pub elements: usize,
     pub fixed: HashSet<usize>,
     pub narrowed: HashMap<usize, Vec<char>>,
+    pub grouped: HashMap<usize, Vec<usize>>
 }
 
 impl Constraints {
@@ -15,10 +16,28 @@ impl Constraints {
         let alphabet = config.form.alphabet.chars().collect();
         let mut fixed: HashSet<usize> = HashSet::new();
         let mut narrowed: HashMap<usize, Vec<char>> = HashMap::new();
-        let cst = &config.optimization.constraints;
-        let mut values = cst.elements.clone();
-        values.append(&mut cst.indices.clone());
-        values.append(&mut cst.element_indices.clone());
+        let mut grouped: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut values: Vec<AtomicConstraint> = Vec::new();
+        if let Some(constraints) = &config.optimization.constraints {
+            values.append(&mut constraints.elements.clone().unwrap_or_default());
+            values.append(&mut constraints.indices.clone().unwrap_or_default());
+            values.append(&mut constraints.element_indices.clone().unwrap_or_default());
+            if let Some(grouping) = &constraints.grouping {
+                for group in grouping {
+                    let mut vec: Vec<usize> = Vec::new();
+                    for AtomicConstraint { element, index, keys: _ } in group {
+                        let element = element.as_ref().unwrap();
+                        let index = index.unwrap();
+                        let name = format!("{}.{}", element.to_string(), index);
+                        let number = cache.forward_converter.get(&name).expect(&format!("{} 并不存在", name));
+                        vec.push(*number);
+                    }
+                    for number in &vec {
+                        grouped.insert(*number, vec.clone());
+                    }
+                }
+            }
+        }
         for atomic_constraint in &values {
             let AtomicConstraint {
                 element,
@@ -49,6 +68,7 @@ impl Constraints {
             elements,
             fixed,
             narrowed,
+            grouped,
         }
     }
 
@@ -66,7 +86,7 @@ impl Constraints {
         let mut rng = thread_rng();
         loop {
             let key = rng.gen_range(0..self.elements);
-            if !self.fixed.contains(&key) && !self.narrowed.contains_key(&key) {
+            if !self.fixed.contains(&key) && !self.narrowed.contains_key(&key) && !self.grouped.contains_key(&key) {
                 return key;
             }
         }
@@ -87,7 +107,13 @@ impl Constraints {
         let movable_element = self.get_movable_element();
         let destinations = self.narrowed.get(&movable_element).unwrap_or(&self.alphabet);
         let char = destinations.choose(&mut rng).unwrap();
-        next.insert(movable_element, *char);
+        if let Some(group) = self.grouped.get(&movable_element) {
+            for number in group {
+                next[*number] = *char;
+            }
+        } else {
+            next[movable_element] = *char;
+        }
         next
     }
 }

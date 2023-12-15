@@ -1,24 +1,22 @@
-mod assets;
 mod config;
-use config::{Cache, Config};
+use config::Cache;
 mod data;
+mod metric;
 mod objective;
 use objective::Objective;
 mod problem;
 use problem::ElementPlacementProblem;
-mod cli;
-use cli::Args;
-use clap::Parser;
-mod encoder;
 mod constraints;
+mod encoder;
 use constraints::Constraints;
 mod metaheuristics;
+mod cli;
+use cli::prepare_file;
 
 fn main() {
-    let args = Args::parse();
-    let config = Config::new(&args.config);
+    let (config, elements, assets) = prepare_file();
     let cache = Cache::new(&config);
-    let objective = Objective::new(&config, &cache, &args.elements);
+    let objective = Objective::new(&config, &cache, elements, assets);
     let constraints = Constraints::new(&config, &cache);
     let mut problem = ElementPlacementProblem::new(config, cache, constraints, objective);
     problem.solve();
