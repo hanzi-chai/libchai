@@ -5,6 +5,8 @@ use crate::config::KeyMap;
 use crate::config::ObjectiveConfig;
 use crate::config::PartialMetricWeights;
 use crate::encoder::Code;
+use crate::encoder::EncodeResults;
+use crate::encoder::Encoded;
 use crate::encoder::Encoder;
 use crate::encoder::RawElements;
 use crate::metric::LevelMetric1;
@@ -17,7 +19,7 @@ use std::collections::HashSet;
 pub struct Objective {
     config: ObjectiveConfig,
     assets: Assets,
-    encoder: Encoder,
+    pub encoder: Encoder,
 }
 
 impl Objective {
@@ -59,9 +61,9 @@ impl Objective {
         total
     }
 
-    pub fn evaluate_partial(
+    pub fn evaluate_partial<T>(
         &self,
-        codes: &Code,
+        codes: &Code<T>,
         weights: &PartialMetricWeights,
     ) -> (PartialMetric, f64) {
         // 处理总数据
@@ -71,7 +73,7 @@ impl Objective {
         let mut total_duplication = 0;
         let mut total_keys_equivalence = 0.0;
         let mut total_pair_equivalence = 0.0;
-        let mut total_levels = vec![0_usize; weights.levels.as_ref().unwrap_or(&vec![]).len()];
+        let mut total_levels = vec![0_u64; weights.levels.as_ref().unwrap_or(&vec![]).len()];
         // 处理分级的数据
         let ntier = weights.tiers.as_ref().map_or(0, |v| v.len());
         let mut tiers_duplication = vec![0; ntier];
@@ -83,18 +85,23 @@ impl Objective {
             }
         }
         let mut occupied_codes: HashSet<String> = HashSet::new();
-        for (index, (code, frequency)) in codes.iter().enumerate() {
+        for (index, encoded) in codes.iter().enumerate() {
+            let Encoded {
+                original: _,
+                frequency,
+                code,
+            } = encoded;
             total_frequency += frequency;
             // 当量相关
             if let Some(_) = weights.key_equivalence {
                 total_keys_equivalence +=
                     self.calculate_total_key_equivalence(code) * *frequency as f64;
-                total_keys += code.len() * frequency;
+                total_keys += code.len() as u64 * frequency;
             }
             if let Some(_) = weights.pair_equivalence {
                 total_pair_equivalence +=
                     self.calculate_total_pair_equivalence(code) * *frequency as f64;
-                total_pairs += (code.len() - 1) * frequency;
+                total_pairs += (code.len() - 1) as u64 * frequency;
             }
             // 重码相关
             if let Some(_) = occupied_codes.get(code) {
@@ -208,7 +215,11 @@ impl Objective {
         return (partial_metric, real);
     }
 
-    pub fn evaluate(&self, candidate: &KeyMap) -> (Metric, f64) {
+    pub fn evaluate(
+        &self,
+        candidate: &KeyMap,
+        save_codes: bool,
+    ) -> (Metric, f64, Option<EncodeResults>) {
         let mut loss = 0.0;
         let mut metric = Metric {
             characters: None,
@@ -216,8 +227,14 @@ impl Objective {
             characters_reduced: None,
             words_reduced: None,
         };
+        let mut results = EncodeResults {
+            characters: None,
+            characters_reduced: None,
+            words: None,
+            words_reduced: None,
+        };
         if let Some(characters) = &self.config.characters {
-            let character_codes = self.encoder.encode_character_full(&candidate);
+            let character_codes = self.encoder.encode_character_full(&candidate, false);
             let (partial, accum) = self.evaluate_partial(&character_codes, characters);
             loss += accum;
             metric.characters = Some(partial);
@@ -227,10 +244,12 @@ impl Objective {
                     self.evaluate_partial(&character_codes_reduced, character_reduced);
                 loss += accum;
                 metric.characters_reduced = Some(partial);
+                results.characters_reduced = Some(character_codes_reduced);
             }
+            results.characters = Some(character_codes);
         }
         if let Some(words) = &self.config.words {
-            let word_codes = self.encoder.encode_words_full(&candidate);
+            let word_codes = self.encoder.encode_words_full(&candidate, false);
             let (partial, accum) = self.evaluate_partial(&word_codes, words);
             loss += accum;
             metric.words = Some(partial);
@@ -239,8 +258,11 @@ impl Objective {
                 let (partial, accum) = self.evaluate_partial(&word_codes_reduced, words_reduced);
                 loss += accum;
                 metric.words_reduced = Some(partial);
+                results.words_reduced = Some(word_codes_reduced);
             }
+            results.words = Some(word_codes);
         }
-        (metric, loss)
+        let wrapped = if save_codes { Some(results) } else { None };
+        (metric, loss, wrapped)
     }
 }

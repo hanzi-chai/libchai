@@ -101,5 +101,5 @@ pub trait Metaheuristics<T, M> {
     ///```
     fn tweak_candidate(&mut self, candidate: &T) -> T;
 
-    fn save_candidate(&self, candidate: &T, rank: &(M, f64));
+    fn save_candidate(&self, candidate: &T, rank: &(M, f64), write_to_file: bool);
 }

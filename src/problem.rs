@@ -6,7 +6,7 @@ use crate::objective::Objective;
 use chrono::Local;
 use rand::random;
 use std::fs;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 // 未来可能会有更加通用的解定义
 type Solution = KeyMap;
@@ -44,9 +44,7 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     }
 
     fn rank_candidate(&mut self, candidate: &Solution) -> (Metric, f64) {
-        let start = Instant::now();
-        let (metric, loss) = self.objective.evaluate(candidate);
-        let _elapsed = start.elapsed();
+        let (metric, loss, _) = self.objective.evaluate(candidate, false);
         return (metric, loss);
     }
 
@@ -58,17 +56,21 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
         }
     }
 
-    fn save_candidate(&self, candidate: &Solution, rank: &(Metric, f64)) {
+    fn save_candidate(&self, candidate: &Solution, rank: &(Metric, f64), write_to_file: bool) {
         let time = Local::now();
         let prefix = format!("{}", time.format("%m-%d+%H_%M_%S_%3f"));
         let config_path = format!("output/{}.yaml", prefix);
         let metric_path = format!("output/{}.txt", prefix);
-        println!("搜索到一个更好的方案，已为您保存在 {}.yaml 中", prefix);
+        println!("{} 系统搜索到了一个更好的方案，评测指标如下：", time.format("%H:%M:%S"));
         print!("{}", rank.0);
-        fs::write(metric_path, format!("{}", rank.0)).unwrap();
         let new_config = self.cache.update_config(&self.config, &candidate);
         let content = serde_yaml::to_string(&new_config).unwrap();
-        fs::write(config_path, content).unwrap();
+        if write_to_file {
+            fs::write(metric_path, format!("{}", rank.0)).unwrap();
+            fs::write(config_path, content).unwrap();
+            println!("方案文件保存于 {}.yaml 中，评测指标保存于 {}.txt 中", prefix, prefix);
+        }
+        println!("");
     }
 }
 

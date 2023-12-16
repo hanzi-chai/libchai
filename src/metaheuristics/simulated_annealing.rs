@@ -89,7 +89,12 @@ pub fn solve<T: Clone, M: Clone>(
         let progress = step as f64 / steps as f64;
         let temperature = t_max / (log_space * progress).exp();
         let next_candidate = problem.tweak_candidate(&annealing_candidate);
+        let start = Instant::now();
         let next_rank = problem.rank_candidate(&next_candidate);
+        let elapsed = start.elapsed();
+        if step == 0 {
+            println!("计算一次评测用时：{} μs", elapsed.as_millis());
+        }
         let improvement = next_rank.1 - annealing_rank.1;
         if improvement < 0.0 || (random::<f64>() < (-improvement / temperature).exp()) {
             annealing_candidate = next_candidate;
@@ -98,7 +103,7 @@ pub fn solve<T: Clone, M: Clone>(
         if annealing_rank.1 < best_rank.1 {
             best_rank = annealing_rank.clone();
             best_candidate = problem.clone_candidate(&annealing_candidate);
-            problem.save_candidate(&best_candidate, &best_rank);
+            problem.save_candidate(&best_candidate, &best_rank, progress > 0.9);
         }
     }
     best_candidate

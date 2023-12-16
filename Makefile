@@ -20,7 +20,7 @@ package: build build-windows
 	zip -r libchai.zip *
 
 build:
-	cargo build
+	cargo build --release
 
 build-windows:
 	cargo build --release --target x86_64-pc-windows-gnu

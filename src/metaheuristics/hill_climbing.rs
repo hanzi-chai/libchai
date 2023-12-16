@@ -46,7 +46,7 @@ pub fn solve<T: Clone, M: Clone>(problem: &mut dyn Metaheuristics<T, M>, runtime
         if next_rank.1 < best_rank.1 {
             best_candidate = next_candidate;
             best_rank = next_rank;
-            problem.save_candidate(&best_candidate, &best_rank);
+            problem.save_candidate(&best_candidate, &best_rank, true);
         }
     }
 
