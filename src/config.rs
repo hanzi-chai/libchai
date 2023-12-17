@@ -114,11 +114,22 @@ pub struct TierMetricWeights {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FingeringWeights {
+    pub same_hand: Option<f64>,
+    pub same_finger_large_jump: Option<f64>,
+    pub same_finger_small_jump: Option<f64>,
+    pub little_finger_inteference: Option<f64>,
+    pub awkward_upside_down: Option<f64>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartialMetricWeights {
     pub tiers: Option<Vec<TierMetricWeights>>,
     pub duplication: Option<f64>,
     pub key_equivalence: Option<f64>,
     pub pair_equivalence: Option<f64>,
+    pub fingering: Option<FingeringWeights>,
     pub levels: Option<Vec<LevelMetricWeights>>,
 }
 
@@ -158,6 +169,7 @@ pub enum MetaheuristicConfig {
     SimulatedAnnealing {
         runtime: Option<u64>,
         parameters: Option<simulated_annealing::Parameters>,
+        report_after: Option<f64>
     },
 }
 

@@ -82,12 +82,13 @@ impl ElementPlacementProblem {
             MetaheuristicConfig::SimulatedAnnealing {
                 runtime,
                 parameters,
+                report_after,
             } => {
                 if let Some(parameters) = parameters {
-                    simulated_annealing::solve(self, parameters.clone())
+                    simulated_annealing::solve(self, parameters.clone(), report_after)
                 } else if let Some(runtime) = runtime {
                     let duration = Duration::new(runtime * 60, 0);
-                    simulated_annealing::autosolve(self, duration)
+                    simulated_annealing::autosolve(self, duration, report_after)
                 } else {
                     panic!("退火算法无法执行，因为配置文件中既没有提供参数，也没有提供运行时间");
                 }

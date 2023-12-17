@@ -14,6 +14,7 @@ use crate::metric::LevelMetric2;
 use crate::metric::Metric;
 use crate::metric::PartialMetric;
 use crate::metric::TierMetric;
+use crate::objectives::fingering::get_fingering_types;
 use std::collections::HashSet;
 
 pub struct Objective {
@@ -146,6 +147,7 @@ impl Objective {
             tiers: None,
             key_equivalence: None,
             pair_equivalence: None,
+            fingering: None,
             duplication: None,
             levels: None,
         };
@@ -234,7 +236,7 @@ impl Objective {
             words_reduced: None,
         };
         if let Some(characters) = &self.config.characters {
-            let character_codes = self.encoder.encode_character_full(&candidate, false);
+            let character_codes = self.encoder.encode_character_full(&candidate, save_codes);
             let (partial, accum) = self.evaluate_partial(&character_codes, characters);
             loss += accum;
             metric.characters = Some(partial);
@@ -249,7 +251,7 @@ impl Objective {
             results.characters = Some(character_codes);
         }
         if let Some(words) = &self.config.words {
-            let word_codes = self.encoder.encode_words_full(&candidate, false);
+            let word_codes = self.encoder.encode_words_full(&candidate, save_codes);
             let (partial, accum) = self.evaluate_partial(&word_codes, words);
             loss += accum;
             metric.words = Some(partial);

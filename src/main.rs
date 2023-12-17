@@ -12,6 +12,7 @@ use constraints::Constraints;
 mod cli;
 mod metaheuristics;
 use cli::{prepare_file, Command, write_encode_results};
+mod objectives;
 
 fn main() {
     let (config, elements, assets, command) = prepare_file();

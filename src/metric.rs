@@ -47,11 +47,21 @@ impl Display for TierMetric {
 }
 
 #[derive(Debug, Clone)]
+pub struct FingeringMetric {
+    pub same_hand: Option<f64>,
+    pub same_finger_large_jump: Option<f64>,
+    pub same_finger_small_jump: Option<f64>,
+    pub little_finger_inteference: Option<f64>,
+    pub awkward_upside_down: Option<f64>,
+}
+
+#[derive(Debug, Clone)]
 pub struct PartialMetric {
     pub tiers: Option<Vec<TierMetric>>,
     pub duplication: Option<f64>,
     pub key_equivalence: Option<f64>,
     pub pair_equivalence: Option<f64>,
+    pub fingering: Option<FingeringMetric>,
     pub levels: Option<Vec<LevelMetric2>>,
 }
 

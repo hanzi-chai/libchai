@@ -73,6 +73,7 @@ pub struct Parameters {
 pub fn solve<T: Clone, M: Clone>(
     problem: &mut dyn Metaheuristics<T, M>,
     parameters: Parameters,
+    report_after: Option<f64>
 ) -> T {
     let mut best_candidate = problem.generate_candidate();
     let mut best_rank = problem.rank_candidate(&best_candidate);
@@ -103,9 +104,10 @@ pub fn solve<T: Clone, M: Clone>(
         if annealing_rank.1 < best_rank.1 {
             best_rank = annealing_rank.clone();
             best_candidate = problem.clone_candidate(&annealing_candidate);
-            problem.save_candidate(&best_candidate, &best_rank, progress > 0.9);
+            problem.save_candidate(&best_candidate, &best_rank, progress > report_after.unwrap_or(0.9));
         }
     }
+    problem.save_candidate(&best_candidate, &best_rank, true);
     best_candidate
 }
 
@@ -134,12 +136,13 @@ fn trial_run<T: Clone, M: Clone>(
     }
     let accept_rate = accepts as f64 / steps as f64;
     let improve_rate = improves as f64 / steps as f64;
-    return (candidate, accept_rate, improve_rate);
+    (candidate, accept_rate, improve_rate)
 }
 
 pub fn autosolve<T: Clone, M: Clone>(
     problem: &mut dyn Metaheuristics<T, M>,
     duration: Duration,
+    report_after: Option<f64>
 ) -> T {
     let batch = 1000;
     println!("开始寻找参数……");
@@ -214,5 +217,5 @@ pub fn autosolve<T: Clone, M: Clone>(
         t_min,
         steps,
     };
-    solve(problem, parameters)
+    solve(problem, parameters, report_after)
 }
