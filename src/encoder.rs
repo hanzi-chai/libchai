@@ -1,43 +1,21 @@
 use crate::{
-    cli::Assets,
-    config::{Config, KeyMap, WordRule},
+    cli::{Assets, RawSequenceMap},
+    config::{Config, EncoderConfig, WordRule},
+    representation::{Codes, KeyMap, Sequence, Representation},
 };
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-};
-use serde::{Serialize, Deserialize};
+use std::{cmp::Reverse, fmt::Debug, iter::zip};
 
 // 支持二字词直到十字词
 const MAX_WORD_LENGTH: usize = 10;
 
-pub type RawElements = HashMap<char, Vec<String>>;
-pub type Elements = HashMap<char, Vec<usize>>;
-pub type RankedElements<T> = (T, Vec<usize>, u64);
-
 #[derive(Debug)]
 pub struct Encoder {
-    characters: Vec<RankedElements<char>>,
-    words: Vec<RankedElements<String>>,
-    auto_select_length: usize,
-    pub max_length: usize,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Encoded<T> {
-    pub original: Option<T>,
-    pub code: String,
-    pub frequency: u64,
-}
-
-pub type Code<T> = Vec<Encoded<T>>;
-
-#[derive(Debug)]
-pub struct EncodeResults {
-    pub characters: Option<Code<char>>,
-    pub characters_reduced: Option<Code<char>>,
-    pub words: Option<Code<String>>,
-    pub words_reduced: Option<Code<String>>,
+    pub characters: Vec<char>,
+    characters_sequence: Vec<Sequence>,
+    pub words: Vec<String>,
+    words_sequence: Vec<Sequence>,
+    config: EncoderConfig,
+    pub radix: usize,
 }
 
 impl Encoder {
@@ -69,7 +47,7 @@ impl Encoder {
                 formula: String::from("AaBaCaCb"),
             },
             WordRule::RangeRule {
-                length_in_range: (4, 20),
+                length_in_range: (4, MAX_WORD_LENGTH),
                 formula: String::from("AaBaCaZa"),
             },
         ];
@@ -100,93 +78,113 @@ impl Encoder {
         quick_lookup
     }
 
-    pub fn new(config: &Config, elements: Elements, assets: &Assets) -> Encoder {
-        let mut characters: Vec<RankedElements<char>> = elements
-            .iter()
-            .map(|(k, v)| (*k, v.clone(), *assets.character_frequency.get(k).unwrap_or(&0)))
-            .collect();
-        characters.sort_by(|a, b| b.2.cmp(&a.2));
-        // 词库中的字可能并没有在拆分表中
-        let lookup = Self::build_lookup(config);
-        let mut words: Vec<RankedElements<String>> = Vec::new();
-        for (word, freq) in &assets.word_frequency {
+    // 字需要提供拆分表，但是词只需要提供词表
+    pub fn new(representation: &Representation, sequence_map: RawSequenceMap, words: Vec<String>, assets: &Assets) -> Encoder {
+        // 将拆分序列映射降序排列
+        let sequence_map = representation.transform_elements(&sequence_map);
+        let mut characters_all: Vec<(char, Sequence)> = sequence_map.clone().into_iter().collect();
+        characters_all
+            .sort_by_key(|x| Reverse(*assets.character_frequency.get(&x.0).unwrap_or(&0)));
+        // 拆分成两个数组，一个只放字，一个只放序列
+        let (characters, characters_sequence): (Vec<_>, Vec<_>) =
+            characters_all.into_iter().unzip();
+
+        // 从词表生成词的拆分序列，滤掉因缺少字的拆分而无法构词的情况
+        let lookup = Self::build_lookup(&representation.config);
+        let mut words_all: Vec<(String, Sequence)> = Vec::new();
+        for word in words {
             let chars: Vec<char> = word.chars().collect();
-            let rule_index = chars.len() - 2;
-            if rule_index + 1 >= lookup.len() {
+            // 过滤掉太长的词
+            if chars.len() > MAX_WORD_LENGTH {
                 continue;
             }
-            let rule = &lookup[rule_index];
+            let rule = &lookup[chars.len() - 2]; // 二字词的下标是 0，所以要减二
             let mut word_elements: Vec<usize> = Vec::new();
-            let mut invalid_char = false;
+            let mut has_invalid_char = false;
             for (char_index, code_index) in rule {
-                let c = Self::signed_index(&chars, *char_index);
-                if let Some(ce) = elements.get(c) {
-                    let value = Self::signed_index(ce, *code_index);
-                    word_elements.push(value.clone());
+                let char = Self::signed_index(&chars, *char_index);
+                if let Some(sequence) = sequence_map.get(char) {
+                    let value = Self::signed_index(sequence, *code_index);
+                    word_elements.push(*value);
                 } else {
-                    invalid_char = true;
+                    has_invalid_char = true;
                     break;
                 }
             }
-            if !invalid_char {
-                words.push((word.clone(), word_elements, *freq));
+            if !has_invalid_char {
+                words_all.push((word.clone(), word_elements));
             }
         }
-        words.sort_by(|a, b| b.2.cmp(&a.2));
+        words_all.sort_by_key(|x| Reverse(*assets.word_frequency.get(&x.0).unwrap_or(&0)));
+        let (words, words_sequence): (Vec<_>, Vec<_>) = words_all.into_iter().unzip();
         Encoder {
             characters,
+            characters_sequence,
             words,
-            auto_select_length: config.encoder.auto_select_length.unwrap_or(0),
-            max_length: config.encoder.max_length.unwrap_or(std::usize::MAX),
+            words_sequence,
+            config: representation.config.encoder.clone(),
+            radix: representation.config.form.alphabet.len() + 2,
         }
     }
 
-    pub fn encode_full<T: Clone>(&self, keymap: &KeyMap, data: &Vec<RankedElements<T>>, with_original: bool) -> Code<T> {
-        let mut codes: Code<T> = Vec::new();
-        for (original, elements, frequency) in data {
-            let mut code = String::new();
-            for element in elements {
-                code.push(keymap[*element]);
-            }
-            if code.len() < self.auto_select_length {
-                code.push('_');
-            }
-            let wrapped = if with_original { Some(original.clone()) } else { None };
-            codes.push(Encoded { original: wrapped, code, frequency: *frequency });
-        }
-        return codes;
+    fn get_auto_select_value(&self) -> usize {
+        let auto_select_length = self.config.auto_select_length.unwrap_or(0);
+        self.radix.pow(auto_select_length as u32 - 1)
     }
 
-    pub fn encode_reduced<T: Clone>(&self, full_code: &Code<T>) -> Code<T> {
-        let mut reduced_codes: Code<T> = Vec::new();
-        let mut known_reduced_codes: HashSet<String> = HashSet::new();
-        for Encoded { original, code, frequency } in full_code {
+    fn get_space(&self) -> usize {
+        let max_length = self.config.max_length;
+        self.radix.pow(max_length as u32)
+    }
+
+    pub fn encode_full(&self, keymap: &KeyMap, data: &Vec<Sequence>, output: &mut Codes) {
+        let auto_select = self.get_auto_select_value();
+        for (sequence, pointer) in zip(data, output) {
+            let mut code = 0_usize;
+            let mut weight = 1_usize;
+            for element in sequence {
+                code += keymap[*element] * weight;
+                weight *= self.radix;
+            }
+            if code <= auto_select {
+                code += (self.radix - 1) * weight;
+            }
+            *pointer = code;
+        }
+    }
+
+    pub fn encode_reduced(&self, full_code: &Codes, output: &mut Codes) {
+        let auto_select = self.get_auto_select_value();
+        let mut occupation = vec![false; self.get_space()];
+        for (code, pointer) in zip(full_code, output) {
             let mut has_reduced = false;
-            for i in 1..code.len() {
-                let mut reduced_code = code[0..i].to_string();
-                if reduced_code.len() < self.auto_select_length {
-                    reduced_code.push('_');
+            let mut reduced_code = 0;
+            let mut modulo = self.radix;
+            while reduced_code < *code {
+                reduced_code = code % modulo;
+                if reduced_code < auto_select {
+                    reduced_code += (self.radix - 1) * modulo;
                 }
-                if !known_reduced_codes.contains(&reduced_code) {
-                    known_reduced_codes.insert(reduced_code.clone());
-                    reduced_codes.push(Encoded { original: original.clone(), code: reduced_code, frequency: *frequency });
+                modulo *= self.radix;
+                if !occupation[reduced_code] {
+                    occupation[reduced_code] = true;
+                    *pointer = reduced_code;
                     has_reduced = true;
                     break;
                 }
             }
             if has_reduced == false {
-                reduced_codes.push(Encoded { original: original.clone(), code: code.clone(), frequency: *frequency });
+                *pointer = *code;
             }
         }
-        reduced_codes
     }
 
-    pub fn encode_character_full(&self, keymap: &KeyMap, with_original: bool) -> Code<char> {
-        self.encode_full(keymap, &self.characters, with_original)
+    pub fn encode_character_full(&self, keymap: &KeyMap, output: &mut Codes) {
+        self.encode_full(keymap, &self.characters_sequence, output)
     }
 
-    pub fn encode_words_full(&self, keymap: &KeyMap, with_original: bool) -> Code<String> {
-        self.encode_full(keymap, &self.words, with_original)
+    pub fn encode_words_full(&self, keymap: &KeyMap, output: &mut Codes) {
+        self.encode_full(keymap, &self.words_sequence, output)
     }
 
     fn signed_index<T: Debug>(vector: &Vec<T>, index: isize) -> &T {

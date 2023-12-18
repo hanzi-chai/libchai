@@ -64,7 +64,6 @@
 //! with this program. If not, see
 //! [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
 extern crate rand;
-extern crate time;
 
 pub mod hill_climbing;
 pub mod simulated_annealing;

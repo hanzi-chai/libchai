@@ -94,7 +94,7 @@ pub fn solve<T: Clone, M: Clone>(
         let next_rank = problem.rank_candidate(&next_candidate);
         let elapsed = start.elapsed();
         if step == 0 {
-            println!("计算一次评测用时：{} μs", elapsed.as_millis());
+            println!("计算一次评测用时：{} μs", elapsed.as_micros());
         }
         let improvement = next_rank.1 - annealing_rank.1;
         if improvement < 0.0 || (random::<f64>() < (-improvement / temperature).exp()) {

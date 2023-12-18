@@ -1,13 +1,10 @@
 use crate::{
     data::{Character, Glyph},
-    encoder::{Elements, RawElements},
     metaheuristics::simulated_annealing,
 };
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, HashMap};
-
-pub type KeyMap = Vec<char>;
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,7 +88,7 @@ pub struct EdgeConfig {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncoderConfig {
-    pub max_length: Option<usize>,
+    pub max_length: usize,
     pub auto_select_length: Option<usize>,
     pub sources: Option<BTreeMap<String, NodeConfig>>,
     pub conditions: Option<BTreeMap<String, EdgeConfig>>,
@@ -169,7 +166,7 @@ pub enum MetaheuristicConfig {
     SimulatedAnnealing {
         runtime: Option<u64>,
         parameters: Option<simulated_annealing::Parameters>,
-        report_after: Option<f64>
+        report_after: Option<f64>,
     },
 }
 
@@ -192,86 +189,4 @@ pub struct Config {
     pub form: FormConfig,
     pub encoder: EncoderConfig,
     pub optimization: OptimizationConfig,
-}
-
-pub struct Cache {
-    pub initial: KeyMap,
-    pub forward_converter: HashMap<String, usize>,
-    pub reverse_converter: Vec<String>,
-}
-
-impl Cache {
-    pub fn new(config: &Config) -> Self {
-        let (initial, forward_converter, reverse_converter) = Self::transform_keymap(&config);
-        Self {
-            initial,
-            forward_converter,
-            reverse_converter,
-        }
-    }
-
-    pub fn transform_keymap(config: &Config) -> (KeyMap, HashMap<String, usize>, Vec<String>) {
-        let mut keymap: KeyMap = Vec::new();
-        let mut forward_converter: HashMap<String, usize> = HashMap::new();
-        let mut reverse_converter: Vec<String> = Vec::new();
-        for (element, mapped) in &config.form.mapping {
-            let chars: Vec<char> = mapped.chars().collect();
-            if chars.len() == 1 {
-                forward_converter.insert(element.clone(), keymap.len());
-                reverse_converter.push(element.clone());
-                keymap.push(chars[0]);
-            } else {
-                for (index, key) in chars.iter().enumerate() {
-                    let name = format!("{}.{}", element.to_string(), index);
-                    forward_converter.insert(name.clone(), keymap.len());
-                    reverse_converter.push(name.clone());
-                    keymap.push(*key);
-                }
-            }
-        }
-        (keymap, forward_converter, reverse_converter)
-    }
-
-    pub fn transform_elements(&self, elements: &RawElements) -> Elements {
-        let mut new_elements: Elements = HashMap::new();
-        for (char, elems) in elements {
-            let mut converted_elems: Vec<usize> = Vec::new();
-            for element in elems {
-                if let Some(number) = self.forward_converter.get(element) {
-                    converted_elems.push(*number);
-                } else {
-                    panic!("不合法的码元：{}", element);
-                }
-            }
-            new_elements.insert(*char, converted_elems);
-        }
-        new_elements
-    }
-
-    pub fn update_config(&self, config: &Config, candidate: &KeyMap) -> Config {
-        let mut new_config = config.clone();
-        for (element, mapped) in &config.form.mapping {
-            if mapped.len() == 1 {
-                let number = *self.forward_converter.get(element).unwrap();
-                let current_mapped = candidate[number];
-                new_config
-                    .form
-                    .mapping
-                    .insert(element.to_string(), current_mapped.to_string());
-            } else {
-                let mut all_codes = String::new();
-                for index in 0..mapped.len() {
-                    let name = format!("{}.{}", element.to_string(), index);
-                    let number = *self.forward_converter.get(&name).unwrap();
-                    let current_mapped = &candidate[number];
-                    all_codes.push(*current_mapped);
-                }
-                new_config
-                    .form
-                    .mapping
-                    .insert(element.to_string(), all_codes);
-            }
-        }
-        new_config
-    }
 }

@@ -14,7 +14,7 @@ package: build build-windows
 	mkdir -p package; \
 	cp target/release/libchai package/; \
 	cp target/x86_64-pc-windows-gnu/release/libchai.exe package/; \
-	cp -r README.md LICENSE config.yaml elements.txt assets package/; \
+	cp -r README.md config.md LICENSE config.yaml elements.txt assets package/; \
 	cd package; \
 	rm libchai.zip; \
 	zip -r libchai.zip *

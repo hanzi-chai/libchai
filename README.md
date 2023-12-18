@@ -10,8 +10,8 @@
 
 压缩包中有以下的示例文件：
 
-- `config.yaml`: 方案文件，由[汉字自动拆分系统](https://chaifen.app/)生成的方案文件；
-- `elements.txt`: 拆分表文件，每个字一行，每行的内容依次为汉字、制表符和以空格分隔的；这个文件也可由自动拆分系统生成；
+- `config.yaml`: 方案文件，具体的格式解释参见 [config.md](./config.md)；这个文件也可以由[汉字自动拆分系统](https://chaifen.app/)生成的方案文件；
+- `elements.txt`: 拆分表文件，每个字一行，每行的内容依次为汉字、制表符和以空格分隔的汉字拆分序列；这个文件也可由自动拆分系统生成；
 - `assets/character_frequency.txt`：字频文件，每个字一行，每行的内容为以制表符分隔的字和字频；
 - `assets/word_frequency.txt`：词频文件，每个字一行，每行的内容为以制表符分隔的词和词频；
 - `assets/key_equivalence.txt`：单键用指当量文件，每个按键一行，每行的内容为以制表符分隔的按键和当量；

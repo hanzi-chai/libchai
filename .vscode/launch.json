@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'libchai'",
+      "cargo": {
+        "args": ["build", "--bin=libchai", "--package=libchai"],
+        "filter": {
+          "name": "libchai",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

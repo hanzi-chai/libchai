@@ -1,8 +1,9 @@
-use crate::config::{Cache, Config, KeyMap, MetaheuristicConfig};
+use crate::config::MetaheuristicConfig;
 use crate::constraints::Constraints;
 use crate::metaheuristics::{hill_climbing, simulated_annealing, Metaheuristics};
 use crate::metric::Metric;
 use crate::objective::Objective;
+use crate::representation::{KeyMap, Representation, Buffer};
 use chrono::Local;
 use rand::random;
 use std::fs;
@@ -12,24 +13,24 @@ use std::time::Duration;
 type Solution = KeyMap;
 
 pub struct ElementPlacementProblem {
-    config: Config,
-    cache: Cache,
+    representation: Representation,
     constraints: Constraints,
     objective: Objective,
+    buffer: Buffer,
 }
 
 impl ElementPlacementProblem {
     pub fn new(
-        config: Config,
-        cache: Cache,
+        representation: Representation,
         constraints: Constraints,
         objective: Objective,
+        buffer: Buffer
     ) -> Self {
         Self {
-            config,
-            cache,
+            representation,
             constraints,
             objective,
+            buffer,
         }
     }
 }
@@ -40,11 +41,11 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     }
 
     fn generate_candidate(&mut self) -> Solution {
-        return self.cache.initial.clone();
+        return self.representation.initial.clone();
     }
 
     fn rank_candidate(&mut self, candidate: &Solution) -> (Metric, f64) {
-        let (metric, loss, _) = self.objective.evaluate(candidate, false);
+        let (metric, loss) = self.objective.evaluate(candidate, &mut self.buffer);
         return (metric, loss);
     }
 
@@ -63,7 +64,7 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
         let metric_path = format!("output/{}.txt", prefix);
         println!("{} 系统搜索到了一个更好的方案，评测指标如下：", time.format("%H:%M:%S"));
         print!("{}", rank.0);
-        let new_config = self.cache.update_config(&self.config, &candidate);
+        let new_config = self.representation.update_config(&candidate);
         let content = serde_yaml::to_string(&new_config).unwrap();
         if write_to_file {
             fs::write(metric_path, format!("{}", rank.0)).unwrap();
@@ -77,7 +78,7 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
 impl ElementPlacementProblem {
     pub fn solve(&mut self) -> Solution {
         let _ = fs::create_dir_all("output").expect("should be able to create an output directory");
-        let metaheuristic = self.config.optimization.metaheuristic.clone();
+        let metaheuristic = self.representation.config.optimization.metaheuristic.clone();
         match metaheuristic {
             MetaheuristicConfig::SimulatedAnnealing {
                 runtime,

@@ -1,24 +1,24 @@
-use crate::config::{AtomicConstraint, Cache, Config, KeyMap};
+use crate::{config::AtomicConstraint, representation::{Representation, KeyMap, Element, Key}};
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::{HashMap, HashSet};
 
 pub struct Constraints {
-    pub alphabet: Vec<char>,
+    pub alphabet: Vec<Key>,
     pub elements: usize,
-    pub fixed: HashSet<usize>,
-    pub narrowed: HashMap<usize, Vec<char>>,
-    pub grouped: HashMap<usize, Vec<usize>>,
+    pub fixed: HashSet<Element>,
+    pub narrowed: HashMap<Element, Vec<Key>>,
+    pub grouped: HashMap<Element, Vec<Element>>,
 }
 
 impl Constraints {
-    pub fn new(config: &Config, cache: &Cache) -> Constraints {
-        let elements = cache.initial.len();
-        let alphabet = config.form.alphabet.chars().collect();
-        let mut fixed: HashSet<usize> = HashSet::new();
-        let mut narrowed: HashMap<usize, Vec<char>> = HashMap::new();
-        let mut grouped: HashMap<usize, Vec<usize>> = HashMap::new();
+    pub fn new(representation: &Representation) -> Constraints {
+        let elements = representation.initial.len();
+        let alphabet = representation.config.form.alphabet.chars().map(|x| *representation.key_repr.get(&x).unwrap()).collect();
+        let mut fixed: HashSet<Element> = HashSet::new();
+        let mut narrowed: HashMap<Element, Vec<Key>> = HashMap::new();
+        let mut grouped: HashMap<Element, Vec<Element>> = HashMap::new();
         let mut values: Vec<AtomicConstraint> = Vec::new();
-        if let Some(constraints) = &config.optimization.constraints {
+        if let Some(constraints) = &representation.config.optimization.constraints {
             values.append(&mut constraints.elements.clone().unwrap_or_default());
             values.append(&mut constraints.indices.clone().unwrap_or_default());
             values.append(&mut constraints.element_indices.clone().unwrap_or_default());
@@ -34,8 +34,8 @@ impl Constraints {
                         let element = element.as_ref().unwrap();
                         let index = index.unwrap();
                         let name = format!("{}.{}", element.to_string(), index);
-                        let number = cache
-                            .forward_converter
+                        let number = representation
+                            .element_repr
                             .get(&name)
                             .expect(&format!("{} 并不存在", name));
                         vec.push(*number);
@@ -53,7 +53,7 @@ impl Constraints {
                 keys,
             } = atomic_constraint;
             for element_number in 0..elements {
-                let one_element = &cache.reverse_converter[element_number];
+                let one_element = representation.repr_element.get(&element_number).unwrap();
                 let excluded = if one_element.contains(".") {
                     let vec: Vec<&str> = one_element.split('.').collect();
                     let p1 = vec[0];
@@ -65,7 +65,7 @@ impl Constraints {
                 };
                 if !excluded {
                     if let Some(keys) = keys {
-                        narrowed.insert(element_number, keys.clone());
+                        narrowed.insert(element_number, keys.iter().map(|x| *representation.key_repr.get(x).unwrap()).collect());
                     } else {
                         fixed.insert(element_number);
                     }

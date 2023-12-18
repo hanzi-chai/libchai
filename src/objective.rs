@@ -1,80 +1,76 @@
 use crate::cli::Assets;
-use crate::config::Cache;
-use crate::config::Config;
-use crate::config::KeyMap;
 use crate::config::ObjectiveConfig;
 use crate::config::PartialMetricWeights;
-use crate::encoder::Code;
-use crate::encoder::EncodeResults;
-use crate::encoder::Encoded;
 use crate::encoder::Encoder;
-use crate::encoder::RawElements;
 use crate::metric::LevelMetric1;
 use crate::metric::LevelMetric2;
 use crate::metric::Metric;
 use crate::metric::PartialMetric;
 use crate::metric::TierMetric;
-use crate::objectives::fingering::get_fingering_types;
-use std::collections::HashSet;
+use crate::representation::Buffer;
+use crate::representation::Representation;
+use crate::representation::Codes;
+use crate::representation::KeyMap;
+use std::iter::zip;
+
+#[derive(Debug)]
+pub struct EncodeExport {
+    pub character_list: Vec<char>,
+    pub characters: Option<Codes>,
+    pub characters_reduced: Option<Codes>,
+    pub word_list: Vec<String>,
+    pub words: Option<Codes>,
+    pub words_reduced: Option<Codes>,
+}
 
 pub struct Objective {
     config: ObjectiveConfig,
-    assets: Assets,
-    pub encoder: Encoder,
+    encoder: Encoder,
+    character_frequencies: Frequencies,
+    word_frequencies: Frequencies,
+    key_equivalence: Vec<f64>,
+    pair_equivalence: Vec<f64>
 }
 
+pub type Frequencies = Vec<f64>;
+
 impl Objective {
-    pub fn new(
-        config: &Config,
-        cache: &Cache,
-        raw_elements: RawElements,
-        assets: Assets,
-    ) -> Objective {
-        let elements = cache.transform_elements(&raw_elements);
-        let encoder = Encoder::new(&config, elements, &assets);
-        Objective {
-            assets,
+    pub fn new(representation: &Representation, encoder: Encoder, assets: Assets) -> Self {
+        let character_frequencies: Vec<_> = encoder.characters.iter().map(|x| *assets.character_frequency.get(x).unwrap_or(&0)).collect();
+        let word_frequencies: Vec<_> = encoder.words.iter().map(|x| *assets.word_frequency.get(x).unwrap_or(&0)).collect();
+        let key_equivalence = representation.transform_key_equivalence(&assets.key_equivalence);
+        let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
+        Self {
             encoder,
-            config: config.optimization.objective.clone(),
+            config: representation.config.optimization.objective.clone(),
+            character_frequencies: Self::normalize_frequencies(&character_frequencies),
+            word_frequencies: Self::normalize_frequencies(&word_frequencies),
+            key_equivalence,
+            pair_equivalence,
         }
     }
 
-    fn calculate_total_key_equivalence(&self, code: &String) -> f64 {
-        let mut total = 0.0;
-        for char in code.chars() {
-            total += self.assets.key_equivalence.get(&char).unwrap_or(&0.0);
-        }
-        total
+    fn normalize_frequencies(occurrences: &Vec<u64>) -> Frequencies {
+        let total_occurrences: u64 = occurrences.iter().sum();
+        occurrences
+            .iter()
+            .map(|x| *x as f64 / total_occurrences as f64)
+            .collect()
     }
 
-    fn calculate_total_pair_equivalence(&self, code: &String) -> f64 {
-        let mut total = 0.0;
-        let mut it = code.chars();
-        let mut this = it.next().unwrap();
-        while let Some(next) = it.next() {
-            total += self
-                .assets
-                .pair_equivalence
-                .get(&(this, next))
-                .unwrap_or(&0.0);
-            this = next;
-        }
-        total
-    }
-
-    pub fn evaluate_partial<T>(
+    pub fn evaluate_partial(
         &self,
-        codes: &Code<T>,
-        weights: &PartialMetricWeights,
+        codes: &Codes,
+        frequencies: &Frequencies,
+        weights: &PartialMetricWeights
     ) -> (PartialMetric, f64) {
         // 处理总数据
-        let mut total_frequency = 0;
-        let mut total_keys = 0;
-        let mut total_pairs = 0;
-        let mut total_duplication = 0;
+        let mut total_duplication = 0.0;
+        let mut total_keys = 0.0;
+        let mut total_pairs = 0.0;
         let mut total_keys_equivalence = 0.0;
         let mut total_pair_equivalence = 0.0;
-        let mut total_levels = vec![0_u64; weights.levels.as_ref().unwrap_or(&vec![]).len()];
+        let mut total_levels = vec![0.0; weights.levels.as_ref().unwrap_or(&vec![]).len()];
         // 处理分级的数据
         let ntier = weights.tiers.as_ref().map_or(0, |v| v.len());
         let mut tiers_duplication = vec![0; ntier];
@@ -85,27 +81,23 @@ impl Objective {
                 tiers_levels.push(vec);
             }
         }
-        let mut occupied_codes: HashSet<String> = HashSet::new();
-        for (index, encoded) in codes.iter().enumerate() {
-            let Encoded {
-                original: _,
-                frequency,
-                code,
-            } = encoded;
-            total_frequency += frequency;
+        // 清空
+        let mut occupation = vec![false; self.key_equivalence.len()];
+        for (index, (code, frequency)) in zip(codes, frequencies).enumerate() {
+            let length = code.ilog(self.encoder.radix) as usize + 1;
             // 当量相关
             if let Some(_) = weights.key_equivalence {
                 total_keys_equivalence +=
-                    self.calculate_total_key_equivalence(code) * *frequency as f64;
-                total_keys += code.len() as u64 * frequency;
+                    self.key_equivalence[*code] * *frequency;
+                total_keys += length as f64 * frequency;
             }
             if let Some(_) = weights.pair_equivalence {
                 total_pair_equivalence +=
-                    self.calculate_total_pair_equivalence(code) * *frequency as f64;
-                total_pairs += (code.len() - 1) as u64 * frequency;
+                    self.pair_equivalence[*code] * *frequency;
+                total_pairs += (length - 1) as f64 * frequency;
             }
             // 重码相关
-            if let Some(_) = occupied_codes.get(code) {
+            if occupation[*code] {
                 total_duplication += frequency;
                 if let Some(tiers) = &weights.tiers {
                     for (itier, tier) in tiers.iter().enumerate() {
@@ -119,7 +111,7 @@ impl Objective {
             // 简码相关
             if let Some(levels) = &weights.levels {
                 for (ilevel, level) in levels.iter().enumerate() {
-                    if level.length == code.len() {
+                    if level.length == length {
                         total_levels[ilevel] += frequency;
                     }
                 }
@@ -130,7 +122,7 @@ impl Objective {
                     if index <= top {
                         if let Some(levels) = &tier.levels {
                             for (ilevel, level) in levels.iter().enumerate() {
-                                if level.length == code.len() {
+                                if level.length == length {
                                     tiers_levels[itier][ilevel] += 1;
                                 }
                             }
@@ -138,11 +130,8 @@ impl Objective {
                     }
                 }
             }
-            occupied_codes.insert(code.clone());
+            occupation[*code] = true;
         }
-        let total_frequency = total_frequency as f64;
-        let total_pairs = total_pairs as f64;
-        let total_keys = total_keys as f64;
         let mut partial_metric = PartialMetric {
             tiers: None,
             key_equivalence: None,
@@ -152,27 +141,26 @@ impl Objective {
             levels: None,
         };
 
-        let mut real = 0.0;
+        let mut loss = 0.0;
         if let Some(equivalence_weight) = weights.key_equivalence {
             let equivalence = total_keys_equivalence / total_keys;
             partial_metric.key_equivalence = Some(equivalence);
-            real += equivalence * equivalence_weight;
+            loss += equivalence * equivalence_weight;
         }
         if let Some(equivalence_weight) = weights.pair_equivalence {
             let equivalence = total_pair_equivalence / total_pairs;
             partial_metric.pair_equivalence = Some(equivalence);
-            real += equivalence * equivalence_weight;
+            loss += equivalence * equivalence_weight;
         }
         if let Some(duplication_weight) = weights.duplication {
-            let duplication = total_duplication as f64 / total_frequency;
-            partial_metric.duplication = Some(duplication);
-            real += duplication * duplication_weight;
+            partial_metric.duplication = Some(total_duplication);
+            loss += total_duplication * duplication_weight;
         }
         if let Some(levels_weight) = &weights.levels {
             let mut levels: Vec<LevelMetric2> = Vec::new();
             for (ilevel, level) in levels_weight.iter().enumerate() {
-                let value = total_levels[ilevel] as f64 / total_frequency;
-                real += value * level.frequency;
+                let value = total_levels[ilevel];
+                loss += value * level.frequency;
                 levels.push(LevelMetric2 {
                     length: level.length,
                     frequency: value,
@@ -193,12 +181,12 @@ impl Objective {
                 let total = twights.top.unwrap_or(codes.len());
                 if let Some(duplication_weight) = twights.duplication {
                     let duplication = tiers_duplication[itier];
-                    real += duplication as f64 / total as f64 * duplication_weight;
+                    loss += duplication as f64 / total as f64 * duplication_weight;
                     tiers[itier].duplication = Some(duplication);
                 }
                 if let Some(level_weight) = &twights.levels {
                     for (ilevel, level) in level_weight.iter().enumerate() {
-                        real += tiers_levels[itier][ilevel] as f64 / total as f64 * level.frequency;
+                        loss += tiers_levels[itier][ilevel] as f64 / total as f64 * level.frequency;
                     }
                     tiers[itier].levels = Some(
                         level_weight
@@ -214,14 +202,10 @@ impl Objective {
             }
             partial_metric.tiers = Some(tiers);
         }
-        return (partial_metric, real);
+        return (partial_metric, loss);
     }
 
-    pub fn evaluate(
-        &self,
-        candidate: &KeyMap,
-        save_codes: bool,
-    ) -> (Metric, f64, Option<EncodeResults>) {
+    pub fn evaluate(&self, candidate: &KeyMap, buffer: &mut Buffer) -> (Metric, f64) {
         let mut loss = 0.0;
         let mut metric = Metric {
             characters: None,
@@ -229,42 +213,65 @@ impl Objective {
             characters_reduced: None,
             words_reduced: None,
         };
-        let mut results = EncodeResults {
-            characters: None,
-            characters_reduced: None,
-            words: None,
-            words_reduced: None,
-        };
         if let Some(characters) = &self.config.characters {
-            let character_codes = self.encoder.encode_character_full(&candidate, save_codes);
-            let (partial, accum) = self.evaluate_partial(&character_codes, characters);
+            self.encoder
+                .encode_character_full(&candidate, &mut buffer.characters);
+            let (partial, accum) = self.evaluate_partial(
+                &buffer.characters,
+                &self.character_frequencies,
+                characters,
+            );
             loss += accum;
             metric.characters = Some(partial);
             if let Some(character_reduced) = &self.config.characters_reduced {
-                let character_codes_reduced = self.encoder.encode_reduced(&character_codes);
-                let (partial, accum) =
-                    self.evaluate_partial(&character_codes_reduced, character_reduced);
+                self.encoder.encode_reduced(
+                    &buffer.characters,
+                    &mut buffer.characters_reduced,
+                );
+                let (partial, accum) = self.evaluate_partial(
+                    &buffer.characters_reduced,
+                    &self.character_frequencies,
+                    character_reduced,
+                );
                 loss += accum;
                 metric.characters_reduced = Some(partial);
-                results.characters_reduced = Some(character_codes_reduced);
             }
-            results.characters = Some(character_codes);
         }
         if let Some(words) = &self.config.words {
-            let word_codes = self.encoder.encode_words_full(&candidate, save_codes);
-            let (partial, accum) = self.evaluate_partial(&word_codes, words);
+            self.encoder
+                .encode_words_full(&candidate, &mut buffer.words);
+            let (partial, accum) = self.evaluate_partial(
+                &buffer.words,
+                &self.word_frequencies,
+                words,
+            );
             loss += accum;
             metric.words = Some(partial);
             if let Some(words_reduced) = &self.config.words_reduced {
-                let word_codes_reduced = self.encoder.encode_reduced(&word_codes);
-                let (partial, accum) = self.evaluate_partial(&word_codes_reduced, words_reduced);
+                self.encoder.encode_reduced(
+                    &buffer.words,
+                    &mut buffer.words_reduced,
+                );
+                let (partial, accum) = self.evaluate_partial(
+                    &buffer.words_reduced,
+                    &self.word_frequencies,
+                    words_reduced,
+                );
                 loss += accum;
                 metric.words_reduced = Some(partial);
-                results.words_reduced = Some(word_codes_reduced);
             }
-            results.words = Some(word_codes);
         }
-        let wrapped = if save_codes { Some(results) } else { None };
-        (metric, loss, wrapped)
+        (metric, loss)
+    }
+
+    pub fn export_codes(&self, buffer: &Buffer) -> EncodeExport {
+        EncodeExport {
+            character_list: self.encoder.characters.clone(),
+            characters: self.config.characters.as_ref().map(|_| buffer.characters.clone()),
+            characters_reduced: self.config.characters_reduced.as_ref().map(|_| buffer.characters_reduced.clone()),
+            word_list: self.encoder.words.clone(),
+            words: self.config.words.as_ref().map(|_| buffer.words.clone()),
+            words_reduced: self.config.words_reduced.as_ref().map(|_| buffer.words_reduced.clone()),
+        }
     }
 }

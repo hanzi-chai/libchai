@@ -1,8 +1,9 @@
 mod config;
-use config::Cache;
 mod data;
 mod metric;
 mod objective;
+use clap::Parser;
+use encoder::Encoder;
 use objective::Objective;
 mod problem;
 use problem::ElementPlacementProblem;
@@ -11,22 +12,28 @@ mod encoder;
 use constraints::Constraints;
 mod cli;
 mod metaheuristics;
-use cli::{prepare_file, Command, write_encode_results};
+use cli::{Command, Cli};
+use representation::Representation;
 mod objectives;
+mod representation;
 
 fn main() {
-    let (config, elements, assets, command) = prepare_file();
-    let cache = Cache::new(&config);
-    let objective = Objective::new(&config, &cache, elements, assets);
-    match command {
+    let cli = Cli::parse();
+    let (config, characters, words, assets) = cli.prepare_file();
+    let representation = Representation::new(config);
+    let mut buffer = representation.init_buffer(characters.len(), words.len());
+    let encoder = Encoder::new(&representation, characters, words, &assets);
+    let objective = Objective::new(&representation, encoder, assets);
+    match cli.command.unwrap_or(Command::Encode) {
         Command::Encode => {
-            let (metric, _, results) = objective.evaluate(&cache.initial, true);
-            let results = results.unwrap();
-            write_encode_results(metric, results);
+            let (metric, _) = objective.evaluate(&representation.initial, &mut buffer);
+            let codes = objective.export_codes(&mut buffer);
+            let human_codes = representation.recover_codes(codes);
+            Cli::write_encode_results(metric, human_codes);
         }
         Command::Optimize => {
-            let constraints = Constraints::new(&config, &cache);
-            let mut problem = ElementPlacementProblem::new(config, cache, constraints, objective);
+            let constraints = Constraints::new(&representation);
+            let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer);
             problem.solve();
         }
     }
