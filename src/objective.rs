@@ -8,9 +8,9 @@ use crate::metric::Metric;
 use crate::metric::PartialMetric;
 use crate::metric::TierMetric;
 use crate::representation::Buffer;
-use crate::representation::Representation;
 use crate::representation::Codes;
 use crate::representation::KeyMap;
+use crate::representation::Representation;
 use std::iter::zip;
 
 #[derive(Debug)]
@@ -29,15 +29,23 @@ pub struct Objective {
     character_frequencies: Frequencies,
     word_frequencies: Frequencies,
     key_equivalence: Vec<f64>,
-    pair_equivalence: Vec<f64>
+    pair_equivalence: Vec<f64>,
 }
 
 pub type Frequencies = Vec<f64>;
 
 impl Objective {
     pub fn new(representation: &Representation, encoder: Encoder, assets: Assets) -> Self {
-        let character_frequencies: Vec<_> = encoder.characters.iter().map(|x| *assets.character_frequency.get(x).unwrap_or(&0)).collect();
-        let word_frequencies: Vec<_> = encoder.words.iter().map(|x| *assets.word_frequency.get(x).unwrap_or(&0)).collect();
+        let character_frequencies: Vec<_> = encoder
+            .characters
+            .iter()
+            .map(|x| *assets.character_frequency.get(x).unwrap_or(&0))
+            .collect();
+        let word_frequencies: Vec<_> = encoder
+            .words
+            .iter()
+            .map(|x| *assets.word_frequency.get(x).unwrap_or(&0))
+            .collect();
         let key_equivalence = representation.transform_key_equivalence(&assets.key_equivalence);
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
         Self {
@@ -62,7 +70,7 @@ impl Objective {
         &self,
         codes: &Codes,
         frequencies: &Frequencies,
-        weights: &PartialMetricWeights
+        weights: &PartialMetricWeights,
     ) -> (PartialMetric, f64) {
         // 处理总数据
         let mut total_duplication = 0.0;
@@ -87,13 +95,11 @@ impl Objective {
             let length = code.ilog(self.encoder.radix) as usize + 1;
             // 当量相关
             if let Some(_) = weights.key_equivalence {
-                total_keys_equivalence +=
-                    self.key_equivalence[*code] * *frequency;
+                total_keys_equivalence += self.key_equivalence[*code] * *frequency;
                 total_keys += length as f64 * frequency;
             }
             if let Some(_) = weights.pair_equivalence {
-                total_pair_equivalence +=
-                    self.pair_equivalence[*code] * *frequency;
+                total_pair_equivalence += self.pair_equivalence[*code] * *frequency;
                 total_pairs += (length - 1) as f64 * frequency;
             }
             // 重码相关
@@ -216,18 +222,13 @@ impl Objective {
         if let Some(characters) = &self.config.characters {
             self.encoder
                 .encode_character_full(&candidate, &mut buffer.characters);
-            let (partial, accum) = self.evaluate_partial(
-                &buffer.characters,
-                &self.character_frequencies,
-                characters,
-            );
+            let (partial, accum) =
+                self.evaluate_partial(&buffer.characters, &self.character_frequencies, characters);
             loss += accum;
             metric.characters = Some(partial);
             if let Some(character_reduced) = &self.config.characters_reduced {
-                self.encoder.encode_reduced(
-                    &buffer.characters,
-                    &mut buffer.characters_reduced,
-                );
+                self.encoder
+                    .encode_reduced(&buffer.characters, &mut buffer.characters_reduced);
                 let (partial, accum) = self.evaluate_partial(
                     &buffer.characters_reduced,
                     &self.character_frequencies,
@@ -240,18 +241,13 @@ impl Objective {
         if let Some(words) = &self.config.words {
             self.encoder
                 .encode_words_full(&candidate, &mut buffer.words);
-            let (partial, accum) = self.evaluate_partial(
-                &buffer.words,
-                &self.word_frequencies,
-                words,
-            );
+            let (partial, accum) =
+                self.evaluate_partial(&buffer.words, &self.word_frequencies, words);
             loss += accum;
             metric.words = Some(partial);
             if let Some(words_reduced) = &self.config.words_reduced {
-                self.encoder.encode_reduced(
-                    &buffer.words,
-                    &mut buffer.words_reduced,
-                );
+                self.encoder
+                    .encode_reduced(&buffer.words, &mut buffer.words_reduced);
                 let (partial, accum) = self.evaluate_partial(
                     &buffer.words_reduced,
                     &self.word_frequencies,
@@ -267,11 +263,23 @@ impl Objective {
     pub fn export_codes(&self, buffer: &Buffer) -> EncodeExport {
         EncodeExport {
             character_list: self.encoder.characters.clone(),
-            characters: self.config.characters.as_ref().map(|_| buffer.characters.clone()),
-            characters_reduced: self.config.characters_reduced.as_ref().map(|_| buffer.characters_reduced.clone()),
+            characters: self
+                .config
+                .characters
+                .as_ref()
+                .map(|_| buffer.characters.clone()),
+            characters_reduced: self
+                .config
+                .characters_reduced
+                .as_ref()
+                .map(|_| buffer.characters_reduced.clone()),
             word_list: self.encoder.words.clone(),
             words: self.config.words.as_ref().map(|_| buffer.words.clone()),
-            words_reduced: self.config.words_reduced.as_ref().map(|_| buffer.words_reduced.clone()),
+            words_reduced: self
+                .config
+                .words_reduced
+                .as_ref()
+                .map(|_| buffer.words_reduced.clone()),
         }
     }
 }

@@ -37,15 +37,15 @@ pub fn get_partial_fingering_types(layout: &Layout) -> FingeringTypes {
                             same_finger_small_jump.insert(pair);
                         }
                     }
-                    if (finger1 == 5 && finger2 >= 3)
-                        || (finger2 == 5 && finger1 >= 3)
-                    {
+                    if (finger1 == 5 && finger2 >= 3) || (finger2 == 5 && finger1 >= 3) {
                         little_finger_interference.insert(pair);
                     }
                     // 短指击上排，长指击下排
-                    let awkward1 = row1 < row2 && is_short_finger(finger1) && is_long_finger(finger2);
+                    let awkward1 =
+                        row1 < row2 && is_short_finger(finger1) && is_long_finger(finger2);
                     // 长指击下排，短指击上排
-                    let awkward2 = row1 > row2 && is_long_finger(finger1) && is_short_finger(finger2);
+                    let awkward2 =
+                        row1 > row2 && is_long_finger(finger1) && is_short_finger(finger2);
                     if (awkward1 || awkward2) && row_diff >= 2 {
                         awkward_upside_down.insert(pair);
                     }

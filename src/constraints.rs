@@ -1,4 +1,7 @@
-use crate::{config::AtomicConstraint, representation::{Representation, KeyMap, Element, Key}};
+use crate::{
+    config::{AtomicConstraint, GroupConstraint},
+    representation::{Element, Key, KeyMap, Representation},
+};
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::{HashMap, HashSet};
 
@@ -13,11 +16,24 @@ pub struct Constraints {
 impl Constraints {
     pub fn new(representation: &Representation) -> Constraints {
         let elements = representation.initial.len();
-        let alphabet = representation.config.form.alphabet.chars().map(|x| *representation.key_repr.get(&x).unwrap()).collect();
+        let alphabet = representation
+            .config
+            .form
+            .alphabet
+            .chars()
+            .map(|x| *representation.key_repr.get(&x).unwrap())
+            .collect();
         let mut fixed: HashSet<Element> = HashSet::new();
         let mut narrowed: HashMap<Element, Vec<Key>> = HashMap::new();
         let mut grouped: HashMap<Element, Vec<Element>> = HashMap::new();
         let mut values: Vec<AtomicConstraint> = Vec::new();
+        let lookup = |x: &String| {
+            *representation
+                .element_repr
+                .get(x)
+                .expect(&format!("{} 不存在于键盘映射中", x))
+        };
+        let assemble = |x: &String, i: &usize| format!("{}.{}", x.to_string(), i);
         if let Some(constraints) = &representation.config.optimization.constraints {
             values.append(&mut constraints.elements.clone().unwrap_or_default());
             values.append(&mut constraints.indices.clone().unwrap_or_default());
@@ -25,20 +41,8 @@ impl Constraints {
             if let Some(grouping) = &constraints.grouping {
                 for group in grouping {
                     let mut vec: Vec<usize> = Vec::new();
-                    for AtomicConstraint {
-                        element,
-                        index,
-                        keys: _,
-                    } in group
-                    {
-                        let element = element.as_ref().unwrap();
-                        let index = index.unwrap();
-                        let name = format!("{}.{}", element.to_string(), index);
-                        let number = representation
-                            .element_repr
-                            .get(&name)
-                            .expect(&format!("{} 并不存在", name));
-                        vec.push(*number);
+                    for GroupConstraint { element, index } in group {
+                        vec.push(lookup(&assemble(element, index)));
                     }
                     for number in &vec {
                         grouped.insert(*number, vec.clone());
@@ -46,29 +50,61 @@ impl Constraints {
                 }
             }
         }
+        let mapping = &representation.config.form.mapping;
         for atomic_constraint in &values {
             let AtomicConstraint {
                 element,
                 index,
                 keys,
             } = atomic_constraint;
-            for element_number in 0..elements {
-                let one_element = representation.repr_element.get(&element_number).unwrap();
-                let excluded = if one_element.contains(".") {
-                    let vec: Vec<&str> = one_element.split('.').collect();
-                    let p1 = vec[0];
-                    let p2 = vec[1].parse::<usize>().unwrap();
-                    index.is_some_and(|x| x != p2) || element.clone().is_some_and(|x| x != p1)
-                } else {
-                    index.is_some_and(|x| x == 1)
-                        || element.clone().is_some_and(|x| x != *one_element)
-                };
-                if !excluded {
-                    if let Some(keys) = keys {
-                        narrowed.insert(element_number, keys.iter().map(|x| *representation.key_repr.get(x).unwrap()).collect());
+            let elements: Vec<String> = match (element, index) {
+                (Some(element), Some(index)) => {
+                    vec![assemble(element, index)]
+                }
+                (None, Some(index)) => mapping
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        if *index == 0 {
+                            if value.len() == 1 {
+                                Some(key.clone())
+                            } else {
+                                Some(assemble(key, index))
+                            }
+                        } else {
+                            if value.len() > *index {
+                                Some(assemble(key, index))
+                            } else {
+                                None
+                            }
+                        }
+                    })
+                    .collect(),
+                (Some(element), None) => {
+                    let mapped = mapping
+                        .get(element)
+                        .expect(&format!("约束中的元素 {} 不在键盘映射中", element));
+                    let mapped_len: Vec<char> = mapped.chars().collect();
+                    if mapped_len.len() == 1 {
+                        vec![element.clone()]
                     } else {
-                        fixed.insert(element_number);
+                        (0..mapped_len.len())
+                            .map(|index| format!("{}.{}", element.to_string(), index))
+                            .collect()
                     }
+                }
+                _ => panic!("约束必须至少提供 element 或 index 之一"),
+            };
+            for element in elements {
+                let element_number = lookup(&element);
+                if let Some(keys) = keys {
+                    narrowed.insert(
+                        element_number,
+                        keys.iter()
+                            .map(|x| *representation.key_repr.get(x).unwrap())
+                            .collect(),
+                    );
+                } else {
+                    fixed.insert(element_number);
                 }
             }
         }
@@ -121,7 +157,9 @@ impl Constraints {
             .narrowed
             .get(&movable_element)
             .unwrap_or(&self.alphabet);
-        let key = destinations.choose(&mut rng).unwrap();
+        let key = destinations
+            .choose(&mut rng)
+            .expect(&format!("元素 {} 无法移动", movable_element));
         if let Some(group) = self.grouped.get(&movable_element) {
             for number in group {
                 next[*number] = *key;

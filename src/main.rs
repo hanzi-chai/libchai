@@ -12,7 +12,7 @@ mod encoder;
 use constraints::Constraints;
 mod cli;
 mod metaheuristics;
-use cli::{Command, Cli};
+use cli::{Cli, Command};
 use representation::Representation;
 mod objectives;
 mod representation;
@@ -24,7 +24,7 @@ fn main() {
     let mut buffer = representation.init_buffer(characters.len(), words.len());
     let encoder = Encoder::new(&representation, characters, words, &assets);
     let objective = Objective::new(&representation, encoder, assets);
-    match cli.command.unwrap_or(Command::Encode) {
+    match cli.command {
         Command::Encode => {
             let (metric, _) = objective.evaluate(&representation.initial, &mut buffer);
             let codes = objective.export_codes(&mut buffer);
@@ -33,7 +33,8 @@ fn main() {
         }
         Command::Optimize => {
             let constraints = Constraints::new(&representation);
-            let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer);
+            let mut problem =
+                ElementPlacementProblem::new(representation, constraints, objective, buffer);
             problem.solve();
         }
     }

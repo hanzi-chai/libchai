@@ -28,8 +28,7 @@ impl Display for TierMetric {
             String::from("全部")
         };
         if let Some(duplication) = self.duplication {
-            f.write_str(&format!("{}选重：{}；", specifier, duplication))
-                .unwrap();
+            f.write_str(&format!("{}选重：{}；", specifier, duplication))?;
         }
         if let Some(levels) = &self.levels {
             for LevelMetric1 { length, frequency } in levels {
@@ -38,8 +37,7 @@ impl Display for TierMetric {
                     specifier,
                     hanzi_numbers[length - 1],
                     frequency
-                ))
-                .unwrap();
+                ))?;
             }
         }
         Ok(())
@@ -69,14 +67,13 @@ impl Display for PartialMetric {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let hanzi_numbers: Vec<char> = "一二三四五六七八九十".chars().collect();
         if let Some(duplication) = self.duplication {
-            f.write_str(&format!("选重率：{:.2}%；", duplication * 100.0))
-                .unwrap();
+            f.write_str(&format!("选重率：{:.2}%；", duplication * 100.0))?;
         }
         if let Some(equivalence) = self.key_equivalence {
-            f.write_str(&format!("用指：{:.2}；", equivalence)).unwrap();
+            f.write_str(&format!("用指：{:.2}；", equivalence))?;
         }
         if let Some(equivalence) = self.pair_equivalence {
-            f.write_str(&format!("当量：{:.2}；", equivalence)).unwrap();
+            f.write_str(&format!("当量：{:.2}；", equivalence))?;
         }
         if let Some(levels) = &self.levels {
             for LevelMetric2 { length, frequency } in levels {
@@ -84,13 +81,12 @@ impl Display for PartialMetric {
                     "{}键：{:.2}%；",
                     hanzi_numbers[length - 1],
                     frequency * 100.0
-                ))
-                .unwrap();
+                ))?;
             }
         }
         if let Some(tiers) = &self.tiers {
             for tier in tiers {
-                f.write_str(&format!("{}", tier)).unwrap();
+                f.write_str(&format!("{}", tier))?;
             }
         }
         Ok(())
@@ -108,19 +104,16 @@ pub struct Metric {
 impl Display for Metric {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(characters) = &self.characters {
-            f.write_str(&format!("单字全码［{}］\n", characters))
-                .unwrap();
+            f.write_str(&format!("单字全码［{}］\n", characters))?;
         }
         if let Some(words) = &self.words {
-            f.write_str(&format!("词语全码［{}］\n", words)).unwrap();
+            f.write_str(&format!("词语全码［{}］\n", words))?;
         }
         if let Some(characters_reduced) = &self.characters_reduced {
-            f.write_str(&format!("单字简码［{}］\n", characters_reduced))
-                .unwrap();
+            f.write_str(&format!("单字简码［{}］\n", characters_reduced))?;
         }
         if let Some(words_reduced) = &self.words_reduced {
-            f.write_str(&format!("词语简码［{}］\n", words_reduced))
-                .unwrap();
+            f.write_str(&format!("词语简码［{}］\n", words_reduced))?;
         }
         Ok(())
     }

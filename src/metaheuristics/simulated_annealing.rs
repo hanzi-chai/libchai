@@ -44,7 +44,10 @@
 //!let solution = metaheuristics::simulated_annealing::solve(&mut problem, runtime);
 //!```
 
-use std::{time::{Duration, Instant}, fmt::Display};
+use std::{
+    fmt::Display,
+    time::{Duration, Instant},
+};
 
 use super::Metaheuristics;
 use rand::random;
@@ -73,7 +76,7 @@ pub struct Parameters {
 pub fn solve<T: Clone, M: Clone + Display>(
     problem: &mut dyn Metaheuristics<T, M>,
     parameters: Parameters,
-    report_after: Option<f64>
+    report_after: Option<f64>,
 ) -> T {
     let mut best_candidate = problem.generate_candidate();
     let mut best_rank = problem.rank_candidate(&best_candidate);
@@ -104,10 +107,17 @@ pub fn solve<T: Clone, M: Clone + Display>(
         if annealing_rank.1 < best_rank.1 {
             best_rank = annealing_rank.clone();
             best_candidate = problem.clone_candidate(&annealing_candidate);
-            problem.save_candidate(&best_candidate, &best_rank, progress > report_after.unwrap_or(0.9));
+            problem.save_candidate(
+                &best_candidate,
+                &best_rank,
+                progress > report_after.unwrap_or(0.9),
+            );
         }
         if step % 10000 == 0 {
-            println!("优化已执行 {} 步，当前温度为 {:.2e}，当前评测指标如下：", step, temperature);
+            println!(
+                "优化已执行 {} 步，当前温度为 {:.2e}，当前评测指标如下：",
+                step, temperature
+            );
             println!("{}", annealing_rank.0);
         }
     }
@@ -146,7 +156,7 @@ fn trial_run<T: Clone, M: Clone>(
 pub fn autosolve<T: Clone, M: Clone + Display>(
     problem: &mut dyn Metaheuristics<T, M>,
     duration: Duration,
-    report_after: Option<f64>
+    report_after: Option<f64>,
 ) -> T {
     let batch = 1000;
     println!("开始寻找参数……");

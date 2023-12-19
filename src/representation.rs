@@ -96,7 +96,15 @@ impl Representation {
         let mut forward_converter: HashMap<String, usize> = HashMap::new();
         let mut reverse_converter: HashMap<usize, String> = HashMap::new();
         for (element, mapped) in &config.form.mapping {
-            let chars: Vec<Key> = mapped.chars().map(|x| *key_repr.get(&x).unwrap()).collect();
+            let chars: Vec<Key> = mapped
+                .chars()
+                .map(|x| {
+                    *key_repr.get(&x).expect(&format!(
+                        "元素 {} 的编码 {} 中的字符 {} 并不在字母表中",
+                        element, mapped, x
+                    ))
+                })
+                .collect();
             if chars.len() == 1 {
                 forward_converter.insert(element.clone(), keymap.len());
                 reverse_converter.insert(keymap.len(), element.clone());
@@ -129,7 +137,10 @@ impl Representation {
                 if let Some(number) = self.element_repr.get(element) {
                     converted_elems.push(*number);
                 } else {
-                    panic!("汉字「{}」包含的元素「{}」无法在键盘映射中找到", char, element);
+                    panic!(
+                        "汉字「{}」包含的元素「{}」无法在键盘映射中找到",
+                        char, element
+                    );
                 }
             }
             sequence_map.insert(*char, converted_elems);
@@ -139,29 +150,30 @@ impl Representation {
 
     pub fn update_config(&self, candidate: &KeyMap) -> Config {
         let mut new_config = self.config.clone();
+        let lookup = |element: &String| {
+            let number = *self
+                .element_repr
+                .get(element)
+                .expect(&format!("元素「{}」未知", element));
+            let current_mapped = &candidate[number];
+            *self
+                .repr_key
+                .get(current_mapped)
+                .expect(&format!("按键代号「{}」未知", current_mapped))
+        };
         for (element, mapped) in &self.config.form.mapping {
-            if mapped.len() == 1 {
-                let number = *self.element_repr.get(element).unwrap();
-                let current_mapped = &candidate[number];
-                let key = *self.repr_key.get(current_mapped).unwrap();
-                new_config
-                    .form
-                    .mapping
-                    .insert(element.to_string(), key.to_string());
+            let new_element = element.clone();
+            let new_mapped = if mapped.len() == 1 {
+                lookup(element).to_string()
             } else {
                 let mut all_codes = String::new();
                 for index in 0..mapped.len() {
-                    let name = format!("{}.{}", element.to_string(), index);
-                    let number = *self.element_repr.get(&name).unwrap();
-                    let current_mapped = &candidate[number];
-                    let key = *self.repr_key.get(current_mapped).unwrap();
-                    all_codes.push(key);
+                    let name = format!("{}.{}", element, index);
+                    all_codes.push(lookup(&name));
                 }
-                new_config
-                    .form
-                    .mapping
-                    .insert(element.to_string(), all_codes);
-            }
+                all_codes
+            };
+            new_config.form.mapping.insert(new_element, new_mapped);
         }
         new_config
     }
@@ -198,7 +210,9 @@ impl Representation {
             let chars = self.repr_code(code);
             let mut total = 0.0;
             for char in chars {
-                total += key_equivalence.get(&char).unwrap();
+                total += key_equivalence
+                    .get(&char)
+                    .expect(&format!("键位 {} 的用指当量数据未知", char));
             }
             result.push(total);
         }
@@ -219,7 +233,9 @@ impl Representation {
             let mut total = 0.0;
             for i in 0..(chars.len() - 1) {
                 let pair = (chars[i], chars[i + 1]);
-                total += pair_equivalence.get(&pair).unwrap();
+                total += pair_equivalence
+                    .get(&pair)
+                    .expect(&format!("键位组合 {:?} 的速度当量数据未知", pair));
             }
             result.push(total);
         }

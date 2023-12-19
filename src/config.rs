@@ -149,11 +149,18 @@ pub struct AtomicConstraint {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GroupConstraint {
+    pub element: String,
+    pub index: usize,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstraintsConfig {
     pub elements: Option<Vec<AtomicConstraint>>,
     pub indices: Option<Vec<AtomicConstraint>>,
     pub element_indices: Option<Vec<AtomicConstraint>>,
-    pub grouping: Option<Vec<Vec<AtomicConstraint>>>,
+    pub grouping: Option<Vec<Vec<GroupConstraint>>>,
 }
 
 #[skip_serializing_none]

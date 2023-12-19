@@ -1,15 +1,15 @@
+use crate::config::Config;
 use crate::metric::Metric;
 use crate::representation::EncodeOutput;
-use crate::config::Config;
 use clap::{Parser, Subcommand};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::identity;
 use std::iter::zip;
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
-use serde::Serialize;
 
 #[derive(Parser)]
 #[command(name = "汉字自动拆分系统")]
@@ -17,7 +17,7 @@ use serde::Serialize;
 #[command(propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Option<Command>,
+    pub command: Command,
 
     /// 方案文件，默认为 config.yaml
     pub config: Option<PathBuf>,
@@ -71,18 +71,7 @@ pub struct Assets {
 
 impl Cli {
     fn get_file(path: PathBuf) -> String {
-        if path.exists() {
-            fs::read_to_string(path).unwrap()
-        } else {
-            let mut dir = env::current_exe().unwrap();
-            dir.pop();
-            let abspath = dir.join(&path);
-            if abspath.exists() {
-                fs::read_to_string(abspath).unwrap().trim().to_string()
-            } else {
-                panic!("无法找到文件：{}", path.display())
-            }
-        }
+        fs::read_to_string(path.clone()).expect(&format!("文件 {} 不存在", path.display()))
     }
 
     fn parse_hashmap<T: Eq + std::hash::Hash, S>(
@@ -118,25 +107,32 @@ impl Cli {
         };
         let to_string_list = |x: String| x.split(' ').map(|x| x.to_string()).collect();
 
-        let elemets_path = self.elements.clone().unwrap_or(PathBuf::from("elements.txt"));
+        let elemets_path = self
+            .elements
+            .clone()
+            .unwrap_or(PathBuf::from("elements.txt"));
         let elements: RawSequenceMap = Self::parse_hashmap(elemets_path, to_char, to_string_list);
 
         // prepare assets
         let assets_dir = Path::new("assets");
         let cf_path = self
-            .character_frequency.clone()
+            .character_frequency
+            .clone()
             .unwrap_or(assets_dir.join("character_frequency.txt"));
         let character_frequency = Self::parse_hashmap(cf_path, to_char, to_u64);
         let wf_path = self
-            .word_frequency.clone()
+            .word_frequency
+            .clone()
             .unwrap_or(assets_dir.join("word_frequency.txt"));
         let word_frequency = Self::parse_hashmap(wf_path, identity, to_u64);
         let keq_path = self
-            .key_equivalence.clone()
+            .key_equivalence
+            .clone()
             .unwrap_or(assets_dir.join("key_equivalence.txt"));
         let key_equivalence = Self::parse_hashmap(keq_path, to_char, to_f64);
         let peq_path = self
-            .pair_equivalence.clone()
+            .pair_equivalence
+            .clone()
             .unwrap_or(assets_dir.join("pair_equivalence.txt"));
         let pair_equivalence = Self::parse_hashmap(peq_path, to_char_pair, to_f64);
         let words = if let Some(_) = self.words {
@@ -153,11 +149,20 @@ impl Cli {
         return (config, elements, words, assets);
     }
 
-    pub fn export_code<T: Serialize>(path: &PathBuf, original: Vec<T>, code: Option<Vec<String>>, code_reduced: Option<Vec<String>>) {
+    pub fn export_code<T: Serialize>(
+        path: &PathBuf,
+        original: Vec<T>,
+        code: Option<Vec<String>>,
+        code_reduced: Option<Vec<String>>,
+    ) {
         if code.is_none() && code_reduced.is_none() {
             return;
         }
-        let mut writer = csv::WriterBuilder::new().delimiter(b'\t').has_headers(false).from_path(path).unwrap();
+        let mut writer = csv::WriterBuilder::new()
+            .delimiter(b'\t')
+            .has_headers(false)
+            .from_path(path)
+            .unwrap();
         if let (Some(code), Some(code_reduced)) = (code.as_ref(), code_reduced.as_ref()) {
             for (orig, (c, cr)) in zip(original, zip(code, code_reduced)) {
                 writer.serialize((&orig, &c, &cr)).unwrap();
@@ -173,10 +178,24 @@ impl Cli {
     pub fn write_encode_results(metric: Metric, results: EncodeOutput) {
         let c_path = PathBuf::from("characters.txt");
         let w_path = PathBuf::from("words.txt");
-        Self::export_code(&c_path, results.character_list, results.characters, results.characters_reduced);
-        Self::export_code(&w_path, results.word_list, results.words, results.words_reduced);
+        Self::export_code(
+            &c_path,
+            results.character_list,
+            results.characters,
+            results.characters_reduced,
+        );
+        Self::export_code(
+            &w_path,
+            results.word_list,
+            results.words,
+            results.words_reduced,
+        );
         println!("当前方案评测：");
         print!("{}", metric);
-        println!("已完成编码，结果保存在 {} 和 {} 中", c_path.display(), w_path.display());
+        println!(
+            "已完成编码，结果保存在 {} 和 {} 中",
+            c_path.display(),
+            w_path.display()
+        );
     }
 }
