@@ -121,13 +121,13 @@ impl Constraints {
             .narrowed
             .get(&movable_element)
             .unwrap_or(&self.alphabet);
-        let char = destinations.choose(&mut rng).unwrap();
+        let key = destinations.choose(&mut rng).unwrap();
         if let Some(group) = self.grouped.get(&movable_element) {
             for number in group {
-                next[*number] = *char;
+                next[*number] = *key;
             }
         } else {
-            next[movable_element] = *char;
+            next[movable_element] = *key;
         }
         next
     }

@@ -27,7 +27,7 @@ pub struct Cli {
     pub elements: Option<PathBuf>,
 
     /// 词表，默认为 words.txt
-    #[arg(short, long, value_name = "FILE")]
+    #[arg(long, value_name = "FILE")]
     pub words: Option<PathBuf>,
 
     /// 字频表，默认为 assets 目录下的 character_frequency.txt

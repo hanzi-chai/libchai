@@ -129,7 +129,7 @@ impl Representation {
                 if let Some(number) = self.element_repr.get(element) {
                     converted_elems.push(*number);
                 } else {
-                    panic!("不合法的码元：{}", element);
+                    panic!("汉字「{}」包含的元素「{}」无法在键盘映射中找到", char, element);
                 }
             }
             sequence_map.insert(*char, converted_elems);
@@ -142,11 +142,12 @@ impl Representation {
         for (element, mapped) in &self.config.form.mapping {
             if mapped.len() == 1 {
                 let number = *self.element_repr.get(element).unwrap();
-                let current_mapped = candidate[number];
+                let current_mapped = &candidate[number];
+                let key = *self.repr_key.get(current_mapped).unwrap();
                 new_config
                     .form
                     .mapping
-                    .insert(element.to_string(), current_mapped.to_string());
+                    .insert(element.to_string(), key.to_string());
             } else {
                 let mut all_codes = String::new();
                 for index in 0..mapped.len() {

@@ -1,7 +1,7 @@
 use crate::{
     cli::{Assets, RawSequenceMap},
     config::{Config, EncoderConfig, WordRule},
-    representation::{Codes, KeyMap, Sequence, Representation},
+    representation::{Codes, KeyMap, Representation, Sequence, SequenceMap},
 };
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
 
@@ -79,19 +79,49 @@ impl Encoder {
     }
 
     // 字需要提供拆分表，但是词只需要提供词表
-    pub fn new(representation: &Representation, sequence_map: RawSequenceMap, words: Vec<String>, assets: &Assets) -> Encoder {
-        // 将拆分序列映射降序排列
+    pub fn new(
+        representation: &Representation,
+        sequence_map: RawSequenceMap,
+        words: Vec<String>,
+        assets: &Assets,
+    ) -> Encoder {
+        // 预处理单字拆分表
         let sequence_map = representation.transform_elements(&sequence_map);
+
+        // 将拆分序列映射降序排列，然后拆分成两个数组，一个只放字，一个只放序列
         let mut characters_all: Vec<(char, Sequence)> = sequence_map.clone().into_iter().collect();
         characters_all
             .sort_by_key(|x| Reverse(*assets.character_frequency.get(&x.0).unwrap_or(&0)));
-        // 拆分成两个数组，一个只放字，一个只放序列
         let (characters, characters_sequence): (Vec<_>, Vec<_>) =
             characters_all.into_iter().unzip();
 
+        // 对词也是一样的操作
+        let mut words_all = Self::build_word_sequence(representation, sequence_map, words);
+        words_all.sort_by_key(|x| Reverse(*assets.word_frequency.get(&x.0).unwrap_or(&0)));
+        let (words, words_sequence): (Vec<_>, Vec<_>) = words_all.into_iter().unzip();
+        Encoder {
+            characters,
+            characters_sequence,
+            words,
+            words_sequence,
+            config: representation.config.encoder.clone(),
+            radix: representation.config.form.alphabet.len() + 2,
+        }
+    }
+
+    fn build_word_sequence(
+        representation: &Representation,
+        sequence_map: SequenceMap,
+        words: Vec<String>,
+    ) -> Vec<(String, Sequence)> {
+        let max_length = representation.config.encoder.max_length;
         // 从词表生成词的拆分序列，滤掉因缺少字的拆分而无法构词的情况
         let lookup = Self::build_lookup(&representation.config);
         let mut words_all: Vec<(String, Sequence)> = Vec::new();
+        // 如果根本没想优化词，就不考虑这个拆分
+        if let None = representation.config.optimization.objective.words {
+            return words_all;
+        }
         for word in words {
             let chars: Vec<char> = word.chars().collect();
             // 过滤掉太长的词
@@ -111,20 +141,19 @@ impl Encoder {
                     break;
                 }
             }
+            if word_elements.len() > max_length {
+                panic!(
+                    "按当前的构词规则，词语「{}」包含的元素数量为 {}，超过了最大码长 {}",
+                    word,
+                    word_elements.len(),
+                    max_length
+                );
+            }
             if !has_invalid_char {
                 words_all.push((word.clone(), word_elements));
             }
         }
-        words_all.sort_by_key(|x| Reverse(*assets.word_frequency.get(&x.0).unwrap_or(&0)));
-        let (words, words_sequence): (Vec<_>, Vec<_>) = words_all.into_iter().unzip();
-        Encoder {
-            characters,
-            characters_sequence,
-            words,
-            words_sequence,
-            config: representation.config.encoder.clone(),
-            radix: representation.config.form.alphabet.len() + 2,
-        }
+        words_all
     }
 
     fn get_auto_select_value(&self) -> usize {
