@@ -1,6 +1,6 @@
 use crate::cli::Assets;
 use crate::config::ObjectiveConfig;
-use crate::config::PartialMetricWeights;
+use crate::config::PartialWeights;
 use crate::encoder::Encoder;
 use crate::metric::LevelMetric1;
 use crate::metric::LevelMetric2;
@@ -70,7 +70,7 @@ impl Objective {
         &self,
         codes: &Codes,
         frequencies: &Frequencies,
-        weights: &PartialMetricWeights,
+        weights: &PartialWeights,
     ) -> (PartialMetric, f64) {
         // 处理总数据
         let mut total_duplication = 0.0;
@@ -219,16 +219,16 @@ impl Objective {
             characters_reduced: None,
             words_reduced: None,
         };
-        if let Some(characters) = &self.config.characters {
+        if let Some(characters) = &self.config.characters_full {
             self.encoder
                 .encode_character_full(&candidate, &mut buffer.characters);
             let (partial, accum) =
                 self.evaluate_partial(&buffer.characters, &self.character_frequencies, characters);
             loss += accum;
             metric.characters = Some(partial);
-            if let Some(character_reduced) = &self.config.characters_reduced {
+            if let Some(character_reduced) = &self.config.characters_short {
                 self.encoder
-                    .encode_reduced(&buffer.characters, &mut buffer.characters_reduced);
+                    .encode_short(&buffer.characters, &mut buffer.characters_reduced);
                 let (partial, accum) = self.evaluate_partial(
                     &buffer.characters_reduced,
                     &self.character_frequencies,
@@ -238,16 +238,16 @@ impl Objective {
                 metric.characters_reduced = Some(partial);
             }
         }
-        if let Some(words) = &self.config.words {
+        if let Some(words) = &self.config.words_full {
             self.encoder
                 .encode_words_full(&candidate, &mut buffer.words);
             let (partial, accum) =
                 self.evaluate_partial(&buffer.words, &self.word_frequencies, words);
             loss += accum;
             metric.words = Some(partial);
-            if let Some(words_reduced) = &self.config.words_reduced {
+            if let Some(words_reduced) = &self.config.words_short {
                 self.encoder
-                    .encode_reduced(&buffer.words, &mut buffer.words_reduced);
+                    .encode_short(&buffer.words, &mut buffer.words_reduced);
                 let (partial, accum) = self.evaluate_partial(
                     &buffer.words_reduced,
                     &self.word_frequencies,
@@ -265,19 +265,19 @@ impl Objective {
             character_list: self.encoder.characters.clone(),
             characters: self
                 .config
-                .characters
+                .characters_full
                 .as_ref()
                 .map(|_| buffer.characters.clone()),
             characters_reduced: self
                 .config
-                .characters_reduced
+                .characters_short
                 .as_ref()
                 .map(|_| buffer.characters_reduced.clone()),
             word_list: self.encoder.words.clone(),
-            words: self.config.words.as_ref().map(|_| buffer.words.clone()),
+            words: self.config.words_full.as_ref().map(|_| buffer.words.clone()),
             words_reduced: self
                 .config
-                .words_reduced
+                .words_short
                 .as_ref()
                 .map(|_| buffer.words_reduced.clone()),
         }

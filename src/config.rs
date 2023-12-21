@@ -48,7 +48,7 @@ pub struct FormConfig {
     pub alphabet: String,
     pub mapping_type: Option<usize>,
     pub mapping: HashMap<String, String>,
-    pub grouping: HashMap<String, String>,
+    pub grouping: Option<HashMap<String, String>>,
     pub analysis: Option<AnalysisConfig>,
 }
 
@@ -87,26 +87,37 @@ pub struct EdgeConfig {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortCodeConfig {
+    pub prefix: usize,
+    pub count: Option<u8>,
+    pub select_keys: Option<Vec<char>>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncoderConfig {
     pub max_length: usize,
+    pub select_keys: Option<Vec<char>>,
     pub auto_select_length: Option<usize>,
+    pub auto_select_pattern: Option<String>,
+    pub short_code_schemes: Option<Vec<ShortCodeConfig>>,
     pub sources: Option<BTreeMap<String, NodeConfig>>,
     pub conditions: Option<BTreeMap<String, EdgeConfig>>,
     pub rules: Option<Vec<WordRule>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LevelMetricWeights {
+pub struct LevelWeights {
     pub length: usize,
     pub frequency: f64,
 }
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TierMetricWeights {
+pub struct TierWeights {
     pub top: Option<usize>,
     pub duplication: Option<f64>,
-    pub levels: Option<Vec<LevelMetricWeights>>,
+    pub levels: Option<Vec<LevelWeights>>,
 }
 
 #[skip_serializing_none]
@@ -121,22 +132,22 @@ pub struct FingeringWeights {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PartialMetricWeights {
-    pub tiers: Option<Vec<TierMetricWeights>>,
+pub struct PartialWeights {
+    pub tiers: Option<Vec<TierWeights>>,
     pub duplication: Option<f64>,
     pub key_equivalence: Option<f64>,
     pub pair_equivalence: Option<f64>,
     pub fingering: Option<FingeringWeights>,
-    pub levels: Option<Vec<LevelMetricWeights>>,
+    pub levels: Option<Vec<LevelWeights>>,
 }
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectiveConfig {
-    pub characters: Option<PartialMetricWeights>,
-    pub words: Option<PartialMetricWeights>,
-    pub characters_reduced: Option<PartialMetricWeights>,
-    pub words_reduced: Option<PartialMetricWeights>,
+    pub characters_full: Option<PartialWeights>,
+    pub words_full: Option<PartialWeights>,
+    pub characters_short: Option<PartialWeights>,
+    pub words_short: Option<PartialWeights>,
 }
 
 #[skip_serializing_none]
@@ -165,16 +176,19 @@ pub struct ConstraintsConfig {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "algorithm")]
-pub enum MetaheuristicConfig {
-    HillClimbing {
-        runtime: u64,
-    },
-    SimulatedAnnealing {
-        runtime: Option<u64>,
-        parameters: Option<simulated_annealing::Parameters>,
-        report_after: Option<f64>,
-    },
+pub struct SearchConfig {
+    pub random_move: f64,
+    pub random_swap: f64,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SolverConfig {
+    pub algorithm: String,
+    pub runtime: Option<u64>,
+    pub parameters: Option<simulated_annealing::Parameters>,
+    pub report_after: Option<f64>,
+    pub search_method: Option<SearchConfig>,
 }
 
 #[skip_serializing_none]
@@ -182,7 +196,7 @@ pub enum MetaheuristicConfig {
 pub struct OptimizationConfig {
     pub objective: ObjectiveConfig,
     pub constraints: Option<ConstraintsConfig>,
-    pub metaheuristic: MetaheuristicConfig,
+    pub metaheuristic: SolverConfig,
 }
 
 #[skip_serializing_none]

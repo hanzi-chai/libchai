@@ -88,16 +88,16 @@ pub fn solve<T: Clone, M: Clone + Display>(
         steps,
     } = parameters;
     let log_space = t_max.ln() - t_min.ln();
+    let start = Instant::now();
 
     for step in 0..steps {
         let progress = step as f64 / steps as f64;
         let temperature = t_max / (log_space * progress).exp();
         let next_candidate = problem.tweak_candidate(&annealing_candidate);
-        let start = Instant::now();
         let next_rank = problem.rank_candidate(&next_candidate);
-        let elapsed = start.elapsed();
-        if step == 0 {
-            println!("计算一次评测用时：{} μs", elapsed.as_micros());
+        if step == 1000 {
+            let elapsed = start.elapsed();
+            println!("计算一次评测用时：{} μs", elapsed.as_micros() / 1000);
         }
         let improvement = next_rank.1 - annealing_rank.1;
         if improvement < 0.0 || (random::<f64>() < (-improvement / temperature).exp()) {
@@ -204,8 +204,8 @@ pub fn autosolve<T: Clone, M: Clone + Display>(
     );
     candidate = problem.generate_candidate();
     temperature = initial_guess;
-    while improve_rate > 0.005 {
-        temperature /= if improve_rate > 0.01 { 16.0 } else { 4.0 };
+    while improve_rate > 0.01 {
+        temperature /= 4.0;
         (candidate, _, improve_rate) = trial_run(problem, candidate, temperature, batch);
         total_steps += batch;
         println!(

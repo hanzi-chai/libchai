@@ -1,7 +1,7 @@
 use crate::{
     cli::{Assets, RawSequenceMap},
-    config::{Config, EncoderConfig, WordRule},
-    representation::{Codes, KeyMap, Representation, Sequence, SequenceMap},
+    config::{Config, EncoderConfig, ShortCodeConfig, WordRule},
+    representation::{Codes, Key, KeyMap, Representation, Sequence, SequenceMap},
 };
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
 
@@ -16,6 +16,16 @@ pub struct Encoder {
     words_sequence: Vec<Sequence>,
     config: EncoderConfig,
     pub radix: usize,
+    auto_select: Vec<bool>,
+    select_keys: Vec<Key>,
+    short_code_schemes: Vec<CompiledShortCodeConfig>,
+}
+
+#[derive(Debug)]
+struct CompiledShortCodeConfig {
+    pub prefix: usize,
+    pub count: u8,
+    pub select_keys: Vec<usize>,
 }
 
 impl Encoder {
@@ -99,14 +109,60 @@ impl Encoder {
         let mut words_all = Self::build_word_sequence(representation, sequence_map, words);
         words_all.sort_by_key(|x| Reverse(*assets.word_frequency.get(&x.0).unwrap_or(&0)));
         let (words, words_sequence): (Vec<_>, Vec<_>) = words_all.into_iter().unzip();
+        let short_code_schemes =
+            Self::build_short_code_schemes(&representation.config.encoder, representation);
         Encoder {
             characters,
             characters_sequence,
             words,
             words_sequence,
             config: representation.config.encoder.clone(),
-            radix: representation.config.form.alphabet.len() + 2,
+            radix: representation.radix,
+            auto_select: representation.transform_auto_select(),
+            select_keys: representation.select_keys.clone(),
+            short_code_schemes,
         }
+    }
+
+    fn build_short_code_schemes(
+        config: &EncoderConfig,
+        representation: &Representation,
+    ) -> Vec<CompiledShortCodeConfig> {
+        let parse_keys = |s: &Vec<char>| -> Vec<usize> {
+            s.iter()
+                .map(|c| {
+                    *representation
+                        .key_repr
+                        .get(&c)
+                        .expect("简码的选择键没有包含在全局选择键中")
+                })
+                .collect()
+        };
+        let default_schemes = (1..config.max_length).map(|prefix| ShortCodeConfig {
+            prefix,
+            count: None,
+            select_keys: None,
+        }).collect();
+        let schemes = config.short_code_schemes.as_ref().unwrap_or(&default_schemes);
+        schemes
+            .iter()
+            .map(|s| {
+                let count = s.count.unwrap_or(1);
+                let select_keys = s
+                    .select_keys
+                    .as_ref()
+                    .map_or(representation.select_keys.clone(), parse_keys);
+                assert!(
+                    count as usize <= select_keys.len(),
+                    "选重数量不能高于选择键数量"
+                );
+                CompiledShortCodeConfig {
+                    prefix: s.prefix,
+                    count,
+                    select_keys,
+                }
+            })
+            .collect()
     }
 
     fn build_word_sequence(
@@ -119,7 +175,7 @@ impl Encoder {
         let lookup = Self::build_lookup(&representation.config);
         let mut words_all: Vec<(String, Sequence)> = Vec::new();
         // 如果根本没想优化词，就不考虑这个拆分
-        if let None = representation.config.optimization.objective.words {
+        if let None = representation.config.optimization.objective.words_full {
             return words_all;
         }
         for word in words {
@@ -156,18 +212,12 @@ impl Encoder {
         words_all
     }
 
-    fn get_auto_select_value(&self) -> usize {
-        let auto_select_length = self.config.auto_select_length.unwrap_or(0);
-        self.radix.pow(auto_select_length as u32 - 1)
-    }
-
     fn get_space(&self) -> usize {
         let max_length = self.config.max_length;
         self.radix.pow(max_length as u32)
     }
 
     pub fn encode_full(&self, keymap: &KeyMap, data: &Vec<Sequence>, output: &mut Codes) {
-        let auto_select = self.get_auto_select_value();
         for (sequence, pointer) in zip(data, output) {
             let mut code = 0_usize;
             let mut weight = 1_usize;
@@ -175,35 +225,48 @@ impl Encoder {
                 code += keymap[*element] * weight;
                 weight *= self.radix;
             }
-            if code <= auto_select {
-                code += (self.radix - 1) * weight;
+            if !self.auto_select[code] {
+                // 全码时，忽略选择键的影响，便于计算重码，否则还要判断
+                code += self.select_keys[0] * weight;
             }
             *pointer = code;
         }
     }
 
-    pub fn encode_reduced(&self, full_code: &Codes, output: &mut Codes) {
-        let auto_select = self.get_auto_select_value();
-        let mut occupation = vec![false; self.get_space()];
-        for (code, pointer) in zip(full_code, output) {
+    pub fn encode_short(&self, full_codes: &Codes, short_codes: &mut Codes) {
+        let schemes = &self.short_code_schemes;
+        let mut occupation = vec![0_u8; self.get_space()];
+        for (full, pointer) in zip(full_codes, short_codes) {
             let mut has_reduced = false;
-            let mut reduced_code = 0;
-            let mut modulo = self.radix;
-            while reduced_code < *code {
-                reduced_code = code % modulo;
-                if reduced_code < auto_select {
-                    reduced_code += (self.radix - 1) * modulo;
+            for scheme in schemes {
+                let CompiledShortCodeConfig {
+                    prefix,
+                    count,
+                    select_keys,
+                } = scheme;
+                // 如果根本没有这么多码，就放弃
+                if *full < self.radix.pow((*prefix - 1) as u32) {
+                    continue;
                 }
-                modulo *= self.radix;
-                if !occupation[reduced_code] {
-                    occupation[reduced_code] = true;
-                    *pointer = reduced_code;
-                    has_reduced = true;
-                    break;
+                // 判断当前码位有几个候选
+                let modulo = self.radix.pow(*prefix as u32);
+                let mut short = full % modulo;
+                let current = occupation[short];
+                if current >= *count {
+                    continue;
                 }
+                // 决定出这个简码
+                occupation[short] += 1;
+                // 如果不是首选，或者虽然是首选但不能自动上屏，就要加选择键
+                if current != 0 || !self.auto_select[short] {
+                    short += select_keys[current as usize] * modulo; // 补选择键
+                }
+                *pointer = short;
+                has_reduced = true;
+                break;
             }
             if has_reduced == false {
-                *pointer = *code;
+                *pointer = *full;
             }
         }
     }

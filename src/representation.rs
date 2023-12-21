@@ -1,6 +1,10 @@
 use std::collections::HashMap;
-
-use crate::{cli::RawSequenceMap, config::Config, objective::EncodeExport};
+use regex::Regex;
+use crate::{
+    cli::RawSequenceMap,
+    config::Config,
+    objective::EncodeExport,
+};
 
 // 元素用一个无符号整数表示
 pub type Element = usize;
@@ -48,11 +52,12 @@ pub struct Representation {
     pub key_repr: HashMap<char, Key>,
     pub repr_key: HashMap<Key, char>,
     pub radix: usize,
+    pub select_keys: Vec<Key>,
 }
 
 impl Representation {
     pub fn new(config: Config) -> Self {
-        let (radix, key_repr, repr_key) = Self::transform_alphabet(&config);
+        let (radix, select_keys, key_repr, repr_key) = Self::transform_alphabet(&config);
         let (initial, element_repr, repr_element) = Self::transform_keymap(&config, &key_repr);
         Self {
             config,
@@ -62,30 +67,42 @@ impl Representation {
             key_repr,
             repr_key,
             radix,
+            select_keys,
         }
     }
 
-    pub fn transform_alphabet(config: &Config) -> (usize, HashMap<char, Key>, HashMap<Key, char>) {
-        // 0 = no code
-        // 1, ... 26 = a, ..., z
-        // 27 = _
+    pub fn transform_alphabet(
+        config: &Config,
+    ) -> (usize, Vec<Key>, HashMap<char, Key>, HashMap<Key, char>) {
+        // 0 = 空字符串
+        // 1, ... n = 所有常规编码键
+        // n + 1, ..., m = 所有选择键
         let mut key_repr: HashMap<char, Key> = HashMap::new();
         let mut repr_key: HashMap<Key, char> = HashMap::new();
         let mut index = 1_usize;
         for key in config.form.alphabet.chars() {
+            assert!(!key_repr.contains_key(&key), "编码键有重复！");
             key_repr.insert(key, index);
             repr_key.insert(index, key);
             index += 1;
         }
-        // 这个以后会支持自定义
-        let select_keys = String::from("_");
-        for key in select_keys.chars() {
-            key_repr.insert(key, index);
-            repr_key.insert(index, key);
+        let default_select_keys = vec!['_'];
+        let select_keys = config
+            .encoder
+            .select_keys
+            .as_ref()
+            .unwrap_or(&default_select_keys);
+        assert!(select_keys.len() >= 1, "选择键不能为空！");
+        let mut parsed_select_keys: Vec<Key> = vec![];
+        for key in select_keys {
+            assert!(!key_repr.contains_key(&key), "编码键或选择键有重复！");
+            key_repr.insert(*key, index);
+            repr_key.insert(index, *key);
+            parsed_select_keys.push(index);
             index += 1;
         }
         let radix = index;
-        (radix, key_repr, repr_key)
+        (radix, parsed_select_keys, key_repr, repr_key)
     }
 
     pub fn transform_keymap(
@@ -123,14 +140,18 @@ impl Representation {
 
     pub fn transform_elements(&self, raw_sequence_map: &RawSequenceMap) -> SequenceMap {
         let mut sequence_map = SequenceMap::new();
+        let max_length = self.config.encoder.max_length;
+        if max_length >= 6 {
+            panic!("目前暂不支持最大码长大于等于 6 的方案计算！")
+        }
         for (char, sequence) in raw_sequence_map {
             let mut converted_elems: Vec<usize> = Vec::new();
-            if sequence.len() > self.config.encoder.max_length {
+            if sequence.len() > max_length {
                 panic!(
                     "汉字「{}」包含的元素数量为 {}，超过了最大码长 {}",
                     char,
                     sequence.len(),
-                    self.config.encoder.max_length
+                    max_length
                 );
             }
             for element in sequence {
@@ -238,6 +259,29 @@ impl Representation {
                     .expect(&format!("键位组合 {:?} 的速度当量数据未知", pair));
             }
             result.push(total);
+        }
+        result
+    }
+
+    pub fn transform_auto_select(&self) -> Vec<bool> {
+        let mut result: Vec<bool> = vec![];
+        let encoder = &self.config.encoder;
+        let re = encoder
+            .auto_select_pattern
+            .as_ref()
+            .map(|x| Regex::new(x).expect("正则表达式不合法"));
+        for code in 0..self.get_space() {
+            let chars = self.repr_code(code);
+            let string: String = chars.iter().collect();
+            let is_matched = if let Some(re) = &re {
+                re.is_match(&string)
+            } else if let Some(length) = encoder.auto_select_length {
+                chars.len() >= length
+            } else {
+                true
+            };
+            let is_max_length = chars.len() == encoder.max_length;
+            result.push(is_matched || is_max_length);
         }
         result
     }

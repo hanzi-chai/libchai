@@ -6,9 +6,9 @@
       "request": "launch",
       "name": "Debug executable 'libchai'",
       "cargo": {
-        "args": ["build", "--bin=libchai", "--package=libchai"],
+        "args": ["build", "--bin=chai", "--package=libchai"],
         "filter": {
-          "name": "libchai",
+          "name": "chai",
           "kind": "bin"
         }
       },

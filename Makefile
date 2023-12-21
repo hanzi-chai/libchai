@@ -12,12 +12,12 @@ assetsdir:
 
 package: build build-windows
 	mkdir -p package; \
-	cp target/release/libchai package/; \
-	cp target/x86_64-pc-windows-gnu/release/libchai.exe package/; \
+	cp target/release/chai package/; \
+	cp target/x86_64-pc-windows-gnu/release/chai.exe package/; \
 	cp -r README.md config.md LICENSE config.yaml elements.txt assets package/; \
 	cd package; \
-	rm libchai.zip; \
-	zip -r libchai.zip *
+	rm chai.zip; \
+	zip -r chai.zip *
 
 build:
 	cargo build --release

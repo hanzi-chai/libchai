@@ -20,6 +20,12 @@
 
 use super::Metaheuristics;
 use std::time::{Duration, Instant};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Parameters {
+    pub steps: usize,
+}
 
 /// Returns an approximate solution to your optimisation problem using Hill Climbing
 ///

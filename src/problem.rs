@@ -1,6 +1,6 @@
-use crate::config::MetaheuristicConfig;
+use crate::config::{SolverConfig, SearchConfig};
 use crate::constraints::Constraints;
-use crate::metaheuristics::{hill_climbing, simulated_annealing, Metaheuristics};
+use crate::metaheuristics::{simulated_annealing, Metaheuristics};
 use crate::metric::Metric;
 use crate::objective::Objective;
 use crate::representation::{Buffer, KeyMap, Representation};
@@ -50,7 +50,9 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     }
 
     fn tweak_candidate(&mut self, candidate: &Solution) -> Solution {
-        if random::<f64>() < 0.9 {
+        let method = self.representation.config.optimization.metaheuristic.search_method.as_ref().unwrap_or(&SearchConfig { random_move: 0.9, random_swap: 0.1 });
+        let ratio = method.random_move / (method.random_move + method.random_swap);
+        if random::<f64>() < ratio {
             self.constraints.constrained_random_move(candidate)
         } else {
             self.constraints.constrained_random_swap(candidate)
@@ -84,31 +86,18 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
 impl ElementPlacementProblem {
     pub fn solve(&mut self) -> Solution {
         let _ = fs::create_dir_all("output").expect("should be able to create an output directory");
-        let metaheuristic = self
+        let SolverConfig { parameters, runtime, report_after, .. } = self
             .representation
             .config
             .optimization
             .metaheuristic
             .clone();
-        match metaheuristic {
-            MetaheuristicConfig::SimulatedAnnealing {
-                runtime,
-                parameters,
-                report_after,
-            } => {
-                if let Some(parameters) = parameters {
-                    simulated_annealing::solve(self, parameters.clone(), report_after)
-                } else if let Some(runtime) = runtime {
-                    let duration = Duration::new(runtime * 60, 0);
-                    simulated_annealing::autosolve(self, duration, report_after)
-                } else {
-                    panic!("退火算法无法执行，因为配置文件中既没有提供参数，也没有提供运行时间");
-                }
-            }
-            MetaheuristicConfig::HillClimbing { runtime } => {
-                let duration = Duration::new(runtime * 60, 0);
-                hill_climbing::solve(self, duration)
-            }
+        if let Some(parameters) = parameters {
+            simulated_annealing::solve(self, parameters.clone(), report_after)
+        } else {
+            let runtime = runtime.unwrap_or(10);
+            let duration = Duration::new(runtime * 60, 0);
+            simulated_annealing::autosolve(self, duration, report_after)
         }
     }
 }
