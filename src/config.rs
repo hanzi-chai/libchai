@@ -201,11 +201,20 @@ pub struct OptimizationConfig {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Info {
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub description: String,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub version: Option<String>,
     #[serialize_always] // JavaScript null
     pub source: Option<String>,
-    pub info: Option<BTreeMap<String, String>>,
+    pub info: Option<Info>,
     pub data: Option<DataConfig>,
     pub form: FormConfig,
     pub encoder: EncoderConfig,

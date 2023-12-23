@@ -1,10 +1,21 @@
-use std::collections::HashMap;
+use crate::{config::Config, objective::EncodeExport};
+use serde::{Serialize, Deserialize};
 use regex::Regex;
-use crate::{
-    cli::RawSequenceMap,
-    config::Config,
-    objective::EncodeExport,
-};
+use std::collections::HashMap;
+
+pub type RawSequenceMap = HashMap<char, String>;
+pub type WordList = Vec<String>;
+pub type KeyEquivalence = HashMap<char, f64>;
+pub type PairEquivalence = HashMap<String, f64>;
+pub type Frequency<T> = HashMap<T, u64>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Assets {
+    pub character_frequency: Frequency<char>,
+    pub word_frequency: Frequency<String>,
+    pub key_equivalence: KeyEquivalence,
+    pub pair_equivalence: PairEquivalence,
+}
 
 // 元素用一个无符号整数表示
 pub type Element = usize;
@@ -146,6 +157,7 @@ impl Representation {
         }
         for (char, sequence) in raw_sequence_map {
             let mut converted_elems: Vec<usize> = Vec::new();
+            let sequence: Vec<_> = sequence.split(' ').map(|x| x.to_string()).collect();
             if sequence.len() > max_length {
                 panic!(
                     "汉字「{}」包含的元素数量为 {}，超过了最大码长 {}",
@@ -154,7 +166,7 @@ impl Representation {
                     max_length
                 );
             }
-            for element in sequence {
+            for element in &sequence {
                 if let Some(number) = self.element_repr.get(element) {
                     converted_elems.push(*number);
                 } else {
@@ -242,7 +254,7 @@ impl Representation {
 
     pub fn transform_pair_equivalence(
         &self,
-        pair_equivalence: &HashMap<(char, char), f64>,
+        pair_equivalence: &HashMap<String, f64>,
     ) -> Vec<f64> {
         let mut result: Vec<f64> = vec![];
         for code in 0..self.get_space() {
@@ -253,7 +265,7 @@ impl Representation {
             }
             let mut total = 0.0;
             for i in 0..(chars.len() - 1) {
-                let pair = (chars[i], chars[i + 1]);
+                let pair: String = [chars[i], chars[i + 1]].iter().collect();
                 total += pair_equivalence
                     .get(&pair)
                     .expect(&format!("键位组合 {:?} 的速度当量数据未知", pair));

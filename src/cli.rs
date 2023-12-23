@@ -1,10 +1,11 @@
 use crate::config::Config;
 use crate::metric::Metric;
-use crate::representation::EncodeOutput;
+use crate::representation::{Assets, EncodeOutput, RawSequenceMap, WordList};
 use clap::{Parser, Subcommand};
-use serde::Serialize;
+use csv::{ReaderBuilder, Reader};
+use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
-use std::convert::identity;
+use std::fs::File;
 use std::iter::zip;
 use std::{
     fs,
@@ -55,63 +56,27 @@ pub enum Command {
     Optimize,
 }
 
-pub type RawSequenceMap = HashMap<char, Vec<String>>;
-pub type WordList = Vec<String>;
-pub type KeyEquivalence = HashMap<char, f64>;
-pub type PairEquivalence = HashMap<(char, char), f64>;
-pub type Frequency<T> = HashMap<T, u64>;
-
-#[derive(Debug)]
-pub struct Assets {
-    pub character_frequency: Frequency<char>,
-    pub word_frequency: Frequency<String>,
-    pub key_equivalence: KeyEquivalence,
-    pub pair_equivalence: PairEquivalence,
+#[derive(Debug, Serialize, Deserialize)]
+struct Test {
+    key: char,
+    value: f64,
 }
 
 impl Cli {
-    fn get_file(path: PathBuf) -> String {
-        fs::read_to_string(path.clone()).expect(&format!("文件 {} 不存在", path.display()))
-    }
-
-    fn parse_hashmap<T: Eq + std::hash::Hash, S>(
-        path: PathBuf,
-        kparser: fn(String) -> T,
-        vparser: fn(String) -> S,
-    ) -> HashMap<T, S> {
-        let content = Self::get_file(path);
-        let mut hashmap: HashMap<T, S> = HashMap::new();
-        for line in content.split('\n') {
-            let fields: Vec<&str> = line.trim().split('\t').collect();
-            hashmap.insert(
-                kparser(fields[0].to_string()),
-                vparser(fields[1].to_string()),
-            );
-        }
-        hashmap
+    fn get_reader(path: PathBuf) -> Reader<File> {
+        return ReaderBuilder::new().delimiter(b'\t').has_headers(false).from_path(path).unwrap()
     }
 
     pub fn prepare_file(&self) -> (Config, RawSequenceMap, WordList, Assets) {
         let config_path = self.config.clone().unwrap_or(PathBuf::from("config.yaml"));
-        let config: Config = serde_yaml::from_str(&Self::get_file(config_path)).unwrap();
-
-        // small parsers for TSV file
-        let to_u64 = |x: String| x.parse::<u64>().unwrap();
-        let to_f64 = |x: String| x.parse::<f64>().unwrap();
-        let to_char = |x: String| x.chars().next().unwrap();
-        let to_char_pair = |x: String| {
-            let mut it = x.chars();
-            let first = it.next().unwrap();
-            let second = it.next().unwrap();
-            (first, second)
-        };
-        let to_string_list = |x: String| x.split(' ').map(|x| x.to_string()).collect();
+        let config_content = fs::read_to_string(&config_path).expect(&format!("文件 {} 不存在", config_path.display()));
+        let config: Config = serde_yaml::from_str(&config_content).unwrap();
 
         let elemets_path = self
             .elements
             .clone()
             .unwrap_or(PathBuf::from("elements.txt"));
-        let elements: RawSequenceMap = Self::parse_hashmap(elemets_path, to_char, to_string_list);
+        let elements: HashMap<char, String> = Self::get_reader(elemets_path).deserialize().map(|x| x.unwrap()).collect();
 
         // prepare assets
         let assets_dir = Path::new("assets");
@@ -119,22 +84,22 @@ impl Cli {
             .character_frequency
             .clone()
             .unwrap_or(assets_dir.join("character_frequency.txt"));
-        let character_frequency = Self::parse_hashmap(cf_path, to_char, to_u64);
+        let character_frequency: HashMap<char, u64> = Self::get_reader(cf_path).deserialize().map(|x| x.unwrap()).collect();
         let wf_path = self
             .word_frequency
             .clone()
             .unwrap_or(assets_dir.join("word_frequency.txt"));
-        let word_frequency = Self::parse_hashmap(wf_path, identity, to_u64);
+        let word_frequency: HashMap<String, u64> = Self::get_reader(wf_path).deserialize().map(|x| x.unwrap()).collect();
         let keq_path = self
             .key_equivalence
             .clone()
             .unwrap_or(assets_dir.join("key_equivalence.txt"));
-        let key_equivalence = Self::parse_hashmap(keq_path, to_char, to_f64);
+        let key_equivalence: HashMap<char, f64> = Self::get_reader(keq_path).deserialize().map(|x| x.unwrap()).collect();
         let peq_path = self
             .pair_equivalence
             .clone()
             .unwrap_or(assets_dir.join("pair_equivalence.txt"));
-        let pair_equivalence = Self::parse_hashmap(peq_path, to_char_pair, to_f64);
+        let pair_equivalence: HashMap<String, f64> = Self::get_reader(peq_path).deserialize().map(|x| x.unwrap()).collect();
         let words = if let Some(_) = self.words {
             vec![]
         } else {

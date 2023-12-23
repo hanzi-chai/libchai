@@ -1,4 +1,3 @@
-use crate::cli::Assets;
 use crate::config::ObjectiveConfig;
 use crate::config::PartialWeights;
 use crate::encoder::Encoder;
@@ -7,6 +6,7 @@ use crate::metric::LevelMetric2;
 use crate::metric::Metric;
 use crate::metric::PartialMetric;
 use crate::metric::TierMetric;
+use crate::representation::Assets;
 use crate::representation::Buffer;
 use crate::representation::Codes;
 use crate::representation::KeyMap;

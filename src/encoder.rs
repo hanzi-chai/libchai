@@ -1,7 +1,6 @@
 use crate::{
-    cli::{Assets, RawSequenceMap},
     config::{Config, EncoderConfig, ShortCodeConfig, WordRule},
-    representation::{Codes, Key, KeyMap, Representation, Sequence, SequenceMap},
+    representation::{Codes, Key, KeyMap, Representation, Sequence, SequenceMap, RawSequenceMap, Assets},
 };
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
 
