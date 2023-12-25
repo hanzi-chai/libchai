@@ -63,9 +63,11 @@
 //! You should have received a copy of the GNU General Public License along
 //! with this program. If not, see
 //! [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
+
+use crate::interface::Interface;
+
 extern crate rand;
 
-pub mod hill_climbing;
 pub mod simulated_annealing;
 
 /// Implement this simple trait to apply metaheuristics to your optimisation problems
@@ -100,5 +102,5 @@ pub trait Metaheuristics<T, M> {
     ///```
     fn tweak_candidate(&mut self, candidate: &T) -> T;
 
-    fn save_candidate(&self, candidate: &T, rank: &(M, f64), write_to_file: bool);
+    fn save_candidate(&self, candidate: &T, rank: &(M, f64), write_to_file: bool, interface: &dyn Interface);
 }

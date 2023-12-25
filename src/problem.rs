@@ -1,13 +1,11 @@
 use crate::config::{SolverConfig, SearchConfig};
 use crate::constraints::Constraints;
+use crate::interface::Interface;
 use crate::metaheuristics::{simulated_annealing, Metaheuristics};
 use crate::metric::Metric;
 use crate::objective::Objective;
 use crate::representation::{Buffer, KeyMap, Representation};
-use chrono::Local;
 use rand::random;
-use std::fs;
-use std::time::Duration;
 
 // 未来可能会有更加通用的解定义
 type Solution = KeyMap;
@@ -59,33 +57,17 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
         }
     }
 
-    fn save_candidate(&self, candidate: &Solution, rank: &(Metric, f64), write_to_file: bool) {
-        let time = Local::now();
-        let prefix = format!("{}", time.format("%m-%d+%H_%M_%S_%3f"));
-        let config_path = format!("output/{}.yaml", prefix);
-        let metric_path = format!("output/{}.txt", prefix);
-        println!(
-            "{} 系统搜索到了一个更好的方案，评测指标如下：",
-            time.format("%H:%M:%S")
-        );
-        print!("{}", rank.0);
+    fn save_candidate(&self, candidate: &Solution, rank: &(Metric, f64), write_to_file: bool, interface: &dyn Interface) {
         let new_config = self.representation.update_config(&candidate);
         let content = serde_yaml::to_string(&new_config).unwrap();
-        if write_to_file {
-            fs::write(metric_path, format!("{}", rank.0)).unwrap();
-            fs::write(config_path, content).unwrap();
-            println!(
-                "方案文件保存于 {}.yaml 中，评测指标保存于 {}.txt 中",
-                prefix, prefix
-            );
-        }
-        println!("");
+        let metric = format!("{}", rank.0);
+        interface.report_solution(content, metric, write_to_file);
     }
 }
 
 impl ElementPlacementProblem {
-    pub fn solve(&mut self) -> Solution {
-        let _ = fs::create_dir_all("output").expect("should be able to create an output directory");
+    pub fn solve(&mut self, interface: &dyn Interface) -> Solution {
+        interface.prepare_output();
         let SolverConfig { parameters, runtime, report_after, .. } = self
             .representation
             .config
@@ -93,11 +75,10 @@ impl ElementPlacementProblem {
             .metaheuristic
             .clone();
         if let Some(parameters) = parameters {
-            simulated_annealing::solve(self, parameters.clone(), report_after)
+            simulated_annealing::solve(self, parameters.clone(), report_after, interface)
         } else {
             let runtime = runtime.unwrap_or(10);
-            let duration = Duration::new(runtime * 60, 0);
-            simulated_annealing::autosolve(self, duration, report_after)
+            simulated_annealing::autosolve(self, runtime, report_after, interface)
         }
     }
 }

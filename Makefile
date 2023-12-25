@@ -24,3 +24,9 @@ build:
 
 build-windows:
 	cargo build --release --target x86_64-pc-windows-gnu
+
+wasm:
+	wasm-pack build --target web
+
+publish:
+	wasm-pack publish

@@ -16,14 +16,15 @@ use cli::{Cli, Command};
 use representation::Representation;
 mod objectives;
 mod representation;
+mod interface;
 
 fn main() {
     let cli = Cli::parse();
     let (config, characters, words, assets) = cli.prepare_file();
     let representation = Representation::new(config);
-    let mut buffer = representation.init_buffer(characters.len(), words.len());
     let encoder = Encoder::new(&representation, characters, words, &assets);
     let objective = Objective::new(&representation, encoder, assets);
+    let mut buffer = objective.init_buffer();
     match cli.command {
         Command::Encode => {
             let (metric, _) = objective.evaluate(&representation.initial, &mut buffer);
@@ -35,7 +36,7 @@ fn main() {
             let constraints = Constraints::new(&representation);
             let mut problem =
                 ElementPlacementProblem::new(representation, constraints, objective, buffer);
-            problem.solve();
+            problem.solve(&cli);
         }
     }
 }

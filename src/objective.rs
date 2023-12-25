@@ -282,4 +282,8 @@ impl Objective {
                 .map(|_| buffer.words_reduced.clone()),
         }
     }
+
+    pub fn init_buffer(&self) -> Buffer {
+        self.encoder.init_buffer()
+    }
 }

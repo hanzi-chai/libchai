@@ -303,15 +303,6 @@ impl Representation {
         self.radix.pow(max_length as u32)
     }
 
-    pub fn init_buffer(&self, nchar: usize, nword: usize) -> Buffer {
-        Buffer {
-            characters: vec![0; nchar],
-            characters_reduced: vec![0; nchar],
-            words: vec![0; nword],
-            words_reduced: vec![0; nword],
-        }
-    }
-
     pub fn recover_codes(&self, codes: EncodeExport) -> EncodeOutput {
         let EncodeExport {
             character_list,

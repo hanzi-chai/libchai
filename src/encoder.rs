@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, EncoderConfig, ShortCodeConfig, WordRule},
-    representation::{Codes, Key, KeyMap, Representation, Sequence, SequenceMap, RawSequenceMap, Assets},
+    representation::{Codes, Key, KeyMap, Representation, Sequence, SequenceMap, RawSequenceMap, Assets, Buffer},
 };
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
 
@@ -284,5 +284,14 @@ impl Encoder {
         } else {
             &vector[vector.len() - (-index as usize)]
         };
+    }
+
+    pub fn init_buffer(&self) -> Buffer {
+        Buffer {
+            characters: vec![0; self.characters.len()],
+            characters_reduced: vec![0; self.characters.len()],
+            words: vec![0; self.words.len()],
+            words_reduced: vec![0; self.words.len()],
+        }
     }
 }
