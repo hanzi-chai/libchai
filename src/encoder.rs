@@ -1,3 +1,5 @@
+//! 编码引擎
+
 use crate::{
     config::{Config, EncoderConfig, ShortCodeConfig, WordRule},
     representation::{Codes, Key, KeyMap, Representation, Sequence, SequenceMap, RawSequenceMap, Assets, Buffer},
@@ -28,6 +30,8 @@ struct CompiledShortCodeConfig {
 }
 
 impl Encoder {
+    /// 将 Rime 格式的［AaAbBaBb］这样的字符串转换成一个数对的列表
+    /// 每个数对表示要取哪个字的哪个码
     fn parse_formula(s: &String) -> Vec<(isize, isize)> {
         let mut ret: Vec<(isize, isize)> = Vec::new();
         let chars: Vec<char> = s.chars().collect();
@@ -44,6 +48,7 @@ impl Encoder {
         ret
     }
 
+    /// 将规则列表中的每一个字符串形式的规则都转换成数对的列表
     fn build_lookup(config: &Config) -> [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] {
         let mut quick_lookup: [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] = Default::default();
         let default_rules: Vec<WordRule> = vec![
@@ -87,7 +92,9 @@ impl Encoder {
         quick_lookup
     }
 
-    // 字需要提供拆分表，但是词只需要提供词表
+    /// 提供配置表示、拆分表、词表和共用资源来创建一个编码引擎
+    /// 字需要提供拆分表
+    /// 词只需要提供词表，它对应的拆分序列从字推出
     pub fn new(
         representation: &Representation,
         sequence_map: RawSequenceMap,

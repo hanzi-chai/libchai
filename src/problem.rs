@@ -1,9 +1,14 @@
+//! 优化问题的整体定义。
+//! 
+//! 目前只定义了最基础的元素布局问题，以后可能会定义更复杂的问题，如元素布局 + 元素选取等等。
+//! 
+
 use crate::config::{SolverConfig, SearchConfig};
 use crate::constraints::Constraints;
 use crate::interface::Interface;
 use crate::metaheuristics::{simulated_annealing, Metaheuristics};
-use crate::metric::Metric;
-use crate::objective::Objective;
+use crate::objectives::Objective;
+use crate::objectives::metric::Metric;
 use crate::representation::{Buffer, KeyMap, Representation};
 use rand::random;
 

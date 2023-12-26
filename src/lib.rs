@@ -4,8 +4,7 @@ mod data;
 mod encoder;
 mod interface;
 mod metaheuristics;
-mod metric;
-mod objective;
+mod objectives;
 mod problem;
 mod representation;
 use crate::constraints::Constraints;
@@ -13,7 +12,7 @@ use crate::problem::ElementPlacementProblem;
 use crate::{
     config::Config,
     encoder::Encoder,
-    objective::Objective,
+    objectives::Objective,
     representation::{Assets, Representation},
 };
 use interface::Interface;

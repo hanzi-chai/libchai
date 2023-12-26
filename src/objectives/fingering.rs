@@ -1,3 +1,8 @@
+//! 指法分析
+//! 
+//! 参考法月的《科学形码测评系统》，基于定义来推导出各种差指法组合都有哪些，然后封装成一个结构体便于主程序使用。
+//! 
+
 use std::collections::HashSet;
 
 type FingeringSet = HashSet<(char, char)>;

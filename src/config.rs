@@ -1,3 +1,8 @@
+//! 递归定义 YAML 配置文件中的所有字段，以及它们和一个 Rust 结构体之间的序列化、反序列化操作应该如何执行。
+//! 
+//! 这部分内容太多，就不一一注释了。后期会写一个「`config.yaml` 详解」来统一解释各种配置文件的字段。
+//! 
+
 use crate::{
     data::{Character, Glyph},
     metaheuristics::simulated_annealing,

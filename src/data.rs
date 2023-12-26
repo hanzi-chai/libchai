@@ -1,3 +1,8 @@
+//! 递归定义汉字自动拆分所需要的基本数据格式。
+//! 
+//! 这部分内容太多，就不一一注释了。在开发文档中有详细解释。
+//! 
+
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 

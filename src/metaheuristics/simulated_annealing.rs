@@ -1,58 +1,13 @@
-//! Find an approximate solution to your optimisation problem using Simulated Annealing
-//!
-//! When metal is heated to melting point, its atoms are let loose to move freely, and do so in a
-//! random fashion. If cooled too quickly (a process known as quenching), the random positioning of
-//! atoms gets frozen in time, creating a hard and brittle metal. However if allowed to cool at a
-//! slower rate (a process known as annealing), the atoms arrange in a more uniform fashion,
-//! creating a soft and malleable metal. Simulated annealing borrows from this process.
-//!
-//! Here we duplicate the functionality of the `metaheuristics::hill_climbing` module but with
-//! slight modification - at each iteration, we introduce a probability of going downhill! This
-//! probability mimicks the cooling temperature from its physical counterpart. At first, the
-//! probability of going downhill is 1. But as time moves on, we lower that probability until time
-//! has run out.
-//!
-//! The probability of going downhill, or cooling temperature, is given by the following function:
-//!ignore
-//!    P(t) = e^(-10*(t^3))
-//!
-//! and can be seen by the following gnuplot:
-//!
-//!```bash
-//!cat <<EOF | gnuplot -p
-//!  set xrange [0:1];
-//!  set yrange [0:1];
-//!  set xlabel "Runtime";
-//!  set ylabel "Probability of going downhill";
-//!  set style line 12 lc rgb '#9bffff' lt 0 lw 1;
-//!  set grid back ls 12;
-//!  set style line 11 lc rgb '#5980d4' lt 1;
-//!  set border 3 back ls 11;
-//!  set tics nomirror;
-//!  set key off;
-//!  f(x) = exp(-10*(x**3));
-//!  plot f(x) with lines lc rgb '#d52339';
-//!EOF
-//!```
-//!
-//! For more info on Simulated Annealing, please see the [Simulated
-//! Annealing](https://wikipedia.org/wiki/Simulated_annealing) Wikipedia article.
-//!
-//!# Examples
-//!
-//!```ignore
-//!let solution = metaheuristics::simulated_annealing::solve(&mut problem, runtime);
-//!```
+//! 退火算法
 
+use super::Metaheuristics;
+use crate::interface::Interface;
+use rand::random;
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use web_time::{Duration, Instant};
 
-use crate::interface::Interface;
-
-use super::Metaheuristics;
-use rand::random;
-use serde::{Deserialize, Serialize};
-
+/// 退火算法的参数，包括最高温、最低温、步数
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Parameters {
     pub t_max: f64,
@@ -60,19 +15,7 @@ pub struct Parameters {
     pub steps: usize,
 }
 
-/// Returns an approximate solution to your optimisation problem using Simulated Annealing
-///
-///# Parameters
-///
-/// `problem` is the type that implements the `Metaheuristics` trait.
-///
-/// `runtime` is a `time::Duration` specifying how long to spend searching for a solution.
-///
-///# Examples
-///
-///```ignore
-///let solution = metaheuristics::simulated_annealing::solve(&mut problem, runtime);
-///```
+/// 退火算法求解的主函数
 pub fn solve<T: Clone, M: Clone + Display>(
     problem: &mut dyn Metaheuristics<T, M>,
     parameters: Parameters,
@@ -152,6 +95,7 @@ fn trial_run<T: Clone, M: Clone>(
     (candidate, accept_rate, improve_rate)
 }
 
+// 不提供参数，而是提供预期运行时间，通过试验来获得一组参数的办法
 pub fn autosolve<T: Clone, M: Clone + Display>(
     problem: &mut dyn Metaheuristics<T, M>,
     runtime: u64,

@@ -1,6 +1,8 @@
-use crate::{config::Config, objective::EncodeExport};
-use serde::{Serialize, Deserialize};
+//! 内部数据结构的表示和定义
+
+use crate::config::Config;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub type RawSequenceMap = HashMap<char, String>;
@@ -17,33 +19,44 @@ pub struct Assets {
     pub pair_equivalence: PairEquivalence,
 }
 
-// 元素用一个无符号整数表示
+/// 元素用一个无符号整数表示
 pub type Element = usize;
 
-// 字或词的拆分序列
+/// 字或词的拆分序列
 pub type Sequence = Vec<Element>;
 
-// 字到拆分序列的映射
+/// 字到拆分序列的映射
 pub type SequenceMap = HashMap<char, Sequence>;
 
-// 编码用无符号整数表示
+/// 编码用无符号整数表示
 pub type Code = usize;
 
+/// 一组编码
 pub type Codes = Vec<Code>;
 
-// 按键用无符号整数表示
+/// 按键用无符号整数表示
 pub type Key = usize;
 
-// 元素映射用一个数组表示，下标是元素
+/// 元素映射用一个数组表示，下标是元素
 pub type KeyMap = Vec<Key>;
 
 #[derive(Debug)]
+pub struct EncodeExport {
+    pub characters: Vec<char>,
+    pub characters_full: Option<Codes>,
+    pub characters_short: Option<Codes>,
+    pub words: Vec<String>,
+    pub words_full: Option<Codes>,
+    pub words_short: Option<Codes>,
+}
+
+#[derive(Debug)]
 pub struct EncodeOutput {
-    pub character_list: Vec<char>,
-    pub characters: Option<Vec<String>>,
-    pub characters_reduced: Option<Vec<String>>,
-    pub word_list: Vec<String>,
-    pub words: Option<Vec<String>>,
+    pub characters: Vec<char>,
+    pub characters_full: Option<Vec<String>>,
+    pub characters_short: Option<Vec<String>>,
+    pub words: Vec<String>,
+    pub words_full: Option<Vec<String>>,
     pub words_reduced: Option<Vec<String>>,
 }
 
@@ -55,6 +68,7 @@ pub struct Buffer {
     pub words_reduced: Codes,
 }
 
+/// 配置表示是对配置文件的进一步封装，除了保存一份配置文件本身之外，还根据配置文件的内容推导出用于各种转换的映射
 pub struct Representation {
     pub config: Config,
     pub initial: KeyMap,
@@ -82,12 +96,12 @@ impl Representation {
         }
     }
 
+    /// 读取字母表和选择键列表，然后分别对它们的每一个按键转换成无符号整数
+    /// 1, ... n = 所有常规编码键
+    /// n + 1, ..., m = 所有选择键
     pub fn transform_alphabet(
         config: &Config,
     ) -> (usize, Vec<Key>, HashMap<char, Key>, HashMap<Key, char>) {
-        // 0 = 空字符串
-        // 1, ... n = 所有常规编码键
-        // n + 1, ..., m = 所有选择键
         let mut key_repr: HashMap<char, Key> = HashMap::new();
         let mut repr_key: HashMap<Key, char> = HashMap::new();
         let mut index = 1_usize;
@@ -116,6 +130,7 @@ impl Representation {
         (radix, parsed_select_keys, key_repr, repr_key)
     }
 
+    /// 读取元素映射，然后把每一个元素转换成无符号整数，从而可以用向量来表示一个元素布局，向量的下标就是元素对应的数
     pub fn transform_keymap(
         config: &Config,
         key_repr: &HashMap<char, Key>,
@@ -133,11 +148,11 @@ impl Representation {
                     ))
                 })
                 .collect();
-            if chars.len() == 1 {
+            if chars.len() == 1 { // 如果这个元素是单编码，那么就记录这个元素的字符串到整数的映射；
                 forward_converter.insert(element.clone(), keymap.len());
                 reverse_converter.insert(keymap.len(), element.clone());
                 keymap.push(chars[0]);
-            } else {
+            } else { // 如果这个元素不是单编码，那么就把它分开成多个子元素，每个子元素对应一码，记录每个子元素到整数的映射；
                 for (index, key) in chars.iter().enumerate() {
                     let name = format!("{}.{}", element.to_string(), index);
                     forward_converter.insert(name.clone(), keymap.len());
@@ -149,6 +164,7 @@ impl Representation {
         (keymap, forward_converter, reverse_converter)
     }
 
+    /// 读取拆分表，将拆分序列中的每一个元素按照先前确定的元素 -> 整数映射来转换为整数向量
     pub fn transform_elements(&self, raw_sequence_map: &RawSequenceMap) -> SequenceMap {
         let mut sequence_map = SequenceMap::new();
         let max_length = self.config.encoder.max_length;
@@ -181,6 +197,7 @@ impl Representation {
         sequence_map
     }
 
+    /// 根据一个计算中得到的元素布局来生成一份新的配置文件，其余内容不变直接复制过来
     pub fn update_config(&self, candidate: &KeyMap) -> Config {
         let mut new_config = self.config.clone();
         let lookup = |element: &String| {
@@ -211,6 +228,7 @@ impl Representation {
         new_config
     }
 
+    /// 如前所述，建立了一个按键到整数的映射之后，可以将字符串看成具有某个进制的数。所以，给定一个数，也可以把它转化为字符串
     pub fn repr_code(&self, code: Code) -> Vec<char> {
         let mut chars: Vec<char> = Vec::new();
         let mut remainder = code;
@@ -237,6 +255,8 @@ impl Representation {
             .collect()
     }
 
+    /// 将编码空间内所有的编码组合预先计算好用指当量
+    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
     pub fn transform_key_equivalence(&self, key_equivalence: &HashMap<char, f64>) -> Vec<f64> {
         let mut result: Vec<f64> = vec![];
         for code in 0..self.get_space() {
@@ -252,10 +272,9 @@ impl Representation {
         result
     }
 
-    pub fn transform_pair_equivalence(
-        &self,
-        pair_equivalence: &HashMap<String, f64>,
-    ) -> Vec<f64> {
+    /// 将编码空间内所有的编码组合预先计算好速度当量
+    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
+    pub fn transform_pair_equivalence(&self, pair_equivalence: &HashMap<String, f64>) -> Vec<f64> {
         let mut result: Vec<f64> = vec![];
         for code in 0..self.get_space() {
             let chars = self.repr_code(code);
@@ -275,6 +294,8 @@ impl Representation {
         result
     }
 
+    /// 将编码空间内所有的编码组合预先计算好是否能自动上屏
+    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
     pub fn transform_auto_select(&self) -> Vec<bool> {
         let mut result: Vec<bool> = vec![];
         let encoder = &self.config.encoder;
@@ -303,22 +324,23 @@ impl Representation {
         self.radix.pow(max_length as u32)
     }
 
+    /// 把导出的编码（每个字符串用数字表示）转化成正常的格式
     pub fn recover_codes(&self, codes: EncodeExport) -> EncodeOutput {
         let EncodeExport {
-            character_list,
             characters,
-            characters_reduced,
-            word_list,
+            characters_full,
+            characters_short,
             words,
-            words_reduced,
+            words_full,
+            words_short,
         } = codes;
         EncodeOutput {
-            character_list,
-            characters: characters.map(|x| self.repr_code_list(x)),
-            characters_reduced: characters_reduced.map(|x| self.repr_code_list(x)),
-            word_list,
-            words: words.map(|x| self.repr_code_list(x)),
-            words_reduced: words_reduced.map(|x| self.repr_code_list(x)),
+            characters,
+            characters_full: characters_full.map(|x| self.repr_code_list(x)),
+            characters_short: characters_short.map(|x| self.repr_code_list(x)),
+            words,
+            words_full: words_full.map(|x| self.repr_code_list(x)),
+            words_reduced: words_short.map(|x| self.repr_code_list(x)),
         }
     }
 }

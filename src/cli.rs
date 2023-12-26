@@ -1,6 +1,11 @@
+//! 命令行界面
+//! 
+//! 此模块基于 `clap` 包实现了命令行的参数设置，标准输出以及文件读写。
+//! 
+
 use crate::config::Config;
 use crate::interface::Interface;
-use crate::metric::Metric;
+use crate::objectives::metric::Metric;
 use crate::representation::{Assets, EncodeOutput, RawSequenceMap, WordList};
 use chrono::Local;
 use clap::{Parser, Subcommand};
@@ -14,6 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// 封装了全部命令行参数，并采用 `derive(Parser)` 来生成解析代码。
 #[derive(Parser)]
 #[command(name = "汉字自动拆分系统")]
 #[command(author, version, about, long_about)]
@@ -50,6 +56,7 @@ pub struct Cli {
     pub pair_equivalence: Option<PathBuf>,
 }
 
+/// 命令行中所有可用的子命令
 #[derive(Subcommand, Clone)]
 pub enum Command {
     /// 使用方案文件和拆分表计算出字词编码并统计各类评测指标
@@ -161,14 +168,14 @@ impl Cli {
         let w_path = PathBuf::from("words.txt");
         Self::export_code(
             &c_path,
-            results.character_list,
             results.characters,
-            results.characters_reduced,
+            results.characters_full,
+            results.characters_short,
         );
         Self::export_code(
             &w_path,
-            results.word_list,
             results.words,
+            results.words_full,
             results.words_reduced,
         );
         println!("当前方案评测：");

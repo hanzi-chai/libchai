@@ -1,106 +1,46 @@
-//! Find approximate solutions to your optimisation problem using metaheuristics algorithms
+//! 优化问题的求解方法。
 //!
-//! The aim of this crate is to host various Metaheuristics algorithms. Patches
-//! implementing useful algorithms most welcome.
+//! 本模块中的代码复制自一个[已有的项目](https://www.alfie.wtf/rustdoc/metaheuristics/metaheuristics/)，但是考虑到其余算法对输入方案优化参考意义不大，所以只复制了退火算法部分。
 //!
-//! The documentation for this crate can be [found
-//! here](https://www.alfie.wtf/rustdoc/metaheuristics/metaheuristics/).
+//! 但是，为了保证可扩展性，仍然保留了这个库中对于不同类型算法和不同类型问题的特征抽象，即只要一个问题定义了 Metaheuristic 这个 trait，就能用所有不同的算法求解；而任何一个算法都可以只依赖于 Metaheuristic 这个 trait 里提供的方法来求解一个问题。相当于建立了一个多对多的模块化设计，这样也许以后使用遗传算法等其他方法也不需要大改结构。
 //!
-//!## What are Metaheuristics
-//!
-//! Metaheuristics are a class of stochastic optimisation algorithms. These type of algorithms rely
-//! on randomness to jump around the search space, then sample where they land for possible
-//! solutions. In simple terms, **metaheuristics are structured trial and error**.
-//!
-//! If you've got a trial and error problem, and individual trials can be compared and ranked
-//! against each other, Metaheuristics may be your most viable option at getting good results.
-//!
-//! For more information, please see the
-//! [Metaheuristics](https://en.wikipedia.org/wiki/Metaheuristic) Wikipedia article, and
-//! [Essentials of
-//! Metaheuristics](https://www.amazon.com/Essentials-Metaheuristics-Second-Sean-Luke/dp/1300549629).
-//!
-//!## How can I use this crate
-//!
-//! By implementing the `Metaheuristics` trait, the algorithms within the following modules will be
-//! available to you. To see an example implementation, check out the [Travelling Salesman
-//! Problem](https://www.alfie.wtf/rustdoc/travelling_salesman/travelling_salesman/) crate.
-//!
-//!# Examples
-//!
-//!```ignore
-//! let solution = metaheuristics::hill_climbing::solve(&mut problem, runtime);
-//!```
-//!
-//!# Support
-//!
-//! Please report any bugs or feature requests at:
-//!
-//! * [https://gitlab.com/alfiedotwtf/metaheuristics/issues](https://gitlab.com/alfiedotwtf/metaheuristics/issues)
-//!
-//! Feel free to fork the repository and submit pull requests :)
-//!
-//!# Author
-//!
-//! [Alfie John](https://www.alfie.wtf) &lt;[alfie@alfie.wtf](mailto:alfie@alfie.wtf)&gt;
-//!
-//!# Warranty
-//!
-//! IT COMES WITHOUT WARRANTY OF ANY KIND.
-//!
-//!# Copyright and License
-//!
-//! This program is free software: you can redistribute it and/or modify it
-//! under the terms of the GNU General Public License as published by the Free
-//! Software Foundation, either version 3 of  the License, or (at your option)
-//! any later version.
-//!
-//! This program is distributed in the hope that it will be useful, but
-//! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-//! or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
-//! more details.
-//!
-//! You should have received a copy of the GNU General Public License along
-//! with this program. If not, see
-//! [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
 
 use crate::interface::Interface;
-
-extern crate rand;
-
 pub mod simulated_annealing;
 
-/// Implement this simple trait to apply metaheuristics to your optimisation problems
+/// 任何问题只要实现了这个 trait，就能用所有算法来求解
 pub trait Metaheuristics<T, M> {
-    /// Clone the supplied candidate solution
-    ///
-    ///```ignore
-    /// let new_candidate = problem.clone_candidate(&old_candidate);
-    ///```
-    fn clone_candidate(&mut self, candidate: &T) -> T;
-
-    /// Randomly generate a new candidate solution
+    /// 生成一个初始解
     ///
     ///```ignore
     /// let candidate = problem.generate_candidate();
     ///```
     fn generate_candidate(&mut self) -> T;
 
-    /// Rank a candidate solution so that it can be compared with another (higher is better)
+    /// 拷贝一份当前的解
     ///
     ///```ignore
-    /// if problem.rank_candidate(&new_candidate) > problem.rank_candidate(&old_candidate) {
-    ///     ...
-    /// }
+    /// let new_candidate = problem.clone_candidate(&old_candidate);
     ///```
+    fn clone_candidate(&mut self, candidate: &T) -> T;
+
+    /// 对一个解来打分
+    /// M 可以是任意复杂的一个结构体，存放了各种指标；而后面的 f64 是对这个结构体的各项指标的加权平均得到的一个标量值。
     fn rank_candidate(&mut self, candidate: &T) -> (M, f64);
 
-    /// Clone the supplied candidate solution, then make a small (but random) modification
+    /// 基于现有的一个解通过随机扰动创建一个新的解
     ///
     ///```ignore
     /// let new_candidate = problem.tweak_candidate(&old_candidate);
     ///```
     fn tweak_candidate(&mut self, candidate: &T) -> T;
 
-    fn save_candidate(&self, candidate: &T, rank: &(M, f64), write_to_file: bool, interface: &dyn Interface);
+    /// 保存当前的一个解
+    fn save_candidate(
+        &self,
+        candidate: &T,
+        rank: &(M, f64),
+        write_to_file: bool,
+        interface: &dyn Interface,
+    );
 }

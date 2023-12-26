@@ -1,3 +1,5 @@
+//! 优化问题的约束。
+
 use crate::{
     config::{AtomicConstraint, GroupConstraint},
     representation::{Element, Key, KeyMap, Representation},
@@ -14,6 +16,7 @@ pub struct Constraints {
 }
 
 impl Constraints {
+    /// 传入配置表示来构造约束，把用户在配置文件中编写的约束「编译」成便于快速计算的数据结构
     pub fn new(representation: &Representation) -> Constraints {
         let elements = representation.initial.len();
         let alphabet = representation
