@@ -183,7 +183,7 @@ impl Constraints {
             .expect(&format!("元素 {} 无法移动", movable_element));
         let former_key = map[movable_element];
         for i in 0..map.len() {
-            if map[i] == former_key || map[i] == *key {
+            if (map[i] == former_key || map[i] == *key) && !self.fixed.contains(&i) {
                 let mut destination = *key;
                 if map[i] == destination {
                     destination = former_key;
