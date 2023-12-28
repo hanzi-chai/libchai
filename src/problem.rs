@@ -53,12 +53,16 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     }
 
     fn tweak_candidate(&mut self, candidate: &Solution) -> Solution {
-        let method = self.representation.config.optimization.metaheuristic.search_method.as_ref().unwrap_or(&SearchConfig { random_move: 0.9, random_swap: 0.1 });
-        let ratio = method.random_move / (method.random_move + method.random_swap);
-        if random::<f64>() < ratio {
+        let method = self.representation.config.optimization.metaheuristic.search_method.as_ref().unwrap_or(&SearchConfig { random_move: 0.9, random_swap: 0.09, random_full_key_swap: 0.01 });
+        let ratio1 = method.random_move / (method.random_move + method.random_swap + method.random_full_key_swap);
+        let ratio2 = (method.random_move + method.random_swap) / (method.random_move + method.random_swap + method.random_full_key_swap);
+        let randomnumber = random::<f64>();
+        if randomnumber < ratio1 {
             self.constraints.constrained_random_move(candidate)
-        } else {
+        } else if randomnumber < ratio2 {
             self.constraints.constrained_random_swap(candidate)
+        } else {
+            self.constraints.constrained_full_key_swap(candidate)
         }
     }
 
