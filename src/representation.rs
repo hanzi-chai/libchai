@@ -294,6 +294,42 @@ impl Representation {
         result
     }
 
+    /// 将编码空间内所有的编码组合预先计算好新速度当量（杏码算法）
+    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
+    pub fn transform_new_pair_equivalence(&self, pair_equivalence: &HashMap<String, f64>) -> Vec<f64> {
+        let mut result: Vec<f64> = vec![];
+        for code in 0..self.get_space() {
+            let chars = self.repr_code(code);
+            if chars.len() < 2 {
+                result.push(0.0);
+                continue;
+            }
+            //遍历所有组合
+            let mut combinations: Vec<String> = vec!["".to_string()];
+            for i in 1..chars.len()-1 {
+                for j in 0..combinations.len() {
+                    combinations.push(format!("{}{}", combinations[j], chars[i]));
+                }
+            }
+            let mut total = 0.0;
+            for s in combinations.iter() {
+                let mut thistime = 0.0;
+                let s_chars: Vec<char> = format!("{}{}{}", chars[0], s, chars[chars.len()-1]).chars().collect();
+                for i in 0..(s_chars.len() - 1) {
+                    let pair: String = [s_chars[i], s_chars[i + 1]].iter().collect();
+                    thistime += pair_equivalence
+                        .get(&pair)
+                        .expect(&format!("键位组合 {:?} 的速度当量数据未知", pair));
+                }
+                if thistime > total {
+                    total = thistime
+                }
+            }
+            result.push(total);
+        }
+        result
+    }
+
     /// 将编码空间内所有的编码组合预先计算好是否能自动上屏
     /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
     pub fn transform_auto_select(&self) -> Vec<bool> {
