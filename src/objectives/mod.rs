@@ -28,6 +28,7 @@ pub struct Objective {
     word_frequencies: Frequencies,
     key_equivalence: Vec<f64>,
     pair_equivalence: Vec<f64>,
+    new_pair_equivalence: Vec<f64>,
 }
 
 pub type Frequencies = Vec<f64>;
@@ -49,6 +50,7 @@ impl Objective {
             .collect();
         let key_equivalence = representation.transform_key_equivalence(&assets.key_equivalence);
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
+        let new_pair_equivalence = representation.transform_new_pair_equivalence(&assets.pair_equivalence);
         Self {
             encoder,
             config: representation.config.optimization.objective.clone(),
@@ -56,6 +58,7 @@ impl Objective {
             word_frequencies: Self::normalize_frequencies(&word_frequencies),
             key_equivalence,
             pair_equivalence,
+            new_pair_equivalence,
         }
     }
 
@@ -78,8 +81,13 @@ impl Objective {
         let mut total_duplication = 0.0;
         let mut total_keys = 0.0;
         let mut total_pairs = 0.0;
+        // 新当量以键数为单位
+        let mut total_new_keys = 0.0;
         let mut total_keys_equivalence = 0.0;
+        let mut total_new_keys_equivalence = 0.0;
+        let mut total_new_keys_equivalence_modified = 0.0;
         let mut total_pair_equivalence = 0.0;
+        let mut total_new_pair_equivalence = 0.0;
         let mut total_levels = vec![0.0; weights.levels.as_ref().unwrap_or(&vec![]).len()];
         // 初始化分级指标的变量
         let ntier = weights.tiers.as_ref().map_or(0, |v| v.len());
@@ -93,6 +101,9 @@ impl Objective {
         }
         // 创建一个占据数据，标识哪些编码已被占用，便于统计重码
         let mut occupation = vec![false; self.key_equivalence.len()];
+        // 标记初始字符、结束字符的频率
+        let mut chuma = vec![0 as f64; self.encoder.radix];
+        let mut moma = vec![0.0 as f64; self.encoder.radix];
         for (index, (code, frequency)) in zip(codes, frequencies).enumerate() {
             let length = code.ilog(self.encoder.radix) as usize + 1;
             // 用指当量和速度当量
@@ -100,9 +111,28 @@ impl Objective {
                 total_keys_equivalence += self.key_equivalence[*code] * *frequency;
                 total_keys += length as f64 * frequency;
             }
+            // 杏码式用指当量，只统计最初的1码
+            if let Some(_) = weights.new_key_equivalence {
+                total_new_keys_equivalence += self.key_equivalence[*code % self.encoder.radix] * *frequency;
+            }
+            // 杏码式用指当量改
+            if let Some(_) = weights.new_key_equivalence_modified {
+                //取得首末码
+                let codefirst = *code % self.encoder.radix;
+                let mut codelast = *code;
+                while codelast > self.encoder.radix {
+                    codelast /= self.encoder.radix;
+                }
+                chuma[codefirst] = chuma[codefirst] + *frequency;
+                moma[codelast] = moma[codelast] + *frequency;
+            }
             if let Some(_) = weights.pair_equivalence {
                 total_pair_equivalence += self.pair_equivalence[*code] * *frequency;
                 total_pairs += (length - 1) as f64 * frequency;
+            }
+            if let Some(_) = weights.new_pair_equivalence {
+                total_new_pair_equivalence += self.new_pair_equivalence[*code] * *frequency;
+                total_new_keys += length as f64 * frequency;
             }
             // 重码
             if occupation[*code] {
@@ -141,10 +171,21 @@ impl Objective {
             }
             occupation[*code] = true;
         }
+        if let Some(_) = weights.new_key_equivalence_modified {
+            //将首末码与全局的首末码频率拼起来
+            for i in 0..self.encoder.radix {
+                for j in 0..self.encoder.radix {
+                    total_new_keys_equivalence_modified += self.pair_equivalence[j + i * self.encoder.radix] * chuma[i] * moma[j];
+                }
+            }
+        }
         let mut partial_metric = PartialMetric {
             tiers: None,
             key_equivalence: None,
+            new_key_equivalence: None,
+            new_key_equivalence_modified: None,
             pair_equivalence: None,
+            new_pair_equivalence: None,
             fingering: None,
             duplication: None,
             levels: None,
@@ -156,9 +197,24 @@ impl Objective {
             partial_metric.key_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
+        if let Some(equivalence_weight) = weights.new_key_equivalence {
+            let equivalence = total_new_keys_equivalence / total_new_keys;
+            partial_metric.new_key_equivalence = Some(equivalence);
+            loss += equivalence * equivalence_weight;
+        }
+        if let Some(equivalence_weight) = weights.new_key_equivalence_modified {
+            let equivalence = total_new_keys_equivalence_modified / total_new_keys;
+            partial_metric.new_key_equivalence_modified = Some(equivalence);
+            loss += equivalence * equivalence_weight;
+        }
         if let Some(equivalence_weight) = weights.pair_equivalence {
             let equivalence = total_pair_equivalence / total_pairs;
             partial_metric.pair_equivalence = Some(equivalence);
+            loss += equivalence * equivalence_weight;
+        }
+        if let Some(equivalence_weight) = weights.new_pair_equivalence {
+            let equivalence = total_new_pair_equivalence / total_new_keys;
+            partial_metric.new_pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
         if let Some(duplication_weight) = weights.duplication {
