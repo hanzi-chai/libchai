@@ -209,7 +209,8 @@ $$
     report_after: 0.9
     search_method:
       random_move: 0.9
-      random_swap: 0.1
+      random_swap: 0.09
+      random_full_key_swap: 0.01
 ...
 ```
 
