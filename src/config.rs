@@ -190,6 +190,7 @@ pub struct ConstraintsConfig {
 pub struct SearchConfig {
     pub random_move: f64,
     pub random_swap: f64,
+    pub random_full_key_swap: f64,
 }
 
 #[skip_serializing_none]
