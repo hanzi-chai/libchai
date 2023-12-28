@@ -141,7 +141,13 @@ pub struct PartialWeights {
     pub tiers: Option<Vec<TierWeights>>,
     pub duplication: Option<f64>,
     pub key_equivalence: Option<f64>,
+    //杏码的「用指当量」。
+    pub new_key_equivalence: Option<f64>,
+    //杏码的「用指当量」（改），假定连续输入时预测上一键从而计算组合当量（慢）。
+    pub new_key_equivalence_modified: Option<f64>,
     pub pair_equivalence: Option<f64>,
+    //杏码的「速度（组合）当量」。
+    pub new_pair_equivalence: Option<f64>,
     pub fingering: Option<FingeringWeights>,
     pub levels: Option<Vec<LevelWeights>>,
 }
