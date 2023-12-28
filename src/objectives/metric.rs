@@ -60,7 +60,10 @@ pub struct PartialMetric {
     pub tiers: Option<Vec<TierMetric>>,
     pub duplication: Option<f64>,
     pub key_equivalence: Option<f64>,
+    pub new_key_equivalence: Option<f64>,
+    pub new_key_equivalence_modified: Option<f64>,
     pub pair_equivalence: Option<f64>,
+    pub new_pair_equivalence: Option<f64>,
     pub fingering: Option<FingeringMetric>,
     pub levels: Option<Vec<LevelMetric2>>,
 }
@@ -68,14 +71,24 @@ pub struct PartialMetric {
 impl Display for PartialMetric {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let hanzi_numbers: Vec<char> = "一二三四五六七八九十".chars().collect();
+        // 宇浩提到过，当量是一个敏感数字。增加它的有效数字
         if let Some(duplication) = self.duplication {
-            f.write_str(&format!("选重率：{:.2}%；", duplication * 100.0))?;
+            f.write_str(&format!("选重率：{:.4}%；", duplication * 100.0))?;
         }
         if let Some(equivalence) = self.key_equivalence {
-            f.write_str(&format!("用指：{:.2}；", equivalence))?;
+            f.write_str(&format!("用指当量：{:.4}；", equivalence))?;
+        }
+        if let Some(equivalence) = self.new_key_equivalence {
+            f.write_str(&format!("杏码式用指当量：{:.4}；", equivalence))?;
+        }
+        if let Some(equivalence) = self.new_key_equivalence_modified {
+            f.write_str(&format!("杏码式用指当量改：{:.4}；", equivalence))?;
         }
         if let Some(equivalence) = self.pair_equivalence {
-            f.write_str(&format!("当量：{:.2}；", equivalence))?;
+            f.write_str(&format!("组合当量：{:.4}；", equivalence))?;
+        }
+        if let Some(equivalence) = self.new_pair_equivalence {
+            f.write_str(&format!("杏码式组合当量：{:.4}；", equivalence))?;
         }
         if let Some(levels) = &self.levels {
             for LevelMetric2 { length, frequency } in levels {
