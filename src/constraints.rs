@@ -134,25 +134,16 @@ impl Constraints {
         let mut rng = thread_rng();
         loop {
             let key = rng.gen_range(0..self.elements);
-            if !self.fixed.contains(&key)
-                //&& !self.narrowed.contains_key(&key)
-                && !self.grouped.contains_key(&key)
-            {
+            if !self.fixed.contains(&key) && !self.grouped.contains_key(&key) {
                 return key;
             }
         }
     }
 
-    fn swap_narrowed_elements(&self, map: &KeyMap, element1: usize, element2: usize) -> KeyMap {
+    fn swap_narrowed_elements(&self, map: &KeyMap, element1: Element, element2: Element) -> KeyMap {
         let mut next = map.clone();
-        let destinations1 = self
-            .narrowed
-            .get(&element1)
-            .unwrap_or(&self.alphabet);
-        let destinations2 = self
-            .narrowed
-            .get(&element2)
-            .unwrap_or(&self.alphabet);
+        let destinations1 = self.narrowed.get(&element1).unwrap_or(&self.alphabet);
+        let destinations2 = self.narrowed.get(&element2).unwrap_or(&self.alphabet);
         //分开判断可行性。这样如果无法交换，至少移动一下。
         if destinations1.contains(&map[element2]) {
             next[element1] = map[element2];
@@ -172,30 +163,25 @@ impl Constraints {
     pub fn constrained_full_key_swap(&self, map: &KeyMap) -> KeyMap {
         let mut rng = thread_rng();
         let mut next = map.clone();
-        //寻找一个可移动元素。这样交换不成也至少能移动一次
+        // 寻找一个可移动元素和一个它的可行移动位置，然后把这两个键上的所有元素交换
+        // 这样交换不成也至少能移动一次
         let movable_element = self.get_movable_element();
+        let key1 = map[movable_element];
         let destinations = self
             .narrowed
             .get(&movable_element)
             .unwrap_or(&self.alphabet);
-        let key = destinations
+        let key2 = destinations
             .choose(&mut rng)
             .expect(&format!("元素 {} 无法移动", movable_element));
-        let former_key = map[movable_element];
-        for i in 0..map.len() {
-            if (map[i] == former_key || map[i] == *key) && !self.fixed.contains(&i) {
-                let mut destination = *key;
-                if map[i] == destination {
-                    destination = former_key;
-                }
+        for (element, key) in map.iter().enumerate() {
+            if (*key == key1 || *key == *key2) && !self.fixed.contains(&element) {
+                let destination = if *key == *key2 { key1 } else { *key2 };
                 //将元素移动到目标
                 //考虑到组合中的元素必然在同样的键上，有同样的约束条件，也必然跟随移动，这里不再判断组合
-                let destinations2 = self
-                    .narrowed
-                    .get(&i)
-                    .unwrap_or(&self.alphabet);
+                let destinations2 = self.narrowed.get(&element).unwrap_or(&self.alphabet);
                 if destinations2.contains(&destination) {
-                    next[i] = destination;
+                    next[element] = destination;
                 }
             }
         }

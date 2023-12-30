@@ -151,13 +151,13 @@ optimization:
 
 「杏码风格速度当量 `new_pair_equivalence`」按照杏码规则优化两个键之间手形变化的难易程度。
 在 `assets/pair_equivalence.txt` 中每个键对都有一个评分，越难按数字越大。
-请将dl2.txt复制为pair_equivalence.txt，来使用杏码的原版数据。
+请将 new_pair_equivalence.txt复制为pair_equivalence.txt，来使用杏码的原版数据。
 也可以使用内置的陈一凡表+杏码规则进行优化，我没有尝试过。
 
 「杏码风格用指当量 `new_key_equivalence`」按照杏码规则优化不同键位击键的难易程度。
 在 `assets/key_equivalence.txt` 中每个键的击键困难程度都有一个评分，越难按数字越大。
 按照杏码规则，除了首码以外的按键通过组合当量new_pair_equivalence优化，用指当量只优化首码。
-请将dl1.txt复制为key_equivalence.txt，来使用杏码的原版数据。
+请将 new_key_equivalence.txt复制为key_equivalence.txt，来使用杏码的原版数据。
 也可以使用内置的表+杏码规则进行优化，我没有尝试过。
 
 「杏码风格用指当量改 `new_key_equivalence_modified`」按照我自己拍脑门的规则优化不同键位击键的难易程度。
