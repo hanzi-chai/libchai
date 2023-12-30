@@ -2,7 +2,10 @@
 
 use crate::{
     config::{Config, EncoderConfig, ShortCodeConfig, WordRule},
-    representation::{Codes, Key, KeyMap, Representation, Sequence, SequenceMap, RawSequenceMap, Assets, Buffer},
+    representation::{
+        Assets, Buffer, Codes, Key, KeyMap, Occupation, RawSequenceMap, Representation, Sequence,
+        SequenceMap,
+    },
 };
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
 
@@ -25,7 +28,6 @@ pub struct Encoder {
 #[derive(Debug)]
 struct CompiledShortCodeConfig {
     pub prefix: usize,
-    pub count: u8,
     pub select_keys: Vec<usize>,
 }
 
@@ -144,12 +146,17 @@ impl Encoder {
                 })
                 .collect()
         };
-        let default_schemes = (1..config.max_length).map(|prefix| ShortCodeConfig {
-            prefix,
-            count: None,
-            select_keys: None,
-        }).collect();
-        let schemes = config.short_code_schemes.as_ref().unwrap_or(&default_schemes);
+        let default_schemes = (1..config.max_length)
+            .map(|prefix| ShortCodeConfig {
+                prefix,
+                count: None,
+                select_keys: None,
+            })
+            .collect();
+        let schemes = config
+            .short_code_schemes
+            .as_ref()
+            .unwrap_or(&default_schemes);
         schemes
             .iter()
             .map(|s| {
@@ -164,8 +171,7 @@ impl Encoder {
                 );
                 CompiledShortCodeConfig {
                     prefix: s.prefix,
-                    count,
-                    select_keys,
+                    select_keys: select_keys[..count].to_vec(),
                 }
             })
             .collect()
@@ -218,12 +224,18 @@ impl Encoder {
         words_all
     }
 
-    fn get_space(&self) -> usize {
+    pub fn get_space(&self) -> usize {
         let max_length = self.config.max_length;
         self.radix.pow(max_length as u32)
     }
 
-    pub fn encode_full(&self, keymap: &KeyMap, data: &Vec<Sequence>, output: &mut Codes) {
+    pub fn encode_full(
+        &self,
+        keymap: &KeyMap,
+        data: &Vec<Sequence>,
+        output: &mut Codes,
+        occupation: &mut Occupation,
+    ) {
         for (sequence, pointer) in zip(data, output) {
             let mut code = 0_usize;
             let mut weight = 1_usize;
@@ -231,58 +243,80 @@ impl Encoder {
                 code += keymap[*element] * weight;
                 weight *= self.radix;
             }
+            // 全码时，忽略次选及之后的选择键，给所有不能自动上屏的码统一添加首选键
+            // 这是为了便于计算重码，否则还要判断
             if !self.auto_select[code] {
-                // 全码时，忽略选择键的影响，便于计算重码，否则还要判断
                 code += self.select_keys[0] * weight;
             }
-            *pointer = code;
+            *pointer = (code, occupation[code]);
+            occupation[code] = true;
         }
     }
 
-    pub fn encode_short(&self, full_codes: &Codes, short_codes: &mut Codes) {
+    pub fn encode_short(
+        &self,
+        full_codes: &Codes,
+        short_codes: &mut Codes,
+        full_occupation: &Occupation,
+    ) {
         let schemes = &self.short_code_schemes;
-        let mut occupation = vec![0_u8; self.get_space()];
-        for (full, pointer) in zip(full_codes, short_codes) {
+        let mut short_occupation = vec![false; self.get_space()];
+        for ((full, _), pointer) in zip(full_codes, short_codes) {
             let mut has_reduced = false;
             for scheme in schemes {
                 let CompiledShortCodeConfig {
                     prefix,
-                    count,
                     select_keys,
                 } = scheme;
                 // 如果根本没有这么多码，就放弃
                 if *full < self.radix.pow((*prefix - 1) as u32) {
                     continue;
                 }
-                // 判断当前码位有几个候选
+                // 首先将全码截取一部分出来
                 let modulo = self.radix.pow(*prefix as u32);
-                let mut short = full % modulo;
-                let current = occupation[short];
-                if current >= *count {
-                    continue;
+                let prefix = full % modulo;
+                for (index, key) in select_keys.iter().enumerate() {
+                    // 如果是首选且不能自动上屏，就要加选择键
+                    let short = if index == 0 && self.auto_select[prefix] {
+                        prefix
+                    } else {
+                        prefix + key * modulo // 补选择键
+                    };
+                    // 决定出这个简码
+                    if !full_occupation[short] && !short_occupation[short] {
+                        short_occupation[short] = true;
+                        *pointer = (short, false);
+                        has_reduced = true;
+                        break;
+                    }
                 }
-                // 决定出这个简码
-                occupation[short] += 1;
-                // 如果不是首选，或者虽然是首选但不能自动上屏，就要加选择键
-                if current != 0 || !self.auto_select[short] {
-                    short += select_keys[current as usize] * modulo; // 补选择键
+                if has_reduced {
+                    break;
                 }
-                *pointer = short;
-                has_reduced = true;
-                break;
             }
             if has_reduced == false {
-                *pointer = *full;
+                *pointer = (*full, short_occupation[*full]);
+                short_occupation[*full] = true;
             }
         }
     }
 
-    pub fn encode_character_full(&self, keymap: &KeyMap, output: &mut Codes) {
-        self.encode_full(keymap, &self.characters_sequence, output)
+    pub fn encode_character_full(
+        &self,
+        keymap: &KeyMap,
+        output: &mut Codes,
+        occupation: &mut Occupation,
+    ) {
+        self.encode_full(keymap, &self.characters_sequence, output, occupation)
     }
 
-    pub fn encode_words_full(&self, keymap: &KeyMap, output: &mut Codes) {
-        self.encode_full(keymap, &self.words_sequence, output)
+    pub fn encode_words_full(
+        &self,
+        keymap: &KeyMap,
+        output: &mut Codes,
+        occupation: &mut Occupation,
+    ) {
+        self.encode_full(keymap, &self.words_sequence, output, occupation)
     }
 
     fn signed_index<T: Debug>(vector: &Vec<T>, index: isize) -> &T {
@@ -295,10 +329,10 @@ impl Encoder {
 
     pub fn init_buffer(&self) -> Buffer {
         Buffer {
-            characters: vec![0; self.characters.len()],
-            characters_reduced: vec![0; self.characters.len()],
-            words: vec![0; self.words.len()],
-            words_reduced: vec![0; self.words.len()],
+            characters: vec![(0, false); self.characters.len()],
+            characters_reduced: vec![(0, false); self.characters.len()],
+            words: vec![(0, false); self.words.len()],
+            words_reduced: vec![(0, false); self.words.len()],
         }
     }
 }

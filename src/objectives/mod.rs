@@ -13,6 +13,7 @@ use crate::representation::Buffer;
 use crate::representation::Codes;
 use crate::representation::EncodeExport;
 use crate::representation::KeyMap;
+use crate::representation::Occupation;
 use crate::representation::Representation;
 use std::iter::zip;
 use metric::LevelMetric1;
@@ -99,12 +100,10 @@ impl Objective {
                 tiers_levels.push(vec);
             }
         }
-        // 创建一个占据数据，标识哪些编码已被占用，便于统计重码
-        let mut occupation = vec![false; self.key_equivalence.len()];
         // 标记初始字符、结束字符的频率
         let mut chuma = vec![0 as f64; self.encoder.radix];
         let mut moma = vec![0.0 as f64; self.encoder.radix];
-        for (index, (code, frequency)) in zip(codes, frequencies).enumerate() {
+        for (index, ((code, duplicated), frequency)) in zip(codes, frequencies).enumerate() {
             let length = code.ilog(self.encoder.radix) as usize + 1;
             // 用指当量和速度当量
             if let Some(_) = weights.key_equivalence {
@@ -135,7 +134,7 @@ impl Objective {
                 total_new_keys += length as f64 * frequency;
             }
             // 重码
-            if occupation[*code] {
+            if *duplicated {
                 total_duplication += frequency;
                 if let Some(tiers) = &weights.tiers {
                     for (itier, tier) in tiers.iter().enumerate() {
@@ -169,7 +168,6 @@ impl Objective {
                     }
                 }
             }
-            occupation[*code] = true;
         }
         if let Some(_) = weights.new_key_equivalence_modified {
             //将首末码与全局的首末码频率拼起来
@@ -280,15 +278,16 @@ impl Objective {
             words_reduced: None,
         };
         if let Some(characters) = &self.config.characters_full {
+            let mut occupation: Occupation = vec![false; self.key_equivalence.len()];
             self.encoder
-                .encode_character_full(&candidate, &mut buffer.characters);
+                .encode_character_full(&candidate, &mut buffer.characters, &mut occupation);
             let (partial, accum) =
                 self.evaluate_partial(&buffer.characters, &self.character_frequencies, characters);
             loss += accum;
             metric.characters = Some(partial);
             if let Some(character_reduced) = &self.config.characters_short {
                 self.encoder
-                    .encode_short(&buffer.characters, &mut buffer.characters_reduced);
+                    .encode_short(&buffer.characters, &mut buffer.characters_reduced, &mut occupation);
                 let (partial, accum) = self.evaluate_partial(
                     &buffer.characters_reduced,
                     &self.character_frequencies,
@@ -299,15 +298,16 @@ impl Objective {
             }
         }
         if let Some(words) = &self.config.words_full {
+            let mut occupation: Occupation = vec![false; self.encoder.get_space()];
             self.encoder
-                .encode_words_full(&candidate, &mut buffer.words);
+                .encode_words_full(&candidate, &mut buffer.words, &mut occupation);
             let (partial, accum) =
                 self.evaluate_partial(&buffer.words, &self.word_frequencies, words);
             loss += accum;
             metric.words = Some(partial);
             if let Some(words_reduced) = &self.config.words_short {
                 self.encoder
-                    .encode_short(&buffer.words, &mut buffer.words_reduced);
+                    .encode_short(&buffer.words, &mut buffer.words_reduced, &mut occupation);
                 let (partial, accum) = self.evaluate_partial(
                     &buffer.words_reduced,
                     &self.word_frequencies,

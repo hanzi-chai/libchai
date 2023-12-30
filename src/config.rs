@@ -94,7 +94,7 @@ pub struct EdgeConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortCodeConfig {
     pub prefix: usize,
-    pub count: Option<u8>,
+    pub count: Option<usize>,
     pub select_keys: Option<Vec<char>>,
 }
 

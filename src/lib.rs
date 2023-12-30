@@ -17,16 +17,16 @@ use crate::{
 };
 use interface::Interface;
 use js_sys::Function;
+use representation::{WordList, RawSequenceMap};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use serde_with::skip_serializing_none;
 
 #[derive(Deserialize)]
 struct Input {
     config: Config,
-    characters: HashMap<char, String>,
-    words: Vec<String>,
+    characters: RawSequenceMap,
+    words: WordList,
     assets: Assets,
 }
 
@@ -148,12 +148,15 @@ fn prepare(js_input: JsValue) -> (Representation, Objective) {
 }
 
 #[wasm_bindgen]
-pub fn evaluate(js_input: JsValue) -> String {
+pub fn evaluate(js_input: JsValue) -> JsValue {
     console_error_panic_hook::set_once();
     let (representation, objective) = prepare(js_input);
     let mut buffer = objective.init_buffer();
     let (metric, _) = objective.evaluate(&representation.initial, &mut buffer);
-    format!("{}", metric)
+    let metric = format!("{}", metric);
+    let codes = objective.export_codes(&mut buffer);
+    let human_codes = representation.recover_codes(codes);
+    serde_wasm_bindgen::to_value(&(metric, human_codes)).unwrap()
 }
 
 #[wasm_bindgen]

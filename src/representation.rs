@@ -32,13 +32,16 @@ pub type SequenceMap = HashMap<char, Sequence>;
 pub type Code = usize;
 
 /// 一组编码
-pub type Codes = Vec<Code>;
+pub type Codes = Vec<(Code, bool)>;
 
 /// 按键用无符号整数表示
 pub type Key = usize;
 
 /// 元素映射用一个数组表示，下标是元素
 pub type KeyMap = Vec<Key>;
+
+/// 每个编码上占据了几个候选
+pub type Occupation = Vec<bool>;
 
 #[derive(Debug)]
 pub struct EncodeExport {
@@ -50,7 +53,7 @@ pub struct EncodeExport {
     pub words_short: Option<Codes>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EncodeOutput {
     pub characters: Vec<char>,
     pub characters_full: Option<Vec<String>>,
@@ -248,7 +251,7 @@ impl Representation {
         codes
             .iter()
             .map(|x| {
-                let chars = self.repr_code(*x);
+                let chars = self.repr_code(x.0);
                 let string = chars.iter().collect();
                 string
             })
