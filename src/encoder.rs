@@ -248,8 +248,8 @@ impl Encoder {
             if !self.auto_select[code] {
                 code += self.select_keys[0] * weight;
             }
-            *pointer = (code, occupation[code]);
-            occupation[code] = true;
+            *pointer = (code, occupation.contains(&code));
+            occupation.insert(code);
         }
     }
 
@@ -283,7 +283,7 @@ impl Encoder {
                         prefix + key * modulo // 补选择键
                     };
                     // 决定出这个简码
-                    if !full_occupation[short] && !short_occupation[short] {
+                    if !full_occupation.contains(&short) && !short_occupation[short] {
                         short_occupation[short] = true;
                         *pointer = (short, false);
                         has_reduced = true;

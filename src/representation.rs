@@ -2,6 +2,7 @@
 
 use crate::config::Config;
 use regex::Regex;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -41,7 +42,7 @@ pub type Key = usize;
 pub type KeyMap = Vec<Key>;
 
 /// 每个编码上占据了几个候选
-pub type Occupation = Vec<bool>;
+pub type Occupation = FxHashSet<usize>;
 
 #[derive(Debug)]
 pub struct EncodeExport {

@@ -15,12 +15,14 @@ use crate::representation::EncodeExport;
 use crate::representation::KeyMap;
 use crate::representation::Occupation;
 use crate::representation::Representation;
+use std::collections::HashSet;
 use std::iter::zip;
 use metric::LevelMetric1;
 use metric::LevelMetric2;
 use metric::Metric;
 use metric::PartialMetric;
 use metric::TierMetric;
+use rustc_hash::FxHashSet;
 
 pub struct Objective {
     config: ObjectiveConfig,
@@ -106,16 +108,16 @@ impl Objective {
         for (index, ((code, duplicated), frequency)) in zip(codes, frequencies).enumerate() {
             let length = code.ilog(self.encoder.radix) as usize + 1;
             // 用指当量和速度当量
-            if let Some(_) = weights.key_equivalence {
+            if weights.key_equivalence.is_some() {
                 total_keys_equivalence += self.key_equivalence[*code] * *frequency;
                 total_keys += length as f64 * frequency;
             }
             // 杏码式用指当量，只统计最初的1码
-            if let Some(_) = weights.new_key_equivalence {
+            if weights.new_key_equivalence.is_some() {
                 total_new_keys_equivalence += self.key_equivalence[*code % self.encoder.radix] * *frequency;
             }
             // 杏码式用指当量改
-            if let Some(_) = weights.new_key_equivalence_modified {
+            if weights.new_key_equivalence_modified.is_some() {
                 //取得首末码
                 let codefirst = *code % self.encoder.radix;
                 let mut codelast = *code;
@@ -125,11 +127,11 @@ impl Objective {
                 chuma[codefirst] = chuma[codefirst] + *frequency;
                 moma[codelast] = moma[codelast] + *frequency;
             }
-            if let Some(_) = weights.pair_equivalence {
+            if weights.pair_equivalence.is_some() {
                 total_pair_equivalence += self.pair_equivalence[*code] * *frequency;
                 total_pairs += (length - 1) as f64 * frequency;
             }
-            if let Some(_) = weights.new_pair_equivalence {
+            if weights.new_pair_equivalence.is_some() {
                 total_new_pair_equivalence += self.new_pair_equivalence[*code] * *frequency;
                 total_new_keys += length as f64 * frequency;
             }
@@ -278,7 +280,8 @@ impl Objective {
             words_reduced: None,
         };
         if let Some(characters) = &self.config.characters_full {
-            let mut occupation: Occupation = vec![false; self.key_equivalence.len()];
+            let mut occupation: Occupation = FxHashSet::default();
+            occupation.reserve(buffer.characters.len() * 10);
             self.encoder
                 .encode_character_full(&candidate, &mut buffer.characters, &mut occupation);
             let (partial, accum) =
@@ -298,7 +301,8 @@ impl Objective {
             }
         }
         if let Some(words) = &self.config.words_full {
-            let mut occupation: Occupation = vec![false; self.encoder.get_space()];
+            let mut occupation: Occupation = FxHashSet::default();
+            occupation.reserve(buffer.words.len());
             self.encoder
                 .encode_words_full(&candidate, &mut buffer.words, &mut occupation);
             let (partial, accum) =
