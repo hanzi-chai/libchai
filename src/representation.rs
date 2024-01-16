@@ -1,13 +1,13 @@
 //! 内部数据结构的表示和定义
 
-use crate::config::Config;
+use crate::config::{Config, Mapped, MappedKey};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub type RawSequenceMap = HashMap<char, String>;
 pub type WordList = Vec<String>;
-pub type KeyEquivalence = HashMap<char, f64>;
+pub type KeyDistribution = HashMap<char, f64>;
 pub type PairEquivalence = HashMap<String, f64>;
 pub type Frequency<T> = HashMap<T, u64>;
 
@@ -15,7 +15,7 @@ pub type Frequency<T> = HashMap<T, u64>;
 pub struct Assets {
     pub character_frequency: Frequency<char>,
     pub word_frequency: Frequency<String>,
-    pub key_equivalence: KeyEquivalence,
+    pub key_distribution: KeyDistribution,
     pub pair_equivalence: PairEquivalence,
 }
 
@@ -43,32 +43,24 @@ pub type KeyMap = Vec<Key>;
 /// 每个编码上占据了几个候选
 pub type Occupation = Vec<bool>;
 
-#[derive(Debug)]
-pub struct EncodeExport {
-    pub characters: Vec<char>,
-    pub characters_full: Option<Codes>,
-    pub characters_short: Option<Codes>,
-    pub words: Vec<String>,
-    pub words_full: Option<Codes>,
-    pub words_short: Option<Codes>,
+#[derive(Debug, Serialize)]
+pub struct Entry {
+    pub item: String,
+    pub full: String,
+    pub short: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct EncodeOutput {
-    pub characters: Vec<char>,
-    pub characters_full: Option<Vec<String>>,
-    pub characters_short: Option<Vec<String>>,
-    pub words: Vec<String>,
-    pub words_full: Option<Vec<String>>,
-    pub words_reduced: Option<Vec<String>>,
+#[derive(Debug, Serialize)]
+pub struct EncodeExport {
+    pub characters: Vec<Entry>,
+    pub words: Option<Vec<Entry>>,
 }
 
 #[derive(Debug)]
 pub struct Buffer {
-    pub characters: Codes,
-    pub characters_reduced: Codes,
-    pub words: Codes,
-    pub words_reduced: Codes,
+    pub characters_full: Codes,
+    pub characters_short: Option<Codes>,
+    pub words_full: Option<Codes>,
 }
 
 /// 配置表示是对配置文件的进一步封装，除了保存一份配置文件本身之外，还根据配置文件的内容推导出用于各种转换的映射
@@ -80,12 +72,37 @@ pub struct Representation {
     pub key_repr: HashMap<char, Key>,
     pub repr_key: HashMap<Key, char>,
     pub radix: usize,
+    pub alphabet_radix: usize,
     pub select_keys: Vec<Key>,
+}
+
+impl Mapped {
+    pub fn len(&self) -> usize {
+        match self {
+            Mapped::Basic(s) => s.len(),
+            Mapped::Advanced(v) => v.len(),
+        }
+    }
+
+    pub fn normalize(&self) -> Vec<MappedKey> {
+        match self {
+            Mapped::Advanced(vector) => vector.clone(),
+            Mapped::Basic(string) => string.chars().map(|x| MappedKey::Ascii(x)).collect(),
+        }
+    }
+}
+
+pub fn assemble(element: &String, index: usize) -> String {
+    if index == 0 {
+        element.to_string()
+    } else {
+        format!("{}.{}", element.to_string(), index)
+    }
 }
 
 impl Representation {
     pub fn new(config: Config) -> Self {
-        let (radix, select_keys, key_repr, repr_key) = Self::transform_alphabet(&config);
+        let (radix, alphabet_radix, select_keys, key_repr, repr_key) = Self::transform_alphabet(&config);
         let (initial, element_repr, repr_element) = Self::transform_keymap(&config, &key_repr);
         Self {
             config,
@@ -95,6 +112,7 @@ impl Representation {
             key_repr,
             repr_key,
             radix,
+            alphabet_radix,
             select_keys,
         }
     }
@@ -104,7 +122,7 @@ impl Representation {
     /// n + 1, ..., m = 所有选择键
     pub fn transform_alphabet(
         config: &Config,
-    ) -> (usize, Vec<Key>, HashMap<char, Key>, HashMap<Key, char>) {
+    ) -> (usize, usize, Vec<Key>, HashMap<char, Key>, HashMap<Key, char>) {
         let mut key_repr: HashMap<char, Key> = HashMap::new();
         let mut repr_key: HashMap<Key, char> = HashMap::new();
         let mut index = 1_usize;
@@ -114,6 +132,7 @@ impl Representation {
             repr_key.insert(index, key);
             index += 1;
         }
+        let alphabet_radix = index;
         let default_select_keys = vec!['_'];
         let select_keys = config
             .encoder
@@ -130,7 +149,7 @@ impl Representation {
             index += 1;
         }
         let radix = index;
-        (radix, parsed_select_keys, key_repr, repr_key)
+        (radix, alphabet_radix, parsed_select_keys, key_repr, repr_key)
     }
 
     /// 读取元素映射，然后把每一个元素转换成无符号整数，从而可以用向量来表示一个元素布局，向量的下标就是元素对应的数
@@ -142,22 +161,14 @@ impl Representation {
         let mut forward_converter: HashMap<String, usize> = HashMap::new();
         let mut reverse_converter: HashMap<usize, String> = HashMap::new();
         for (element, mapped) in &config.form.mapping {
-            let chars: Vec<Key> = mapped
-                .chars()
-                .map(|x| {
-                    *key_repr.get(&x).expect(&format!(
-                        "元素 {} 的编码 {} 中的字符 {} 并不在字母表中",
-                        element, mapped, x
-                    ))
-                })
-                .collect();
-            if chars.len() == 1 { // 如果这个元素是单编码，那么就记录这个元素的字符串到整数的映射；
-                forward_converter.insert(element.clone(), keymap.len());
-                reverse_converter.insert(keymap.len(), element.clone());
-                keymap.push(chars[0]);
-            } else { // 如果这个元素不是单编码，那么就把它分开成多个子元素，每个子元素对应一码，记录每个子元素到整数的映射；
-                for (index, key) in chars.iter().enumerate() {
-                    let name = format!("{}.{}", element.to_string(), index);
+            let normalized = mapped.normalize();
+            for (index, mapped_key) in normalized.iter().enumerate() {
+                if let MappedKey::Ascii(x) = mapped_key {
+                    let key = key_repr.get(&x).expect(&format!(
+                        "元素 {} 的编码中的字符 {} 并不在字母表中",
+                        element, x
+                    ));
+                    let name = assemble(element, index);
                     forward_converter.insert(name.clone(), keymap.len());
                     reverse_converter.insert(keymap.len(), name.clone());
                     keymap.push(*key);
@@ -216,15 +227,28 @@ impl Representation {
         };
         for (element, mapped) in &self.config.form.mapping {
             let new_element = element.clone();
-            let new_mapped = if mapped.len() == 1 {
-                lookup(element).to_string()
-            } else {
-                let mut all_codes = String::new();
-                for index in 0..mapped.len() {
-                    let name = format!("{}.{}", element, index);
-                    all_codes.push(lookup(&name));
+            let new_mapped = match mapped {
+                Mapped::Basic(string) => {
+                    let mut all_codes = String::new();
+                    for index in 0..string.len() {
+                        let name = assemble(element, index);
+                        all_codes.push(lookup(&name));
+                    }
+                    Mapped::Basic(all_codes)
                 }
-                all_codes
+                Mapped::Advanced(vector) => {
+                    let all_codes: Vec<MappedKey> = vector
+                        .iter()
+                        .enumerate()
+                        .map(|(index, mapped_key)| match mapped_key {
+                            MappedKey::Ascii(_) => {
+                                MappedKey::Ascii(lookup(&assemble(element, index)))
+                            }
+                            other => other.clone(),
+                        })
+                        .collect();
+                    Mapped::Advanced(all_codes)
+                }
             };
             new_config.form.mapping.insert(new_element, new_mapped);
         }
@@ -247,30 +271,19 @@ impl Representation {
         chars
     }
 
-    pub fn repr_code_list(&self, codes: Codes) -> Vec<String> {
-        codes
-            .iter()
+    /// 根据编码字符和未归一化的键位分布，生成一个理想的键位分布
+    pub fn generate_ideal_distribution(&self, key_distribution: &HashMap<char, f64>) -> Vec<f64> {
+        let mut result: Vec<f64> = (0..self.alphabet_radix)
             .map(|x| {
-                let chars = self.repr_code(x.0);
-                let string = chars.iter().collect();
-                string
+                self.repr_key
+                    .get(&x)
+                    .map_or(0.0, |c| *key_distribution.get(c).unwrap())
             })
-            .collect()
-    }
-
-    /// 将编码空间内所有的编码组合预先计算好用指当量
-    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
-    pub fn transform_key_equivalence(&self, key_equivalence: &HashMap<char, f64>) -> Vec<f64> {
-        let mut result: Vec<f64> = vec![];
-        for code in 0..self.get_space() {
-            let chars = self.repr_code(code);
-            let mut total = 0.0;
-            for char in chars {
-                total += key_equivalence
-                    .get(&char)
-                    .expect(&format!("键位 {} 的用指当量数据未知", char));
-            }
-            result.push(total);
+            .collect();
+        // 归一化
+        let sum: f64 = result.iter().sum();
+        for i in result.iter_mut() {
+            *i /= sum;
         }
         result
     }
@@ -299,7 +312,10 @@ impl Representation {
 
     /// 将编码空间内所有的编码组合预先计算好新速度当量（杏码算法）
     /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
-    pub fn transform_new_pair_equivalence(&self, pair_equivalence: &HashMap<String, f64>) -> Vec<f64> {
+    pub fn transform_new_pair_equivalence(
+        &self,
+        pair_equivalence: &HashMap<String, f64>,
+    ) -> Vec<f64> {
         let mut result: Vec<f64> = vec![];
         for code in 0..self.get_space() {
             let chars = self.repr_code(code);
@@ -309,7 +325,7 @@ impl Representation {
             }
             //遍历所有组合
             let mut combinations: Vec<String> = vec!["".to_string()];
-            for i in 1..chars.len()-1 {
+            for i in 1..chars.len() - 1 {
                 for j in 0..combinations.len() {
                     combinations.push(format!("{}{}", combinations[j], chars[i]));
                 }
@@ -317,7 +333,9 @@ impl Representation {
             let mut total = 0.0;
             for s in combinations.iter() {
                 let mut thistime = 0.0;
-                let s_chars: Vec<char> = format!("{}{}{}", chars[0], s, chars[chars.len()-1]).chars().collect();
+                let s_chars: Vec<char> = format!("{}{}{}", chars[0], s, chars[chars.len() - 1])
+                    .chars()
+                    .collect();
                 for i in 0..(s_chars.len() - 1) {
                     let pair: String = [s_chars[i], s_chars[i + 1]].iter().collect();
                     thistime += pair_equivalence
@@ -361,25 +379,5 @@ impl Representation {
     fn get_space(&self) -> usize {
         let max_length = self.config.encoder.max_length;
         self.radix.pow(max_length as u32)
-    }
-
-    /// 把导出的编码（每个字符串用数字表示）转化成正常的格式
-    pub fn recover_codes(&self, codes: EncodeExport) -> EncodeOutput {
-        let EncodeExport {
-            characters,
-            characters_full,
-            characters_short,
-            words,
-            words_full,
-            words_short,
-        } = codes;
-        EncodeOutput {
-            characters,
-            characters_full: characters_full.map(|x| self.repr_code_list(x)),
-            characters_short: characters_short.map(|x| self.repr_code_list(x)),
-            words,
-            words_full: words_full.map(|x| self.repr_code_list(x)),
-            words_reduced: words_short.map(|x| self.repr_code_list(x)),
-        }
     }
 }

@@ -68,9 +68,8 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
 
     fn save_candidate(&self, candidate: &Solution, rank: &(Metric, f64), write_to_file: bool, interface: &dyn Interface) {
         let new_config = self.representation.update_config(&candidate);
-        let content = serde_yaml::to_string(&new_config).unwrap();
         let metric = format!("{}", rank.0);
-        interface.report_solution(content, metric, write_to_file);
+        interface.report_solution(new_config, metric, write_to_file);
     }
 }
 

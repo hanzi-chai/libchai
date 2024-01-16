@@ -1,12 +1,13 @@
-mod config;
-mod constraints;
-mod data;
-mod encoder;
-mod interface;
-mod metaheuristics;
-mod objectives;
-mod problem;
-mod representation;
+pub mod config;
+pub mod constraints;
+pub mod data;
+pub mod encoder;
+pub mod interface;
+pub mod metaheuristics;
+pub mod objectives;
+pub mod problem;
+pub mod representation;
+
 use crate::constraints::Constraints;
 use crate::problem::ElementPlacementProblem;
 use crate::{
@@ -17,10 +18,11 @@ use crate::{
 };
 use interface::Interface;
 use js_sys::Function;
-use representation::{WordList, RawSequenceMap};
+use representation::{RawSequenceMap, WordList};
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
+use serde_wasm_bindgen::to_value;
 use serde_with::skip_serializing_none;
+use wasm_bindgen::prelude::*;
 
 #[derive(Deserialize)]
 struct Input {
@@ -28,10 +30,6 @@ struct Input {
     characters: RawSequenceMap,
     words: WordList,
     assets: Assets,
-}
-
-fn jsvalue<T: Serialize>(v: T) -> JsValue {
-    serde_wasm_bindgen::to_value(&v).unwrap()
 }
 
 #[wasm_bindgen]
@@ -56,7 +54,7 @@ enum Message {
     BetterSolution {
         metric: String,
         config: String,
-        save: bool
+        save: bool,
     },
 }
 
@@ -65,10 +63,10 @@ impl WebInterface {
         Self { post_message }
     }
 
-    fn post(&self, message: Message) {
-        self.post_message
-            .call1(&JsValue::null(), &jsvalue(message))
-            .unwrap();
+    fn post(&self, message: Message) -> Result<(), JsValue> {
+        let js_message = to_value(&message)?;
+        let _ = self.post_message.call1(&JsValue::null(), &js_message)?;
+        Ok(())
     }
 }
 
@@ -80,7 +78,7 @@ impl Interface for WebInterface {
     fn report_elapsed(&self, _: u128) {}
 
     fn report_trial_t_max(&self, t_max: f64, _: f64) {
-        self.post(Message::Parameters {
+        let _ = self.post(Message::Parameters {
             t_max: Some(t_max),
             t_min: None,
             steps: None,
@@ -88,7 +86,7 @@ impl Interface for WebInterface {
     }
 
     fn report_t_max(&self, t_max: f64) {
-        self.post(Message::Parameters {
+        let _ = self.post(Message::Parameters {
             t_max: Some(t_max),
             t_min: None,
             steps: None,
@@ -96,7 +94,7 @@ impl Interface for WebInterface {
     }
 
     fn report_trial_t_min(&self, t_min: f64, _: f64) {
-        self.post(Message::Parameters {
+        let _ = self.post(Message::Parameters {
             t_max: None,
             t_min: Some(t_min),
             steps: None,
@@ -104,7 +102,7 @@ impl Interface for WebInterface {
     }
 
     fn report_t_min(&self, t_min: f64) {
-        self.post(Message::Parameters {
+        let _ = self.post(Message::Parameters {
             t_max: None,
             t_min: Some(t_min),
             steps: None,
@@ -117,7 +115,7 @@ impl Interface for WebInterface {
             t_min: Some(t_min),
             steps: Some(steps),
         };
-        self.post(message);
+        let _ = self.post(message);
     }
 
     fn report_schedule(&self, steps: usize, temperature: f64, metric: String) {
@@ -126,46 +124,58 @@ impl Interface for WebInterface {
             temperature,
             metric,
         };
-        self.post(message);
+        let _ = self.post(message);
     }
 
-    fn report_solution(&self, config: String, metric: String, save: bool) {
-        self.post(Message::BetterSolution { metric, config, save });
+    fn report_solution(&self, config: Config, metric: String, save: bool) {
+        let _ = self.post(Message::BetterSolution {
+            metric,
+            config: serde_yaml::to_string(&config).unwrap(),
+            save,
+        });
     }
 }
 
-fn prepare(js_input: JsValue) -> (Representation, Objective) {
+fn prepare(js_input: JsValue) -> Result<(Representation, Encoder, Assets), JsValue> {
     let Input {
         config,
         characters,
         words,
         assets,
-    } = serde_wasm_bindgen::from_value(js_input).unwrap();
+    } = serde_wasm_bindgen::from_value(js_input)?;
     let representation = Representation::new(config);
     let encoder = Encoder::new(&representation, characters, words, &assets);
-    let objective = Objective::new(&representation, encoder, assets);
-    (representation, objective)
+    Ok((representation, encoder, assets))
 }
 
 #[wasm_bindgen]
-pub fn evaluate(js_input: JsValue) -> JsValue {
+pub fn encode(js_input: JsValue) -> Result<JsValue, JsValue> {
     console_error_panic_hook::set_once();
-    let (representation, objective) = prepare(js_input);
-    let mut buffer = objective.init_buffer();
+    let (representation, encoder, _) = prepare(js_input)?;
+    let codes = encoder.encode(&representation.initial, &representation);
+    Ok(to_value(&codes)?)
+}
+
+#[wasm_bindgen]
+pub fn evaluate(js_input: JsValue) -> Result<JsValue, JsValue> {
+    console_error_panic_hook::set_once();
+    let (representation, encoder, assets) = prepare(js_input)?;
+    let mut buffer = encoder.init_buffer();
+    let objective = Objective::new(&representation, encoder, assets);
     let (metric, _) = objective.evaluate(&representation.initial, &mut buffer);
     let metric = format!("{}", metric);
-    let codes = objective.export_codes(&mut buffer);
-    let human_codes = representation.recover_codes(codes);
-    serde_wasm_bindgen::to_value(&(metric, human_codes)).unwrap()
+    Ok(to_value(&metric)?)
 }
 
 #[wasm_bindgen]
-pub fn optimize(js_input: JsValue, post_message: Function) {
+pub fn optimize(js_input: JsValue, post_message: Function) -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
-    let (representation, objective) = prepare(js_input);
-    let buffer = objective.init_buffer();
+    let (representation, encoder, assets) = prepare(js_input)?;
+    let buffer = encoder.init_buffer();
+    let objective = Objective::new(&representation, encoder, assets);
     let constraints = Constraints::new(&representation);
     let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer);
     let web_interface = WebInterface::new(post_message);
     problem.solve(&web_interface);
+    Ok(())
 }

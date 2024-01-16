@@ -2,6 +2,8 @@
 //! 
 //! 定义了一个特征，指定了所有在退火计算的过程中需要向用户反馈的数据。命令行界面、Web 界面只需要各自实现这些方法，就可向用户报告各种用户数据，实现方式可以很不一样。
 
+use crate::config::Config;
+
 pub trait Interface {
     fn prepare_output(&self);
 
@@ -21,5 +23,5 @@ pub trait Interface {
 
     fn report_schedule(&self, step: usize, temperature: f64, metric: String);
 
-    fn report_solution(&self, config: String, metric: String, save: bool);
+    fn report_solution(&self, config: Config, metric: String, save: bool);
 }

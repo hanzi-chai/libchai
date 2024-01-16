@@ -22,14 +22,10 @@ pub enum Stroke {
         start: (i8, i8),
         curveList: Vec<Draw>,
     },
-    IndexedStroke(i8),
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Component {
-    pub source: Option<String>,
-    pub strokes: Vec<Stroke>,
+    ReferenceStroke {
+        feature: String,
+        index: usize,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,34 +34,38 @@ pub struct Block {
     pub strokes: usize,
 }
 
-#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 #[allow(non_snake_case)]
-pub struct Partition {
-    pub operator: String,
-    pub operandList: Vec<String>,
-    pub tags: Option<Vec<String>>,
-    pub order: Option<Vec<Block>>,
+pub enum Glyph {
+    BasicComponent {
+        tags: Option<Vec<String>>,
+        strokes: Vec<Stroke>,
+    },
+    DerivedComponent {
+        source: Option<String>,
+        tags: Option<Vec<String>>,
+        strokes: Vec<Stroke>,
+    },
+    Compound {
+        operator: String,
+        operandList: Vec<String>,
+        tags: Option<Vec<String>>,
+        order: Option<Vec<Block>>,
+    }
 }
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Glyph {
+pub struct Character {
     pub unicode: usize,
+    pub tygf: u8,
+    pub gb2312: bool,
     #[serialize_always] // JavaScript null
     pub name: Option<String>,
     #[serialize_always] // JavaScript null
     pub gf0014_id: Option<usize>,
-    pub default_type: String,
-    pub component: Option<Component>,
-    pub compound: Option<Vec<Partition>>,
+    pub readings: Vec<String>,
+    pub glyphs: Vec<Glyph>,
     pub ambiguous: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Character {
-    pub unicode: usize,
-    pub pinyin: Vec<String>,
-    pub tygf: u8,
-    pub gb2312: bool,
 }

@@ -1,10 +1,10 @@
 //! 编码引擎
 
 use crate::{
-    config::{Config, EncoderConfig, ShortCodeConfig, WordRule},
+    config::{EncoderConfig, ShortCodeConfig, WordRule},
     representation::{
-        Assets, Buffer, Codes, Key, KeyMap, Occupation, RawSequenceMap, Representation, Sequence,
-        SequenceMap,
+        Assets, Buffer, Codes, EncodeExport, Entry, Key, KeyMap, Occupation, RawSequenceMap,
+        Representation, Sequence, SequenceMap,
     },
 };
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
@@ -16,13 +16,14 @@ const MAX_WORD_LENGTH: usize = 10;
 pub struct Encoder {
     pub characters: Vec<char>,
     characters_sequence: Vec<Sequence>,
-    pub words: Vec<String>,
-    words_sequence: Vec<Sequence>,
+    pub words: Option<Vec<String>>,
+    words_sequence: Option<Vec<Sequence>>,
     config: EncoderConfig,
     pub radix: usize,
+    pub alphabet_radix: usize,
     auto_select: Vec<bool>,
     select_keys: Vec<Key>,
-    short_code_schemes: Vec<CompiledShortCodeConfig>,
+    short_code_schemes: Option<Vec<CompiledShortCodeConfig>>,
 }
 
 #[derive(Debug)]
@@ -51,26 +52,12 @@ impl Encoder {
     }
 
     /// 将规则列表中的每一个字符串形式的规则都转换成数对的列表
-    fn build_lookup(config: &Config) -> [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] {
+    fn build_lookup(rules: &Vec<WordRule>) -> [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] {
         let mut quick_lookup: [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1] = Default::default();
-        let default_rules: Vec<WordRule> = vec![
-            WordRule::EqualRule {
-                length_equal: 2,
-                formula: String::from("AaAbBaBb"),
-            },
-            WordRule::EqualRule {
-                length_equal: 3,
-                formula: String::from("AaBaCaCb"),
-            },
-            WordRule::RangeRule {
-                length_in_range: (4, MAX_WORD_LENGTH),
-                formula: String::from("AaBaCaZa"),
-            },
-        ];
         for i in 2..=MAX_WORD_LENGTH {
             // 尝试从规则列表中找到一个能符合当前长度的规则
             let mut one_matched = false;
-            for rule in config.encoder.rules.as_ref().unwrap_or(&default_rules) {
+            for rule in rules {
                 let (is_matched, formula) = match rule {
                     WordRule::EqualRule {
                         formula,
@@ -112,13 +99,23 @@ impl Encoder {
             .sort_by_key(|x| Reverse(*assets.character_frequency.get(&x.0).unwrap_or(&0)));
         let (characters, characters_sequence): (Vec<_>, Vec<_>) =
             characters_all.into_iter().unzip();
+        let short_code_schemes = representation
+            .config
+            .encoder
+            .short_code_schemes
+            .as_ref()
+            .map(|x| Self::build_short_code_schemes(x, representation));
 
         // 对词也是一样的操作
         let mut words_all = Self::build_word_sequence(representation, sequence_map, words);
-        words_all.sort_by_key(|x| Reverse(*assets.word_frequency.get(&x.0).unwrap_or(&0)));
-        let (words, words_sequence): (Vec<_>, Vec<_>) = words_all.into_iter().unzip();
-        let short_code_schemes =
-            Self::build_short_code_schemes(&representation.config.encoder, representation);
+        words_all
+            .as_mut()
+            .map(|x| x.sort_by_key(|x| Reverse(*assets.word_frequency.get(&x.0).unwrap_or(&0))));
+        let (words, words_sequence): (Option<Vec<_>>, Option<Vec<_>>) =
+            words_all.map_or((None, None), |x| {
+                let (a, b) = x.into_iter().unzip();
+                (Some(a), Some(b))
+            });
         Encoder {
             characters,
             characters_sequence,
@@ -126,6 +123,7 @@ impl Encoder {
             words_sequence,
             config: representation.config.encoder.clone(),
             radix: representation.radix,
+            alphabet_radix: representation.alphabet_radix,
             auto_select: representation.transform_auto_select(),
             select_keys: representation.select_keys.clone(),
             short_code_schemes,
@@ -133,7 +131,7 @@ impl Encoder {
     }
 
     fn build_short_code_schemes(
-        config: &EncoderConfig,
+        schemes: &Vec<ShortCodeConfig>,
         representation: &Representation,
     ) -> Vec<CompiledShortCodeConfig> {
         let parse_keys = |s: &Vec<char>| -> Vec<usize> {
@@ -146,17 +144,6 @@ impl Encoder {
                 })
                 .collect()
         };
-        let default_schemes = (1..config.max_length)
-            .map(|prefix| ShortCodeConfig {
-                prefix,
-                count: None,
-                select_keys: None,
-            })
-            .collect();
-        let schemes = config
-            .short_code_schemes
-            .as_ref()
-            .unwrap_or(&default_schemes);
         schemes
             .iter()
             .map(|s| {
@@ -181,15 +168,16 @@ impl Encoder {
         representation: &Representation,
         sequence_map: SequenceMap,
         words: Vec<String>,
-    ) -> Vec<(String, Sequence)> {
-        let max_length = representation.config.encoder.max_length;
-        // 从词表生成词的拆分序列，滤掉因缺少字的拆分而无法构词的情况
-        let lookup = Self::build_lookup(&representation.config);
-        let mut words_all: Vec<(String, Sequence)> = Vec::new();
-        // 如果根本没想优化词，就不考虑这个拆分
-        if let None = representation.config.optimization.objective.words_full {
-            return words_all;
+    ) -> Option<Vec<(String, Sequence)>> {
+        let rules = &representation.config.encoder.rules;
+        // 如果没有组词规则，就不生成词拆表
+        if rules.is_none() {
+            return None;
         }
+        // 从词表生成词的拆分序列，滤掉因缺少字的拆分而无法构词的情况
+        let mut words_all: Vec<(String, Sequence)> = Vec::new();
+        let lookup = Self::build_lookup(rules.as_ref().unwrap());
+        let max_length = representation.config.encoder.max_length;
         for word in words {
             let chars: Vec<char> = word.chars().collect();
             // 过滤掉太长的词
@@ -221,7 +209,7 @@ impl Encoder {
                 words_all.push((word.clone(), word_elements));
             }
         }
-        words_all
+        Some(words_all)
     }
 
     pub fn get_space(&self) -> usize {
@@ -259,7 +247,7 @@ impl Encoder {
         short_codes: &mut Codes,
         full_occupation: &Occupation,
     ) {
-        let schemes = &self.short_code_schemes;
+        let schemes = self.short_code_schemes.as_ref().unwrap();
         let mut short_occupation = vec![false; self.get_space()];
         for ((full, _), pointer) in zip(full_codes, short_codes) {
             let mut has_reduced = false;
@@ -316,7 +304,12 @@ impl Encoder {
         output: &mut Codes,
         occupation: &mut Occupation,
     ) {
-        self.encode_full(keymap, &self.words_sequence, output, occupation)
+        self.encode_full(
+            keymap,
+            self.words_sequence.as_ref().expect("没有词组数据"),
+            output,
+            occupation,
+        )
     }
 
     fn signed_index<T: Debug>(vector: &Vec<T>, index: isize) -> &T {
@@ -329,10 +322,60 @@ impl Encoder {
 
     pub fn init_buffer(&self) -> Buffer {
         Buffer {
-            characters: vec![(0, false); self.characters.len()],
-            characters_reduced: vec![(0, false); self.characters.len()],
-            words: vec![(0, false); self.words.len()],
-            words_reduced: vec![(0, false); self.words.len()],
+            characters_full: vec![(0, false); self.characters.len()],
+            characters_short: self
+                .short_code_schemes
+                .as_ref()
+                .map(|_| vec![(0, false); self.characters.len()]),
+            words_full: self.words.as_ref().map(|x| vec![(0, false); x.len()]),
+        }
+    }
+
+    pub fn encode(&self, keymap: &KeyMap, representation: &Representation) -> EncodeExport {
+        let mut buffer = self.init_buffer();
+        let mut occupation: Occupation = vec![false; self.get_space()];
+        self.encode_character_full(keymap, &mut buffer.characters_full, &mut occupation);
+        if self.short_code_schemes.is_some() {
+            self.encode_short(
+                &mut buffer.characters_full,
+                buffer.characters_short.as_mut().unwrap(),
+                &mut occupation,
+            );
+        }
+        let mut character_entries: Vec<Entry> = Vec::new();
+        for (index, character) in self.characters.iter().enumerate() {
+            let full = representation.repr_code(buffer.characters_full[index].0);
+            let short = buffer
+                .characters_short
+                .as_ref()
+                .map(|x| representation.repr_code(x[index].0));
+            character_entries.push(Entry {
+                item: character.to_string(),
+                full: full.iter().collect(),
+                short: short.map(|x| x.iter().collect()),
+            });
+        }
+        let mut word_entries: Option<Vec<Entry>> = None;
+        if let Some(words) = self.words.as_ref() {
+            self.encode_words_full(keymap, buffer.words_full.as_mut().unwrap(), &mut occupation);
+            let entries = words
+                .iter()
+                .enumerate()
+                .map(|(index, word)| {
+                    let full =
+                        representation.repr_code(buffer.words_full.as_ref().unwrap()[index].0);
+                    Entry {
+                        item: word.to_string(),
+                        full: full.iter().collect(),
+                        short: None,
+                    }
+                })
+                .collect();
+            word_entries = Some(entries);
+        }
+        EncodeExport {
+            characters: character_entries,
+            words: word_entries,
         }
     }
 }

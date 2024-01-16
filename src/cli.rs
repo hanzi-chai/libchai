@@ -1,19 +1,17 @@
 //! 命令行界面
-//! 
+//!
 //! 此模块基于 `clap` 包实现了命令行的参数设置，标准输出以及文件读写。
-//! 
+//!
 
-use crate::config::Config;
-use crate::interface::Interface;
-use crate::objectives::metric::Metric;
-use crate::representation::{Assets, EncodeOutput, RawSequenceMap, WordList};
+use chai::config::Config;
+use chai::interface::Interface;
+use chai::objectives::metric::Metric;
+use chai::representation::{Assets, EncodeExport, Entry, RawSequenceMap, WordList};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use csv::{Reader, ReaderBuilder};
-use serde::Serialize;
 use std::collections::HashMap;
 use std::fs::File;
-use std::iter::zip;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -49,7 +47,7 @@ pub struct Cli {
 
     /// 单键用指当量表，默认为 assets 目录下的 key_equivalence.txt
     #[arg(short, long, value_name = "FILE")]
-    pub key_equivalence: Option<PathBuf>,
+    pub key_distribution: Option<PathBuf>,
 
     /// 双键速度当量表，默认为 assets 目录下的 pair_equivalence.txt
     #[arg(short, long, value_name = "FILE")]
@@ -61,6 +59,8 @@ pub struct Cli {
 pub enum Command {
     /// 使用方案文件和拆分表计算出字词编码并统计各类评测指标
     Encode,
+    /// 评测当前方案的各项指标
+    Evaluate,
     /// 基于拆分表和方案文件中的配置优化元素布局
     Optimize,
 }
@@ -108,10 +108,10 @@ impl Cli {
             .map(|x| x.unwrap())
             .collect();
         let keq_path = self
-            .key_equivalence
+            .key_distribution
             .clone()
-            .unwrap_or(assets_dir.join("key_equivalence.txt"));
-        let key_equivalence: HashMap<char, f64> = Self::get_reader(keq_path)
+            .unwrap_or(assets_dir.join("key_distribution.txt"));
+        let key_distribution: HashMap<char, f64> = Self::get_reader(keq_path)
             .deserialize()
             .map(|x| x.unwrap())
             .collect();
@@ -131,60 +131,47 @@ impl Cli {
         let assets = Assets {
             character_frequency,
             word_frequency,
-            key_equivalence,
+            key_distribution,
             pair_equivalence,
         };
         return (config, elements, words, assets);
     }
 
-    pub fn export_code<T: Serialize>(
-        path: &PathBuf,
-        original: Vec<T>,
-        code: Option<Vec<String>>,
-        code_reduced: Option<Vec<String>>,
-    ) {
-        if code.is_none() && code_reduced.is_none() {
-            return;
-        }
+    pub fn export_code(path: &PathBuf, original: Vec<Entry>) {
         let mut writer = csv::WriterBuilder::new()
             .delimiter(b'\t')
             .has_headers(false)
             .from_path(path)
             .unwrap();
-        if let (Some(code), Some(code_reduced)) = (code.as_ref(), code_reduced.as_ref()) {
-            for (orig, (c, cr)) in zip(original, zip(code, code_reduced)) {
-                writer.serialize((&orig, &c, &cr)).unwrap();
-            }
-        } else {
-            for (orig, c) in zip(original, code.or(code_reduced).unwrap()) {
-                writer.serialize((&orig, &c)).unwrap();
+        for Entry { item, full, short } in original {
+            if let Some(short) = short {
+                writer.serialize((&item, &full, &short)).unwrap();
+                continue;
+            } else {
+                writer.serialize((&item, &full)).unwrap();
+                continue;
             }
         }
         writer.flush().unwrap();
     }
 
-    pub fn write_encode_results(metric: Metric, results: EncodeOutput) {
+    pub fn write_encode_results(results: EncodeExport) {
         let c_path = PathBuf::from("characters.txt");
         let w_path = PathBuf::from("words.txt");
-        Self::export_code(
-            &c_path,
-            results.characters,
-            results.characters_full,
-            results.characters_short,
-        );
-        Self::export_code(
-            &w_path,
-            results.words,
-            results.words_full,
-            results.words_reduced,
-        );
-        println!("当前方案评测：");
-        print!("{}", metric);
+        Self::export_code(&c_path, results.characters);
+        if let Some(words) = results.words {
+            Self::export_code(&w_path, words);
+        }
         println!(
             "已完成编码，结果保存在 {} 和 {} 中",
             c_path.display(),
             w_path.display()
         );
+    }
+
+    pub fn report_metric(metric: Metric) {
+        println!("当前方案评测：");
+        print!("{}", metric);
     }
 }
 
@@ -230,9 +217,7 @@ impl Interface for Cli {
     fn report_parameters(&self, t_max: f64, t_min: f64, steps: usize) {
         println!(
             "参数寻找完成，将在 {} 步内从最高温 {} 降到最低温 {}……",
-            steps,
-            t_max,
-            t_min
+            steps, t_max, t_min
         );
     }
 
@@ -248,7 +233,7 @@ impl Interface for Cli {
         println!("{}", metric);
     }
 
-    fn report_solution(&self, config: String, metric: String, save: bool) {
+    fn report_solution(&self, config: Config, metric: String, save: bool) {
         let time = Local::now();
         let prefix = format!("{}", time.format("%m-%d+%H_%M_%S_%3f"));
         let config_path = format!("output/{}.yaml", prefix);
@@ -260,12 +245,11 @@ impl Interface for Cli {
         print!("{}", metric);
         if save {
             fs::write(metric_path, metric).unwrap();
-            fs::write(config_path, config).unwrap();
+            fs::write(config_path, serde_yaml::to_string(&config).unwrap()).unwrap();
             println!(
                 "方案文件保存于 {}.yaml 中，评测指标保存于 {}.txt 中",
                 prefix, prefix
             );
         }
-        
     }
 }

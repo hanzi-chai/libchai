@@ -1,6 +1,6 @@
 //! 优化问题的目标函数。
-//! 
-//! 
+//!
+//!
 
 pub mod fingering;
 pub mod metric;
@@ -11,23 +11,22 @@ use crate::encoder::Encoder;
 use crate::representation::Assets;
 use crate::representation::Buffer;
 use crate::representation::Codes;
-use crate::representation::EncodeExport;
 use crate::representation::KeyMap;
 use crate::representation::Occupation;
 use crate::representation::Representation;
-use std::iter::zip;
 use metric::LevelMetric1;
 use metric::LevelMetric2;
 use metric::Metric;
 use metric::PartialMetric;
 use metric::TierMetric;
+use std::iter::zip;
 
 pub struct Objective {
     config: ObjectiveConfig,
     encoder: Encoder,
     character_frequencies: Frequencies,
-    word_frequencies: Frequencies,
-    key_equivalence: Vec<f64>,
+    word_frequencies: Option<Frequencies>,
+    ideal_distribution: Vec<f64>,
     pair_equivalence: Vec<f64>,
     new_pair_equivalence: Vec<f64>,
 }
@@ -36,7 +35,6 @@ pub type Frequencies = Vec<f64>;
 
 /// 目标函数
 impl Objective {
-
     /// 通过传入配置表示、编码器和共用资源来构造一个目标函数
     pub fn new(representation: &Representation, encoder: Encoder, assets: Assets) -> Self {
         let character_frequencies: Vec<_> = encoder
@@ -44,20 +42,21 @@ impl Objective {
             .iter()
             .map(|x| *assets.character_frequency.get(x).unwrap_or(&0))
             .collect();
-        let word_frequencies: Vec<_> = encoder
-            .words
-            .iter()
-            .map(|x| *assets.word_frequency.get(x).unwrap_or(&0))
-            .collect();
-        let key_equivalence = representation.transform_key_equivalence(&assets.key_equivalence);
+        let word_frequencies: Option<Vec<_>> = encoder.words.as_ref().map(|x| {
+            x.iter()
+                .map(|word| *assets.word_frequency.get(word).unwrap_or(&0))
+                .collect()
+        });
+        let ideal_distribution = representation.generate_ideal_distribution(&assets.key_distribution);
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
-        let new_pair_equivalence = representation.transform_new_pair_equivalence(&assets.pair_equivalence);
+        let new_pair_equivalence =
+            representation.transform_new_pair_equivalence(&assets.pair_equivalence);
         Self {
             encoder,
             config: representation.config.optimization.objective.clone(),
             character_frequencies: Self::normalize_frequencies(&character_frequencies),
-            word_frequencies: Self::normalize_frequencies(&word_frequencies),
-            key_equivalence,
+            word_frequencies: word_frequencies.as_ref().map(Self::normalize_frequencies),
+            ideal_distribution,
             pair_equivalence,
             new_pair_equivalence,
         }
@@ -71,6 +70,20 @@ impl Objective {
             .collect()
     }
 
+    fn get_distribution_distance(
+        &self,
+        distribution: &Vec<f64>,
+        ideal_distribution: &Vec<f64>,
+    ) -> f64 {
+        let mut distance = 0.0;
+        for (frequency, ideal_frequency) in zip(distribution, ideal_distribution) {
+            if frequency > ideal_frequency {
+                distance += frequency - ideal_frequency;
+            }
+        }
+        distance
+    }
+
     /// 计算一部分编码的指标，这里的部分可以是单字全码、单字简码、词语全码或词语简码
     pub fn evaluate_partial(
         &self,
@@ -80,11 +93,9 @@ impl Objective {
     ) -> (PartialMetric, f64) {
         // 初始化整体指标的变量
         let mut total_duplication = 0.0;
-        let mut total_keys = 0.0;
         let mut total_pairs = 0.0;
         // 新当量以键数为单位
         let mut total_new_keys = 0.0;
-        let mut total_keys_equivalence = 0.0;
         let mut total_new_keys_equivalence = 0.0;
         let mut total_new_keys_equivalence_modified = 0.0;
         let mut total_pair_equivalence = 0.0;
@@ -96,23 +107,31 @@ impl Objective {
         let mut tiers_levels: Vec<Vec<usize>> = vec![];
         if let Some(tiers) = &weights.tiers {
             for tier in tiers {
-                let vec = vec![0_usize, tier.levels.as_ref().map_or(0, |v| v.len())];
+                let vec = vec![0_usize; tier.levels.as_ref().map_or(0, |v| v.len())];
                 tiers_levels.push(vec);
             }
         }
+        let mut distribution = vec![0.0; self.encoder.alphabet_radix];
         // 标记初始字符、结束字符的频率
         let mut chuma = vec![0 as f64; self.encoder.radix];
         let mut moma = vec![0.0 as f64; self.encoder.radix];
         for (index, ((code, duplicated), frequency)) in zip(codes, frequencies).enumerate() {
             let length = code.ilog(self.encoder.radix) as usize + 1;
-            // 用指当量和速度当量
-            if let Some(_) = weights.key_equivalence {
-                total_keys_equivalence += self.key_equivalence[*code] * *frequency;
-                total_keys += length as f64 * frequency;
+            // 按键分布
+            if weights.key_distribution.is_some() {
+                let mut current = *code;
+                while current > 0 {
+                    let key = current % self.encoder.radix;
+                    if key < distribution.len() {
+                        distribution[key] += *frequency;
+                    }
+                    current /= self.encoder.radix;
+                }
             }
             // 杏码式用指当量，只统计最初的1码
             if let Some(_) = weights.new_key_equivalence {
-                total_new_keys_equivalence += self.key_equivalence[*code % self.encoder.radix] * *frequency;
+                total_new_keys_equivalence +=
+                *frequency / self.ideal_distribution[*code % self.encoder.radix];
             }
             // 杏码式用指当量改
             if let Some(_) = weights.new_key_equivalence_modified {
@@ -139,7 +158,7 @@ impl Objective {
                 if let Some(tiers) = &weights.tiers {
                     for (itier, tier) in tiers.iter().enumerate() {
                         let top = tier.top.unwrap_or(std::usize::MAX);
-                        if index <= top {
+                        if index < top {
                             tiers_duplication[itier] += 1;
                         }
                     }
@@ -157,7 +176,7 @@ impl Objective {
             if let Some(tiers) = &weights.tiers {
                 for (itier, tier) in tiers.iter().enumerate() {
                     let top = tier.top.unwrap_or(std::usize::MAX);
-                    if index <= top {
+                    if index < top {
                         if let Some(levels) = &tier.levels {
                             for (ilevel, level) in levels.iter().enumerate() {
                                 if level.length == length {
@@ -173,13 +192,14 @@ impl Objective {
             //将首末码与全局的首末码频率拼起来
             for i in 0..self.encoder.radix {
                 for j in 0..self.encoder.radix {
-                    total_new_keys_equivalence_modified += self.pair_equivalence[j + i * self.encoder.radix] * chuma[i] * moma[j];
+                    total_new_keys_equivalence_modified +=
+                        self.pair_equivalence[j + i * self.encoder.radix] * chuma[i] * moma[j];
                 }
             }
         }
         let mut partial_metric = PartialMetric {
             tiers: None,
-            key_equivalence: None,
+            key_distribution: None,
             new_key_equivalence: None,
             new_key_equivalence_modified: None,
             pair_equivalence: None,
@@ -190,10 +210,15 @@ impl Objective {
         };
 
         let mut loss = 0.0;
-        if let Some(equivalence_weight) = weights.key_equivalence {
-            let equivalence = total_keys_equivalence / total_keys;
-            partial_metric.key_equivalence = Some(equivalence);
-            loss += equivalence * equivalence_weight;
+        if let Some(key_distribution_weight) = weights.key_distribution {
+            // 首先归一化
+            let total: f64 = distribution.iter().sum();
+            for i in distribution.iter_mut() {
+                *i /= total;
+            }
+            let distance = self.get_distribution_distance(&distribution, &self.ideal_distribution);
+            partial_metric.key_distribution = Some(distance);
+            loss += distance * key_distribution_weight;
         }
         if let Some(equivalence_weight) = weights.new_key_equivalence {
             let equivalence = total_new_keys_equivalence / total_new_keys;
@@ -278,18 +303,27 @@ impl Objective {
             words_reduced: None,
         };
         if let Some(characters) = &self.config.characters_full {
-            let mut occupation: Occupation = vec![false; self.key_equivalence.len()];
-            self.encoder
-                .encode_character_full(&candidate, &mut buffer.characters, &mut occupation);
-            let (partial, accum) =
-                self.evaluate_partial(&buffer.characters, &self.character_frequencies, characters);
+            let mut occupation: Occupation = vec![false; self.pair_equivalence.len()];
+            self.encoder.encode_character_full(
+                &candidate,
+                &mut buffer.characters_full,
+                &mut occupation,
+            );
+            let (partial, accum) = self.evaluate_partial(
+                &buffer.characters_full,
+                &self.character_frequencies,
+                characters,
+            );
             loss += accum;
             metric.characters = Some(partial);
             if let Some(character_reduced) = &self.config.characters_short {
-                self.encoder
-                    .encode_short(&buffer.characters, &mut buffer.characters_reduced, &mut occupation);
+                self.encoder.encode_short(
+                    &buffer.characters_full,
+                    buffer.characters_short.as_mut().expect("无简码定义"),
+                    &mut occupation,
+                );
                 let (partial, accum) = self.evaluate_partial(
-                    &buffer.characters_reduced,
+                    buffer.characters_short.as_mut().expect("无简码定义"),
                     &self.character_frequencies,
                     character_reduced,
                 );
@@ -300,50 +334,12 @@ impl Objective {
         if let Some(words) = &self.config.words_full {
             let mut occupation: Occupation = vec![false; self.encoder.get_space()];
             self.encoder
-                .encode_words_full(&candidate, &mut buffer.words, &mut occupation);
+                .encode_words_full(&candidate, buffer.words_full.as_mut().expect("无词语定义"), &mut occupation);
             let (partial, accum) =
-                self.evaluate_partial(&buffer.words, &self.word_frequencies, words);
+                self.evaluate_partial(buffer.words_full.as_ref().expect("无词语定义"), self.word_frequencies.as_ref().expect("无词语定义"), words);
             loss += accum;
             metric.words = Some(partial);
-            if let Some(words_reduced) = &self.config.words_short {
-                self.encoder
-                    .encode_short(&buffer.words, &mut buffer.words_reduced, &mut occupation);
-                let (partial, accum) = self.evaluate_partial(
-                    &buffer.words_reduced,
-                    &self.word_frequencies,
-                    words_reduced,
-                );
-                loss += accum;
-                metric.words_reduced = Some(partial);
-            }
         }
         (metric, loss)
-    }
-
-    pub fn export_codes(&self, buffer: &Buffer) -> EncodeExport {
-        EncodeExport {
-            characters: self.encoder.characters.clone(),
-            characters_full: self
-                .config
-                .characters_full
-                .as_ref()
-                .map(|_| buffer.characters.clone()),
-            characters_short: self
-                .config
-                .characters_short
-                .as_ref()
-                .map(|_| buffer.characters_reduced.clone()),
-            words: self.encoder.words.clone(),
-            words_full: self.config.words_full.as_ref().map(|_| buffer.words.clone()),
-            words_short: self
-                .config
-                .words_short
-                .as_ref()
-                .map(|_| buffer.words_reduced.clone()),
-        }
-    }
-
-    pub fn init_buffer(&self) -> Buffer {
-        self.encoder.init_buffer()
     }
 }

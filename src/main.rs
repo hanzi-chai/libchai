@@ -4,39 +4,34 @@
 //! 
 //! 具体用法详见 README.md 和 config.md。
 
-mod config;
-mod data;
-use clap::Parser;
-use encoder::Encoder;
-mod problem;
-use problem::ElementPlacementProblem;
-mod constraints;
-mod encoder;
-use constraints::Constraints;
+use chai::representation::Representation;
+use chai::encoder::Encoder;
+use chai::objectives::Objective;
+use chai::constraints::Constraints;
+use chai::problem::ElementPlacementProblem;
 mod cli;
-mod metaheuristics;
-use cli::{Cli, Command};
-use representation::Representation;
-mod objectives;
-use objectives::Objective;
-mod representation;
-mod interface;
+use crate::cli::{Cli, Command};
+use clap::Parser;
 
 fn main() {
     let cli = Cli::parse();
     let (config, characters, words, assets) = cli.prepare_file();
     let representation = Representation::new(config);
     let encoder = Encoder::new(&representation, characters, words, &assets);
-    let objective = Objective::new(&representation, encoder, assets);
-    let mut buffer = objective.init_buffer();
     match cli.command {
         Command::Encode => {
+            let codes = encoder.encode(&representation.initial, &representation);
+            Cli::write_encode_results(codes);
+        }
+        Command::Evaluate => {
+            let mut buffer = encoder.init_buffer();
+            let objective = Objective::new(&representation, encoder, assets);
             let (metric, _) = objective.evaluate(&representation.initial, &mut buffer);
-            let codes = objective.export_codes(&mut buffer);
-            let human_codes = representation.recover_codes(codes);
-            Cli::write_encode_results(metric, human_codes);
+            Cli::report_metric(metric);
         }
         Command::Optimize => {
+            let buffer = encoder.init_buffer();
+            let objective = Objective::new(&representation, encoder, assets);
             let constraints = Constraints::new(&representation);
             let mut problem =
                 ElementPlacementProblem::new(representation, constraints, objective, buffer);

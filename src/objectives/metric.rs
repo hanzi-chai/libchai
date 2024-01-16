@@ -59,7 +59,7 @@ pub struct FingeringMetric {
 pub struct PartialMetric {
     pub tiers: Option<Vec<TierMetric>>,
     pub duplication: Option<f64>,
-    pub key_equivalence: Option<f64>,
+    pub key_distribution: Option<f64>,
     pub new_key_equivalence: Option<f64>,
     pub new_key_equivalence_modified: Option<f64>,
     pub pair_equivalence: Option<f64>,
@@ -75,8 +75,8 @@ impl Display for PartialMetric {
         if let Some(duplication) = self.duplication {
             f.write_str(&format!("选重率：{:.4}%；", duplication * 100.0))?;
         }
-        if let Some(equivalence) = self.key_equivalence {
-            f.write_str(&format!("用指当量：{:.4}；", equivalence))?;
+        if let Some(key_distribution) = self.key_distribution {
+            f.write_str(&format!("用指分布偏差：{:.2}%；", key_distribution * 100.0))?;
         }
         if let Some(equivalence) = self.new_key_equivalence {
             f.write_str(&format!("杏码式用指当量：{:.4}；", equivalence))?;

@@ -4,7 +4,7 @@
 //! 
 
 use crate::{
-    data::{Character, Glyph},
+    data::Character,
     metaheuristics::simulated_annealing,
 };
 use serde::{Deserialize, Serialize};
@@ -14,9 +14,7 @@ use std::collections::{BTreeMap, HashMap};
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataConfig {
-    pub form: Option<BTreeMap<String, Glyph>>,
     pub repertoire: Option<BTreeMap<String, Character>>,
-    pub classifier: Option<BTreeMap<String, usize>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,9 +40,26 @@ pub struct DegeneratorConfig {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisConfig {
+    pub classifier: Option<BTreeMap<String, usize>>,
     pub degenerator: Option<DegeneratorConfig>,
     pub selector: Option<Vec<String>>,
     pub customize: Option<BTreeMap<String, Vec<String>>>,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MappedKey {
+    Ascii(char),
+    Reference { element: String, index: usize }
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Mapped {
+    Basic(String),
+    Advanced(Vec<MappedKey>)
 }
 
 #[skip_serializing_none]
@@ -52,9 +67,8 @@ pub struct AnalysisConfig {
 pub struct FormConfig {
     pub alphabet: String,
     pub mapping_type: Option<usize>,
-    pub mapping: HashMap<String, String>,
+    pub mapping: HashMap<String, Mapped>,
     pub grouping: Option<HashMap<String, String>>,
-    pub analysis: Option<AnalysisConfig>,
 }
 
 #[skip_serializing_none]
@@ -101,13 +115,17 @@ pub struct ShortCodeConfig {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncoderConfig {
+    // 全局
     pub max_length: usize,
     pub select_keys: Option<Vec<char>>,
     pub auto_select_length: Option<usize>,
     pub auto_select_pattern: Option<String>,
-    pub short_code_schemes: Option<Vec<ShortCodeConfig>>,
+    // 单字全码
     pub sources: Option<BTreeMap<String, NodeConfig>>,
     pub conditions: Option<BTreeMap<String, EdgeConfig>>,
+    // 单字简码
+    pub short_code_schemes: Option<Vec<ShortCodeConfig>>,
+    // 词语全码
     pub rules: Option<Vec<WordRule>>,
 }
 
@@ -140,7 +158,7 @@ pub struct FingeringWeights {
 pub struct PartialWeights {
     pub tiers: Option<Vec<TierWeights>>,
     pub duplication: Option<f64>,
-    pub key_equivalence: Option<f64>,
+    pub key_distribution: Option<f64>,
     //杏码的「用指当量」。
     pub new_key_equivalence: Option<f64>,
     //杏码的「用指当量」（改），假定连续输入时预测上一键从而计算组合当量（慢）。
@@ -171,18 +189,10 @@ pub struct AtomicConstraint {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GroupConstraint {
-    pub element: String,
-    pub index: usize,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstraintsConfig {
     pub elements: Option<Vec<AtomicConstraint>>,
     pub indices: Option<Vec<AtomicConstraint>>,
     pub element_indices: Option<Vec<AtomicConstraint>>,
-    pub grouping: Option<Vec<Vec<GroupConstraint>>>,
 }
 
 #[skip_serializing_none]
@@ -220,6 +230,15 @@ pub struct Info {
     pub description: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Algebra {
+    Xform { from: String, to: String },
+    Xlit { from: String, to: String }
+}
+
+type AlgebraConfig = BTreeMap<String, Vec<Algebra>>;
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -228,6 +247,8 @@ pub struct Config {
     pub source: Option<String>,
     pub info: Option<Info>,
     pub data: Option<DataConfig>,
+    pub analysis: Option<AnalysisConfig>,
+    pub algebra: Option<AlgebraConfig>,
     pub form: FormConfig,
     pub encoder: EncoderConfig,
     pub optimization: OptimizationConfig,

@@ -1,6 +1,6 @@
 [package]
 name = "libchai"
-version = "0.1.2"
+version = "0.1.4"
 authors = ["Songchen Tan <i@tansongchen.com>"]
 edition = "2018"
 
@@ -9,6 +9,7 @@ name = "chai"
 path = "src/main.rs"
 
 [lib]
+name = "chai"
 crate-type = ["cdylib", "rlib"]
 
 [features]
