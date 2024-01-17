@@ -4,7 +4,7 @@
 //! 
 //! 具体用法详见 README.md 和 config.md。
 
-use chai::representation::Representation;
+use chai::{representation::Representation, error::Error};
 use chai::encoder::Encoder;
 use chai::objectives::Objective;
 use chai::constraints::Constraints;
@@ -13,11 +13,11 @@ mod cli;
 use crate::cli::{Cli, Command};
 use clap::Parser;
 
-fn main() {
+fn main() -> Result<(), Error> {
     let cli = Cli::parse();
     let (config, characters, words, assets) = cli.prepare_file();
-    let representation = Representation::new(config);
-    let encoder = Encoder::new(&representation, characters, words, &assets);
+    let representation = Representation::new(config)?;
+    let encoder = Encoder::new(&representation, characters, words, &assets)?;
     match cli.command {
         Command::Encode => {
             let codes = encoder.encode(&representation.initial, &representation);
@@ -26,16 +26,17 @@ fn main() {
         Command::Evaluate => {
             let mut buffer = encoder.init_buffer();
             let objective = Objective::new(&representation, encoder, assets);
-            let (metric, _) = objective.evaluate(&representation.initial, &mut buffer);
+            let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
             Cli::report_metric(metric);
         }
         Command::Optimize => {
             let buffer = encoder.init_buffer();
             let objective = Objective::new(&representation, encoder, assets);
-            let constraints = Constraints::new(&representation);
+            let constraints = Constraints::new(&representation)?;
             let mut problem =
                 ElementPlacementProblem::new(representation, constraints, objective, buffer);
             problem.solve(&cli);
         }
     }
+    Ok(())
 }

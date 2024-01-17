@@ -1,7 +1,8 @@
 //! 优化问题的约束。
 
 use crate::{
-    config::AtomicConstraint,
+    config::{AtomicConstraint, MappedKey},
+    error::Error,
     representation::{assemble, Element, Key, KeyMap, Representation},
 };
 use rand::{seq::SliceRandom, thread_rng, Rng};
@@ -16,23 +17,21 @@ pub struct Constraints {
 
 impl Constraints {
     /// 传入配置表示来构造约束，把用户在配置文件中编写的约束「编译」成便于快速计算的数据结构
-    pub fn new(representation: &Representation) -> Constraints {
+    pub fn new(representation: &Representation) -> Result<Constraints, Error> {
         let elements = representation.initial.len();
         let alphabet = representation
             .config
             .form
             .alphabet
             .chars()
-            .map(|x| *representation.key_repr.get(&x).unwrap())
+            .map(|x| *representation.key_repr.get(&x).unwrap()) // 在生成表示的时候已经确保了这里一定有对应的键
             .collect();
         let mut fixed: HashSet<Element> = HashSet::new();
         let mut narrowed: HashMap<Element, Vec<Key>> = HashMap::new();
         let mut values: Vec<AtomicConstraint> = Vec::new();
-        let lookup = |x: &String| {
-            *representation
-                .element_repr
-                .get(x)
-                .expect(&format!("{} 不存在于键盘映射中", x))
+        let lookup = |x: String| {
+            let element_number = representation.element_repr.get(&x);
+            element_number.ok_or(format!("{x} 不存在于键盘映射中"))
         };
         if let Some(constraints) = &representation.config.optimization.constraints {
             values.append(&mut constraints.elements.clone().unwrap_or_default());
@@ -46,53 +45,65 @@ impl Constraints {
                 index,
                 keys,
             } = atomic_constraint;
-            let elements: Vec<String> = match (element, index) {
+            let elements: Vec<usize> = match (element, index) {
                 // 如果指定了元素和码位
                 (Some(element), Some(index)) => {
-                    vec![assemble(element, *index)]
+                    let element = *lookup(assemble(element, *index))?;
+                    vec![element]
                 }
                 // 如果指定了码位
-                (None, Some(index)) => mapping
-                    .iter()
-                    .filter_map(|(key, value)| {
-                        if value.len() > *index {
-                            Some(assemble(key, *index))
-                        } else {
-                            None
+                (None, Some(index)) => {
+                    let mut elements = Vec::new();
+                    for (key, value) in mapping {
+                        let normalized = value.normalize();
+                        if let Some(MappedKey::Ascii(_)) = normalized.get(*index) {
+                            let element = *lookup(assemble(key, *index))?;
+                            elements.push(element);
                         }
-                    })
-                    .collect(),
+                    }
+                    elements
+                }
                 // 如果指定了元素
                 (Some(element), None) => {
                     let mapped = mapping
                         .get(element)
-                        .expect(&format!("约束中的元素 {} 不在键盘映射中", element));
-                    (0..mapped.len())
-                        .map(|index| assemble(element, index))
-                        .collect()
+                        .ok_or(format!("约束中的元素 {element} 不在键盘映射中"))?;
+                    let mut elements = Vec::new();
+                    for (i, x) in mapped.normalize().iter().enumerate() {
+                        if let MappedKey::Ascii(_) = x {
+                            elements.push(*lookup(assemble(element, i))?);
+                        }
+                    }
+                    elements
                 }
-                _ => panic!("约束必须至少提供 element 或 index 之一"),
+                _ => return Err("约束必须至少提供 element 或 index 之一".into()),
             };
             for element in elements {
-                let element_number = lookup(&element);
                 if let Some(keys) = keys {
-                    narrowed.insert(
-                        element_number,
-                        keys.iter()
-                            .map(|x| *representation.key_repr.get(x).unwrap())
-                            .collect(),
-                    );
+                    let mut transformed = Vec::new();
+                    for key in keys {
+                        transformed.push(
+                            *representation
+                                .key_repr
+                                .get(key)
+                                .ok_or(format!("约束中的键 {key} 不在键盘映射中"))?,
+                        );
+                    }
+                    if transformed.len() == 0 {
+                        return Err("约束中的键列表不能为空".into());
+                    }
+                    narrowed.insert(element, transformed);
                 } else {
-                    fixed.insert(element_number);
+                    fixed.insert(element);
                 }
             }
         }
-        Constraints {
+        Ok(Constraints {
             alphabet,
             elements,
             fixed,
             narrowed,
-        }
+        })
     }
 
     fn get_movable_element(&self) -> usize {
@@ -146,9 +157,7 @@ impl Constraints {
             .narrowed
             .get(&movable_element)
             .unwrap_or(&self.alphabet);
-        let key2 = destinations
-            .choose(&mut rng)
-            .expect(&format!("元素 {} 无法移动", movable_element));
+        let key2 = destinations.choose(&mut rng).unwrap(); // 在编译约束时已经确保了这里一定有可行的移动位置
         for (element, key) in map.iter().enumerate() {
             if (*key == key1 || *key == *key2) && !self.fixed.contains(&element) {
                 let destination = if *key == *key2 { key1 } else { *key2 };
@@ -171,9 +180,7 @@ impl Constraints {
             .narrowed
             .get(&movable_element)
             .unwrap_or(&self.alphabet);
-        let key = destinations
-            .choose(&mut rng)
-            .expect(&format!("元素 {} 无法移动", movable_element));
+        let key = destinations.choose(&mut rng).unwrap(); // 在编译约束时已经确保了这里一定有可行的移动位置
         next[movable_element] = *key;
         next
     }

@@ -2,6 +2,7 @@ pub mod config;
 pub mod constraints;
 pub mod data;
 pub mod encoder;
+pub mod error;
 pub mod interface;
 pub mod metaheuristics;
 pub mod objectives;
@@ -136,20 +137,20 @@ impl Interface for WebInterface {
     }
 }
 
-fn prepare(js_input: JsValue) -> Result<(Representation, Encoder, Assets), JsValue> {
+fn prepare(js_input: JsValue) -> Result<(Representation, Encoder, Assets), JsError> {
     let Input {
         config,
         characters,
         words,
         assets,
     } = serde_wasm_bindgen::from_value(js_input)?;
-    let representation = Representation::new(config);
-    let encoder = Encoder::new(&representation, characters, words, &assets);
+    let representation = Representation::new(config)?;
+    let encoder = Encoder::new(&representation, characters, words, &assets)?;
     Ok((representation, encoder, assets))
 }
 
 #[wasm_bindgen]
-pub fn encode(js_input: JsValue) -> Result<JsValue, JsValue> {
+pub fn encode(js_input: JsValue) -> Result<JsValue, JsError> {
     console_error_panic_hook::set_once();
     let (representation, encoder, _) = prepare(js_input)?;
     let codes = encoder.encode(&representation.initial, &representation);
@@ -157,23 +158,24 @@ pub fn encode(js_input: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn evaluate(js_input: JsValue) -> Result<JsValue, JsValue> {
+pub fn evaluate(js_input: JsValue) -> Result<JsValue, JsError> {
     console_error_panic_hook::set_once();
     let (representation, encoder, assets) = prepare(js_input)?;
     let mut buffer = encoder.init_buffer();
     let objective = Objective::new(&representation, encoder, assets);
-    let (metric, _) = objective.evaluate(&representation.initial, &mut buffer);
+    let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
     let metric = format!("{}", metric);
     Ok(to_value(&metric)?)
 }
 
 #[wasm_bindgen]
-pub fn optimize(js_input: JsValue, post_message: Function) -> Result<(), JsValue> {
+pub fn optimize(js_input: JsValue, post_message: Function) -> Result<(), JsError> {
     console_error_panic_hook::set_once();
     let (representation, encoder, assets) = prepare(js_input)?;
-    let buffer = encoder.init_buffer();
+    let mut buffer = encoder.init_buffer();
     let objective = Objective::new(&representation, encoder, assets);
-    let constraints = Constraints::new(&representation);
+    let constraints = Constraints::new(&representation)?;
+    let _ = objective.evaluate(&representation.initial, &mut buffer)?;
     let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer);
     let web_interface = WebInterface::new(post_message);
     problem.solve(&web_interface);

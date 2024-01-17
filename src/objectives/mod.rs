@@ -8,6 +8,7 @@ pub mod metric;
 use crate::config::ObjectiveConfig;
 use crate::config::PartialWeights;
 use crate::encoder::Encoder;
+use crate::error::Error;
 use crate::representation::Assets;
 use crate::representation::Buffer;
 use crate::representation::Codes;
@@ -47,7 +48,8 @@ impl Objective {
                 .map(|word| *assets.word_frequency.get(word).unwrap_or(&0))
                 .collect()
         });
-        let ideal_distribution = representation.generate_ideal_distribution(&assets.key_distribution);
+        let ideal_distribution =
+            representation.generate_ideal_distribution(&assets.key_distribution);
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
         let new_pair_equivalence =
             representation.transform_new_pair_equivalence(&assets.pair_equivalence);
@@ -131,7 +133,7 @@ impl Objective {
             // 杏码式用指当量，只统计最初的1码
             if let Some(_) = weights.new_key_equivalence {
                 total_new_keys_equivalence +=
-                *frequency / self.ideal_distribution[*code % self.encoder.radix];
+                    *frequency / self.ideal_distribution[*code % self.encoder.radix];
             }
             // 杏码式用指当量改
             if let Some(_) = weights.new_key_equivalence_modified {
@@ -294,7 +296,11 @@ impl Objective {
     }
 
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
-    pub fn evaluate(&self, candidate: &KeyMap, buffer: &mut Buffer) -> (Metric, f64) {
+    pub fn evaluate(
+        &self,
+        candidate: &KeyMap,
+        buffer: &mut Buffer,
+    ) -> Result<(Metric, f64), Error> {
         let mut loss = 0.0;
         let mut metric = Metric {
             characters: None,
@@ -316,16 +322,18 @@ impl Objective {
             );
             loss += accum;
             metric.characters = Some(partial);
-            if let Some(character_reduced) = &self.config.characters_short {
+            if let Some(characters_short) = &self.config.characters_short {
+                let characters_short_buffer =
+                    buffer.characters_short.as_mut().ok_or("简码模式未定义")?;
                 self.encoder.encode_short(
                     &buffer.characters_full,
-                    buffer.characters_short.as_mut().expect("无简码定义"),
+                    characters_short_buffer,
                     &mut occupation,
                 );
                 let (partial, accum) = self.evaluate_partial(
-                    buffer.characters_short.as_mut().expect("无简码定义"),
+                    characters_short_buffer,
                     &self.character_frequencies,
-                    character_reduced,
+                    characters_short,
                 );
                 loss += accum;
                 metric.characters_reduced = Some(partial);
@@ -333,13 +341,14 @@ impl Objective {
         }
         if let Some(words) = &self.config.words_full {
             let mut occupation: Occupation = vec![false; self.encoder.get_space()];
+            let words_buffer = buffer.words_full.as_mut().ok_or("组词规则未定义")?;
             self.encoder
-                .encode_words_full(&candidate, buffer.words_full.as_mut().expect("无词语定义"), &mut occupation);
+                .encode_words_full(&candidate, words_buffer, &mut occupation);
             let (partial, accum) =
-                self.evaluate_partial(buffer.words_full.as_ref().expect("无词语定义"), self.word_frequencies.as_ref().expect("无词语定义"), words);
+                self.evaluate_partial(&words_buffer, self.word_frequencies.as_ref().unwrap(), words);
             loss += accum;
             metric.words = Some(partial);
         }
-        (metric, loss)
+        Ok((metric, loss))
     }
 }

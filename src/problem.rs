@@ -48,7 +48,7 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     }
 
     fn rank_candidate(&mut self, candidate: &Solution) -> (Metric, f64) {
-        let (metric, loss) = self.objective.evaluate(candidate, &mut self.buffer);
+        let (metric, loss) = self.objective.evaluate(candidate, &mut self.buffer).unwrap();
         return (metric, loss);
     }
 
