@@ -2,7 +2,7 @@
 
 all: build
 
-assets: assetsdir character_frequency.txt word_frequency.txt key_equivalence.txt pair_equivalence.txt
+assets: assetsdir character_frequency.txt word_frequency.txt key_distribution.txt pair_equivalence.txt
 
 assetsdir:
 	mkdir -p assets
