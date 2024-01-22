@@ -37,7 +37,11 @@ pub type Frequencies = Vec<f64>;
 /// 目标函数
 impl Objective {
     /// 通过传入配置表示、编码器和共用资源来构造一个目标函数
-    pub fn new(representation: &Representation, encoder: Encoder, assets: Assets) -> Self {
+    pub fn new(
+        representation: &Representation,
+        encoder: Encoder,
+        assets: Assets,
+    ) -> Result<Self, Error> {
         let character_frequencies: Vec<_> = encoder
             .characters
             .iter()
@@ -53,15 +57,17 @@ impl Objective {
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
         let new_pair_equivalence =
             representation.transform_new_pair_equivalence(&assets.pair_equivalence);
-        Self {
+        let config = representation.config.optimization.as_ref().ok_or("优化配置不存在")?;
+        let objective = Self {
             encoder,
-            config: representation.config.optimization.objective.clone(),
+            config: config.objective.clone(),
             character_frequencies: Self::normalize_frequencies(&character_frequencies),
             word_frequencies: word_frequencies.as_ref().map(Self::normalize_frequencies),
             ideal_distribution,
             pair_equivalence,
             new_pair_equivalence,
-        }
+        };
+        Ok(objective)
     }
 
     fn normalize_frequencies(occurrences: &Vec<u64>) -> Frequencies {
@@ -344,8 +350,11 @@ impl Objective {
             let words_buffer = buffer.words_full.as_mut().ok_or("组词规则未定义")?;
             self.encoder
                 .encode_words_full(&candidate, words_buffer, &mut occupation);
-            let (partial, accum) =
-                self.evaluate_partial(&words_buffer, self.word_frequencies.as_ref().unwrap(), words);
+            let (partial, accum) = self.evaluate_partial(
+                &words_buffer,
+                self.word_frequencies.as_ref().unwrap(),
+                words,
+            );
             loss += accum;
             metric.words = Some(partial);
         }

@@ -25,16 +25,16 @@ fn main() -> Result<(), Error> {
         }
         Command::Evaluate => {
             let mut buffer = encoder.init_buffer();
-            let objective = Objective::new(&representation, encoder, assets);
+            let objective = Objective::new(&representation, encoder, assets)?;
             let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
             Cli::report_metric(metric);
         }
         Command::Optimize => {
             let buffer = encoder.init_buffer();
-            let objective = Objective::new(&representation, encoder, assets);
+            let objective = Objective::new(&representation, encoder, assets)?;
             let constraints = Constraints::new(&representation)?;
             let mut problem =
-                ElementPlacementProblem::new(representation, constraints, objective, buffer);
+                ElementPlacementProblem::new(representation, constraints, objective, buffer)?;
             problem.solve(&cli);
         }
     }

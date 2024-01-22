@@ -315,7 +315,7 @@ impl Representation {
     /// 将编码空间内所有的编码组合预先计算好速度当量
     /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
     pub fn transform_pair_equivalence(&self, pair_equivalence: &HashMap<String, f64>) -> Vec<f64> {
-        let mut result: Vec<f64> = vec![];
+        let mut result: Vec<f64> = Vec::with_capacity(self.get_space());
         for code in 0..self.get_space() {
             let chars = self.repr_code(code);
             if chars.len() < 2 {
@@ -338,7 +338,7 @@ impl Representation {
         &self,
         pair_equivalence: &HashMap<String, f64>,
     ) -> Vec<f64> {
-        let mut result: Vec<f64> = vec![];
+        let mut result: Vec<f64> = Vec::with_capacity(self.get_space());
         for code in 0..self.get_space() {
             let chars = self.repr_code(code);
             if chars.len() < 2 {
@@ -346,17 +346,21 @@ impl Representation {
                 continue;
             }
             //遍历所有组合
-            let mut combinations: Vec<String> = vec!["".to_string()];
-            for i in 1..chars.len() - 1 {
-                for j in 0..combinations.len() {
-                    combinations.push(format!("{}{}", combinations[j], chars[i]));
-                }
-            }
+            let combinations = 2_usize.pow(chars.len() as u32);
+            let start = 2_usize.pow(chars.len() as u32 - 1) + 1;
             let mut total = 0.0;
-            for s in combinations.iter() {
+            for s in (start..combinations).step_by(2) {
                 let mut thistime = 0.0;
-                let s_chars: Vec<char> = format!("{}{}{}", chars[0], s, chars[chars.len() - 1])
-                    .chars()
+                let s_chars: Vec<char> = chars
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, char)| {
+                        if s & (1 << index) != 0 {
+                            Some(*char)
+                        } else {
+                            None
+                        }
+                    })
                     .collect();
                 for i in 0..(s_chars.len() - 1) {
                     let pair: String = [s_chars[i], s_chars[i + 1]].iter().collect();

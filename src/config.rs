@@ -3,49 +3,74 @@
 //! 这部分内容太多，就不一一注释了。后期会写一个「`config.yaml` 详解」来统一解释各种配置文件的字段。
 //! 
 
-use crate::{
-    data::Character,
-    metaheuristics::simulated_annealing,
-};
+use crate::data::{PrimitiveRepertoire, Glyph};
+use crate::metaheuristics::simulated_annealing::Parameters;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
+
+// config.info begin
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Info {
+    pub name: String,
+    pub version: Option<String>,
+    pub author: Option<String>,
+    pub description: Option<String>,
+}
+// config.info end
+
+// config.data begin
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Data {
+    pub repertoire: Option<PrimitiveRepertoire>,
+    pub glyph_customization: Option<HashMap<String, Glyph>>,
+    pub reading_customization: Option<HashMap<String, Vec<String>>>,
+    pub tags: Option<Vec<String>>
+}
+// config.data end
+
+// config.analysis begin
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Analysis {
+    pub classifier: Option<HashMap<String, usize>>,
+    pub degenerator: Option<Degenerator>,
+    pub selector: Option<Vec<String>>,
+    pub customize: Option<HashMap<String, Vec<String>>>,
+    pub strong: Option<Vec<String>>,
+    pub weak: Option<Vec<String>>,
+}
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DataConfig {
-    pub repertoire: Option<BTreeMap<String, Character>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum WordRule {
-    EqualRule {
-        length_equal: usize,
-        formula: String,
-    },
-    RangeRule {
-        length_in_range: (usize, usize),
-        formula: String,
-    },
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DegeneratorConfig {
-    pub feature: Option<BTreeMap<String, String>>,
+pub struct Degenerator {
+    pub feature: Option<HashMap<String, String>>,
     pub no_cross: Option<bool>,
 }
+// config.analysis end
 
+// config.algebra begin
+type Algebra = HashMap<String, Vec<Rule>>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Rule {
+    Xform { from: String, to: String },
+    Xlit { from: String, to: String }
+}
+// config.algebra end
+
+// config.form begin
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AnalysisConfig {
-    pub classifier: Option<BTreeMap<String, usize>>,
-    pub degenerator: Option<DegeneratorConfig>,
-    pub selector: Option<Vec<String>>,
-    pub customize: Option<BTreeMap<String, Vec<String>>>,
+pub struct FormConfig {
+    pub alphabet: String,
+    pub mapping_type: Option<usize>,
+    pub mapping: HashMap<String, Mapped>,
+    pub grouping: Option<HashMap<String, String>>,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -54,21 +79,30 @@ pub enum MappedKey {
     Reference { element: String, index: usize }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Mapped {
     Basic(String),
     Advanced(Vec<MappedKey>)
 }
+// config.form end
 
+// config.encoder begin
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FormConfig {
-    pub alphabet: String,
-    pub mapping_type: Option<usize>,
-    pub mapping: HashMap<String, Mapped>,
-    pub grouping: Option<HashMap<String, String>>,
+pub struct EncoderConfig {
+    // 全局
+    pub max_length: usize,
+    pub select_keys: Option<Vec<char>>,
+    pub auto_select_length: Option<usize>,
+    pub auto_select_pattern: Option<String>,
+    // 单字全码
+    pub sources: HashMap<String, NodeConfig>,
+    pub conditions: HashMap<String, EdgeConfig>,
+    // 单字简码
+    pub short_code_schemes: Option<Vec<ShortCodeConfig>>,
+    // 词语全码
+    pub rules: Option<Vec<WordRule>>,
 }
 
 #[skip_serializing_none]
@@ -112,23 +146,21 @@ pub struct ShortCodeConfig {
     pub select_keys: Option<Vec<char>>,
 }
 
-#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EncoderConfig {
-    // 全局
-    pub max_length: usize,
-    pub select_keys: Option<Vec<char>>,
-    pub auto_select_length: Option<usize>,
-    pub auto_select_pattern: Option<String>,
-    // 单字全码
-    pub sources: Option<BTreeMap<String, NodeConfig>>,
-    pub conditions: Option<BTreeMap<String, EdgeConfig>>,
-    // 单字简码
-    pub short_code_schemes: Option<Vec<ShortCodeConfig>>,
-    // 词语全码
-    pub rules: Option<Vec<WordRule>>,
+#[serde(untagged)]
+pub enum WordRule {
+    EqualRule {
+        length_equal: usize,
+        formula: String,
+    },
+    RangeRule {
+        length_in_range: (usize, usize),
+        formula: String,
+    },
 }
+// config.encoder end
 
+// config.optimization begin
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelWeights {
     pub length: usize,
@@ -208,7 +240,7 @@ pub struct SearchConfig {
 pub struct SolverConfig {
     pub algorithm: String,
     pub runtime: Option<u64>,
-    pub parameters: Option<simulated_annealing::Parameters>,
+    pub parameters: Option<Parameters>,
     pub report_after: Option<f64>,
     pub search_method: Option<SearchConfig>,
 }
@@ -220,24 +252,7 @@ pub struct OptimizationConfig {
     pub constraints: Option<ConstraintsConfig>,
     pub metaheuristic: SolverConfig,
 }
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Info {
-    pub name: String,
-    pub version: String,
-    pub author: String,
-    pub description: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum Algebra {
-    Xform { from: String, to: String },
-    Xlit { from: String, to: String }
-}
-
-type AlgebraConfig = BTreeMap<String, Vec<Algebra>>;
+// config.optimization end
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,11 +260,11 @@ pub struct Config {
     pub version: Option<String>,
     #[serialize_always] // JavaScript null
     pub source: Option<String>,
-    pub info: Option<Info>,
-    pub data: Option<DataConfig>,
-    pub analysis: Option<AnalysisConfig>,
-    pub algebra: Option<AlgebraConfig>,
+    pub info: Info,
+    pub data: Option<Data>,
+    pub analysis: Option<Analysis>,
+    pub algebra: Option<Algebra>,
     pub form: FormConfig,
     pub encoder: EncoderConfig,
-    pub optimization: OptimizationConfig,
+    pub optimization: Option<OptimizationConfig>,
 }

@@ -17,11 +17,12 @@ use crate::{
     objectives::Objective,
     representation::{Assets, Representation},
 };
+use console_error_panic_hook::set_once;
 use interface::Interface;
 use js_sys::Function;
 use representation::{RawSequenceMap, WordList};
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::to_value;
+use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
 use wasm_bindgen::prelude::*;
 
@@ -143,15 +144,22 @@ fn prepare(js_input: JsValue) -> Result<(Representation, Encoder, Assets), JsErr
         characters,
         words,
         assets,
-    } = serde_wasm_bindgen::from_value(js_input)?;
+    } = from_value(js_input)?;
     let representation = Representation::new(config)?;
     let encoder = Encoder::new(&representation, characters, words, &assets)?;
     Ok((representation, encoder, assets))
 }
 
 #[wasm_bindgen]
+pub fn validate(js_config: JsValue) -> Result<(), JsError> {
+    set_once();
+    let _: Config = from_value(js_config)?;
+    Ok(())
+}
+
+#[wasm_bindgen]
 pub fn encode(js_input: JsValue) -> Result<JsValue, JsError> {
-    console_error_panic_hook::set_once();
+    set_once();
     let (representation, encoder, _) = prepare(js_input)?;
     let codes = encoder.encode(&representation.initial, &representation);
     Ok(to_value(&codes)?)
@@ -159,10 +167,10 @@ pub fn encode(js_input: JsValue) -> Result<JsValue, JsError> {
 
 #[wasm_bindgen]
 pub fn evaluate(js_input: JsValue) -> Result<JsValue, JsError> {
-    console_error_panic_hook::set_once();
+    set_once();
     let (representation, encoder, assets) = prepare(js_input)?;
     let mut buffer = encoder.init_buffer();
-    let objective = Objective::new(&representation, encoder, assets);
+    let objective = Objective::new(&representation, encoder, assets)?;
     let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
     let metric = format!("{}", metric);
     Ok(to_value(&metric)?)
@@ -170,13 +178,13 @@ pub fn evaluate(js_input: JsValue) -> Result<JsValue, JsError> {
 
 #[wasm_bindgen]
 pub fn optimize(js_input: JsValue, post_message: Function) -> Result<(), JsError> {
-    console_error_panic_hook::set_once();
+    set_once();
     let (representation, encoder, assets) = prepare(js_input)?;
     let mut buffer = encoder.init_buffer();
-    let objective = Objective::new(&representation, encoder, assets);
+    let objective = Objective::new(&representation, encoder, assets)?;
     let constraints = Constraints::new(&representation)?;
     let _ = objective.evaluate(&representation.initial, &mut buffer)?;
-    let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer);
+    let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer)?;
     let web_interface = WebInterface::new(post_message);
     problem.solve(&web_interface);
     Ok(())
