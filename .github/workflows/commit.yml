@@ -60,9 +60,13 @@ jobs:
           cp target/universal2-apple-darwin/release/chai dist/chai
           cp target/x86_64-pc-windows-msvc/release/chai.exe dist/
           cp target/x86_64-pc-windows-msvc/release/chai.pdb dist/
-          cp README.md config.md LICENSE dist/
+          cp *.md LICENSE dist/
+
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%y%m%d')"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: chai
+          name: "chai-${{ steps.date.outputs.date }}"
           path: dist
