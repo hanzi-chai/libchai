@@ -16,7 +16,12 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [profile.release]
-debug = true
+strip = true
+lto = true
+
+[profile.benchmark]
+inherits = "dev"
+opt-level = 3
 
 [dependencies]
 rand = "0.8.5"
