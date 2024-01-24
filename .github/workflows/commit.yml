@@ -59,12 +59,11 @@ jobs:
           cp target/x86_64-unknown-linux-musl/release/chai dist/chai-musl
           cp target/universal2-apple-darwin/release/chai dist/chai
           cp target/x86_64-pc-windows-msvc/release/chai.exe dist/
-          cp target/x86_64-pc-windows-msvc/release/chai.pdb dist/
           cp *.md LICENSE dist/
 
       - name: Get current date
         id: date
-        run: echo "::set-output name=date::$(date +'%y%m%d')"
+        run: echo "date=$(date +'%y%m%d')" >> $GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v4
         with:
