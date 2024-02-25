@@ -39,6 +39,7 @@ pub struct Block {
     pub strokes: usize,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[allow(non_snake_case)]
