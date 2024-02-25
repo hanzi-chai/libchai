@@ -103,6 +103,8 @@ pub struct EncoderConfig {
     pub short_code_schemes: Option<Vec<ShortCodeConfig>>,
     // 词语全码
     pub rules: Option<Vec<WordRule>>,
+    // 词语简码
+    pub word_short_code_schemes: Option<Vec<ShortCodeConfig>>,
 }
 
 #[skip_serializing_none]

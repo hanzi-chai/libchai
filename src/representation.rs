@@ -5,10 +5,25 @@ use crate::{
     error::Error,
 };
 use regex::Regex;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{cmp::Reverse, collections::HashMap};
 
-pub type RawSequenceMap = HashMap<char, String>;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Assemble {
+    char: char,
+    sequence: String,
+    #[serde(default = "Assemble::importance_default")]
+    importance: u64,
+}
+
+impl Assemble {
+    const fn importance_default() -> u64 {
+        100
+    }
+}
+
+pub type RawSequenceMap = Vec<Assemble>;
 pub type WordList = Vec<String>;
 pub type KeyDistribution = HashMap<char, f64>;
 pub type PairEquivalence = HashMap<String, f64>;
@@ -28,7 +43,10 @@ pub type Element = usize;
 /// 字或词的拆分序列
 pub type Sequence = Vec<Element>;
 
-/// 字到拆分序列的映射
+/// 字到拆分序列（至少有一个，可能有多个）的映射
+pub type WeightedSequences = Vec<(char, Sequence, u64)>;
+
+/// 字到拆分序列的映射（多音字取最高频音）
 pub type SequenceMap = HashMap<char, Sequence>;
 
 /// 编码用无符号整数表示
@@ -43,8 +61,40 @@ pub type Key = usize;
 /// 元素映射用一个数组表示，下标是元素
 pub type KeyMap = Vec<Key>;
 
-/// 每个编码上占据了几个候选
-pub type Occupation = Vec<bool>;
+/// 编码是否已被占据
+/// 用一个数组和一个哈希集合来表示，数组用来表示四码以内的编码，哈希集合用来表示四码以上的编码
+pub struct Occupation {
+    pub vector: Vec<bool>,
+    pub hashset: FxHashSet<usize>,
+}
+
+impl Occupation {
+    pub fn new(length: usize) -> Self {
+        let vector = vec![false; length];
+        let hashset = FxHashSet::default();
+        Self { vector, hashset }
+    }
+
+    pub fn insert(&mut self, index: usize) {
+        if index < self.vector.len() {
+            self.vector[index] = true;
+        } else {
+            self.hashset.insert(index);
+        }
+    }
+
+    pub fn contains(&self, index: usize) -> bool {
+        if index < self.vector.len() {
+            self.vector[index]
+        } else {
+            self.hashset.contains(&index)
+        }
+    }
+}
+
+pub type AutoSelect = Vec<bool>;
+
+pub const MAX_COMBINATION_LENGTH: usize = 4;
 
 #[derive(Debug, Serialize)]
 pub struct Entry {
@@ -64,16 +114,19 @@ pub struct Buffer {
     pub characters_full: Codes,
     pub characters_short: Option<Codes>,
     pub words_full: Option<Codes>,
+    pub words_short: Option<Codes>,
+    pub auto_select: AutoSelect,
 }
 
 /// 配置表示是对配置文件的进一步封装，除了保存一份配置文件本身之外，还根据配置文件的内容推导出用于各种转换的映射
+#[derive(Debug, Clone)]
 pub struct Representation {
     pub config: Config,
     pub initial: KeyMap,
-    pub element_repr: HashMap<String, Element>,
-    pub repr_element: HashMap<Element, String>,
-    pub key_repr: HashMap<char, Key>,
-    pub repr_key: HashMap<Key, char>,
+    pub element_repr: FxHashMap<String, Element>,
+    pub repr_element: FxHashMap<Element, String>,
+    pub key_repr: FxHashMap<char, Key>,
+    pub repr_key: FxHashMap<Key, char>,
     pub radix: usize,
     pub alphabet_radix: usize,
     pub select_keys: Vec<Key>,
@@ -132,13 +185,13 @@ impl Representation {
             usize,
             usize,
             Vec<Key>,
-            HashMap<char, Key>,
-            HashMap<Key, char>,
+            FxHashMap<char, Key>,
+            FxHashMap<Key, char>,
         ),
         Error,
     > {
-        let mut key_repr: HashMap<char, Key> = HashMap::new();
-        let mut repr_key: HashMap<Key, char> = HashMap::new();
+        let mut key_repr: FxHashMap<char, Key> = FxHashMap::default();
+        let mut repr_key: FxHashMap<Key, char> = FxHashMap::default();
         let mut index = 1_usize;
         for key in config.form.alphabet.chars() {
             if key_repr.contains_key(&key) {
@@ -181,11 +234,18 @@ impl Representation {
     /// 读取元素映射，然后把每一个元素转换成无符号整数，从而可以用向量来表示一个元素布局，向量的下标就是元素对应的数
     pub fn transform_keymap(
         config: &Config,
-        key_repr: &HashMap<char, Key>,
-    ) -> Result<(KeyMap, HashMap<String, Element>, HashMap<Element, String>), Error> {
+        key_repr: &FxHashMap<char, Key>,
+    ) -> Result<
+        (
+            KeyMap,
+            FxHashMap<String, Element>,
+            FxHashMap<Element, String>,
+        ),
+        Error,
+    > {
         let mut keymap: KeyMap = Vec::new();
-        let mut forward_converter: HashMap<String, usize> = HashMap::new();
-        let mut reverse_converter: HashMap<usize, String> = HashMap::new();
+        let mut forward_converter: FxHashMap<String, usize> = FxHashMap::default();
+        let mut reverse_converter: FxHashMap<usize, String> = FxHashMap::default();
         for (element, mapped) in &config.form.mapping {
             let normalized = mapped.normalize();
             for (index, mapped_key) in normalized.iter().enumerate() {
@@ -210,13 +270,19 @@ impl Representation {
     pub fn transform_elements(
         &self,
         raw_sequence_map: &RawSequenceMap,
-    ) -> Result<SequenceMap, Error> {
+    ) -> Result<(WeightedSequences, SequenceMap), Error> {
+        let mut weighted_sequences: WeightedSequences = Vec::new();
         let mut sequence_map = SequenceMap::new();
         let max_length = self.config.encoder.max_length;
-        if max_length >= 6 {
-            return Err("目前暂不支持最大码长大于等于 6 的方案计算！".into());
+        if max_length >= 8 {
+            return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
         }
-        for (char, sequence) in raw_sequence_map {
+        for Assemble {
+            char,
+            sequence,
+            importance,
+        } in raw_sequence_map
+        {
             let mut converted_elems: Vec<usize> = Vec::new();
             let sequence: Vec<_> = sequence.split(' ').map(|x| x.to_string()).collect();
             let length = sequence.len();
@@ -236,9 +302,16 @@ impl Representation {
                     .into());
                 }
             }
-            sequence_map.insert(*char, converted_elems);
+            weighted_sequences.push((*char, converted_elems, *importance));
         }
-        Ok(sequence_map)
+        weighted_sequences.sort_by_key(|x| (x.0, Reverse(x.2)));
+        for (char, sequence, _) in &weighted_sequences {
+            if sequence_map.contains_key(char) {
+                continue;
+            }
+            sequence_map.insert(*char, sequence.clone());
+        }
+        Ok((weighted_sequences, sequence_map))
     }
 
     /// 根据一个计算中得到的元素布局来生成一份新的配置文件，其余内容不变直接复制过来
@@ -281,7 +354,7 @@ impl Representation {
 
     /// 如前所述，建立了一个按键到整数的映射之后，可以将字符串看成具有某个进制的数。所以，给定一个数，也可以把它转化为字符串
     pub fn repr_code(&self, code: Code) -> Vec<char> {
-        let mut chars: Vec<char> = Vec::new();
+        let mut chars: Vec<char> = Vec::with_capacity(self.config.encoder.max_length);
         let mut remainder = code;
         while remainder > 0 {
             let k = remainder % self.radix as usize;
@@ -405,8 +478,8 @@ impl Representation {
         Ok(result)
     }
 
-    fn get_space(&self) -> usize {
-        let max_length = self.config.encoder.max_length;
+    pub fn get_space(&self) -> usize {
+        let max_length = self.config.encoder.max_length.min(MAX_COMBINATION_LENGTH);
         self.radix.pow(max_length as u32)
     }
 }

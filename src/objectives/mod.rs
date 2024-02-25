@@ -15,6 +15,7 @@ use crate::representation::Codes;
 use crate::representation::KeyMap;
 use crate::representation::Occupation;
 use crate::representation::Representation;
+use crate::representation::MAX_COMBINATION_LENGTH;
 use metric::LevelMetric1;
 use metric::LevelMetric2;
 use metric::Metric;
@@ -25,8 +26,6 @@ use std::iter::zip;
 pub struct Objective {
     config: ObjectiveConfig,
     encoder: Encoder,
-    character_frequencies: Frequencies,
-    word_frequencies: Option<Frequencies>,
     ideal_distribution: Vec<f64>,
     pair_equivalence: Vec<f64>,
     new_pair_equivalence: Vec<f64>,
@@ -42,16 +41,6 @@ impl Objective {
         encoder: Encoder,
         assets: Assets,
     ) -> Result<Self, Error> {
-        let character_frequencies: Vec<_> = encoder
-            .characters
-            .iter()
-            .map(|x| *assets.character_frequency.get(x).unwrap_or(&0))
-            .collect();
-        let word_frequencies: Option<Vec<_>> = encoder.words.as_ref().map(|x| {
-            x.iter()
-                .map(|word| *assets.word_frequency.get(word).unwrap_or(&0))
-                .collect()
-        });
         let ideal_distribution =
             representation.generate_ideal_distribution(&assets.key_distribution);
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
@@ -61,21 +50,11 @@ impl Objective {
         let objective = Self {
             encoder,
             config: config.objective.clone(),
-            character_frequencies: Self::normalize_frequencies(&character_frequencies),
-            word_frequencies: word_frequencies.as_ref().map(Self::normalize_frequencies),
             ideal_distribution,
             pair_equivalence,
             new_pair_equivalence,
         };
         Ok(objective)
-    }
-
-    fn normalize_frequencies(occurrences: &Vec<u64>) -> Frequencies {
-        let total_occurrences: u64 = occurrences.iter().sum();
-        occurrences
-            .iter()
-            .map(|x| *x as f64 / total_occurrences as f64)
-            .collect()
     }
 
     fn get_distribution_distance(
@@ -123,6 +102,8 @@ impl Objective {
         // 标记初始字符、结束字符的频率
         let mut chuma = vec![0 as f64; self.encoder.radix];
         let mut moma = vec![0.0 as f64; self.encoder.radix];
+        let max_pair_equivalence_index = self.pair_equivalence.len();
+        let segment = self.encoder.radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
         for (index, ((code, duplicated), frequency)) in zip(codes, frequencies).enumerate() {
             let length = code.ilog(self.encoder.radix) as usize + 1;
             // 按键分布
@@ -153,11 +134,19 @@ impl Objective {
                 moma[codelast] = moma[codelast] + *frequency;
             }
             if let Some(_) = weights.pair_equivalence {
-                total_pair_equivalence += self.pair_equivalence[*code] * *frequency;
+                let mut code = *code;
+                while code > self.encoder.radix {
+                    total_pair_equivalence += self.pair_equivalence[code % max_pair_equivalence_index] * *frequency;
+                    code /= segment;
+                }
                 total_pairs += (length - 1) as f64 * frequency;
             }
             if let Some(_) = weights.new_pair_equivalence {
-                total_new_pair_equivalence += self.new_pair_equivalence[*code] * *frequency;
+                let mut code = *code;
+                while code > self.encoder.radix {
+                    total_pair_equivalence += self.new_pair_equivalence[code % max_pair_equivalence_index] * *frequency;
+                    code /= segment;
+                }
                 total_new_keys += length as f64 * frequency;
             }
             // 重码
@@ -309,25 +298,25 @@ impl Objective {
     ) -> Result<(Metric, f64), Error> {
         let mut loss = 0.0;
         let mut metric = Metric {
-            characters: None,
-            words: None,
-            characters_reduced: None,
-            words_reduced: None,
+            characters_full: None,
+            words_full: None,
+            characters_short: None,
+            words_short: None,
         };
         if let Some(characters) = &self.config.characters_full {
-            let mut occupation: Occupation = vec![false; self.pair_equivalence.len()];
+            let mut occupation = Occupation::new(self.pair_equivalence.len());
             self.encoder.encode_character_full(
                 &candidate,
                 &mut buffer.characters_full,
-                &mut occupation,
+                &mut occupation
             );
             let (partial, accum) = self.evaluate_partial(
                 &buffer.characters_full,
-                &self.character_frequencies,
+                &self.encoder.characters_frequency,
                 characters,
             );
             loss += accum;
-            metric.characters = Some(partial);
+            metric.characters_full = Some(partial);
             if let Some(characters_short) = &self.config.characters_short {
                 let characters_short_buffer =
                     buffer.characters_short.as_mut().ok_or("简码模式未定义")?;
@@ -335,28 +324,46 @@ impl Objective {
                     &buffer.characters_full,
                     characters_short_buffer,
                     &mut occupation,
+                    self.encoder.short_code_schemes.as_ref().unwrap()
                 );
                 let (partial, accum) = self.evaluate_partial(
                     characters_short_buffer,
-                    &self.character_frequencies,
+                    &self.encoder.characters_frequency,
                     characters_short,
                 );
                 loss += accum;
-                metric.characters_reduced = Some(partial);
+                metric.characters_short = Some(partial);
             }
         }
         if let Some(words) = &self.config.words_full {
-            let mut occupation: Occupation = vec![false; self.encoder.get_space()];
+            let mut occupation = Occupation::new(self.pair_equivalence.len());
             let words_buffer = buffer.words_full.as_mut().ok_or("组词规则未定义")?;
             self.encoder
                 .encode_words_full(&candidate, words_buffer, &mut occupation);
             let (partial, accum) = self.evaluate_partial(
                 &words_buffer,
-                self.word_frequencies.as_ref().unwrap(),
+                self.encoder.words_frequency.as_ref().unwrap(),
                 words,
             );
             loss += accum;
-            metric.words = Some(partial);
+            metric.words_full = Some(partial);
+            if let Some(words_short) = &self.config.words_short {
+                let words_short_buffer =
+                    buffer.words_short.as_mut().ok_or("简码模式未定义")?;
+                self.encoder.encode_short(
+                    &words_buffer,
+                    words_short_buffer,
+                    &mut occupation,
+                    self.encoder.word_short_code_schemes.as_ref().unwrap()
+                );
+                let (partial, accum) = self.evaluate_partial(
+                    &words_short_buffer,
+                    self.encoder.words_frequency.as_ref().unwrap(),
+                    words_short,
+                );
+                loss += accum;
+                metric.words_short = Some(partial);
+            }
         }
         Ok((metric, loss))
     }

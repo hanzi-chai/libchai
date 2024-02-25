@@ -70,6 +70,7 @@ impl Cli {
         return ReaderBuilder::new()
             .delimiter(b'\t')
             .has_headers(false)
+            .flexible(true)
             .from_path(path)
             .unwrap();
     }
@@ -84,7 +85,7 @@ impl Cli {
             .elements
             .clone()
             .unwrap_or(PathBuf::from("elements.txt"));
-        let elements: HashMap<char, String> = Self::get_reader(elemets_path)
+        let elements: RawSequenceMap = Self::get_reader(elemets_path)
             .deserialize()
             .map(|x| x.unwrap())
             .collect();
