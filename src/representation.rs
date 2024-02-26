@@ -1,7 +1,8 @@
 //! 内部数据结构的表示和定义
 
 use crate::{
-    config::{Config, Mapped, MappedKey},
+    config::{Config, Mapped, MappedKey, ShortCodeConfig},
+    encoder::{CompiledShortCodeConfig, Encoder},
     error::Error,
 };
 use regex::Regex;
@@ -33,6 +34,7 @@ pub type Frequency<T> = HashMap<T, u64>;
 pub struct Assets {
     pub character_frequency: Frequency<char>,
     pub word_frequency: Frequency<String>,
+    pub frequency: Frequency<String>,
     pub key_distribution: KeyDistribution,
     pub pair_equivalence: PairEquivalence,
 }
@@ -52,8 +54,24 @@ pub type SequenceMap = HashMap<char, Sequence>;
 /// 编码用无符号整数表示
 pub type Code = usize;
 
+///
+#[derive(Clone, Debug)]
+pub struct CodeInfo {
+    pub code: Code,
+    pub duplication: bool,
+}
+
+impl Default for CodeInfo {
+    fn default() -> Self {
+        Self {
+            code: 0,
+            duplication: false,
+        }
+    }
+}
+
 /// 一组编码
-pub type Codes = Vec<(Code, bool)>;
+pub type Codes = Vec<CodeInfo>;
 
 /// 按键用无符号整数表示
 pub type Key = usize;
@@ -115,7 +133,36 @@ pub struct Buffer {
     pub characters_short: Option<Codes>,
     pub words_full: Option<Codes>,
     pub words_short: Option<Codes>,
-    pub auto_select: AutoSelect,
+    pub all_full: Option<Codes>,
+    pub all_short: Option<Codes>,
+}
+
+impl Buffer {
+    pub fn new(encoder: &Encoder) -> Self {
+        let info = CodeInfo::default();
+        let mut buffer = Self {
+            characters_full: vec![info.clone(); encoder.characters_info.len()],
+            characters_short: None,
+            words_full: None,
+            words_short: None,
+            all_full: None,
+            all_short: None,
+        };
+        if encoder.short_code_schemes.is_some() {
+            buffer.characters_short = Some(vec![info.clone(); encoder.characters_info.len()]);
+        }
+        if let Some(words_info) = &encoder.words_info {
+            buffer.words_full = Some(vec![info.clone(); words_info.len()]);
+            if encoder.short_code_schemes.is_some() {
+                buffer.words_short = Some(vec![info.clone(); words_info.len()]);
+            }
+        }
+        if let Some(all_info) = &encoder.all_info {
+            buffer.all_full = Some(vec![info.clone(); all_info.len()]);
+            buffer.all_short = Some(vec![info.clone(); all_info.len()]);
+        }
+        buffer
+    }
 }
 
 /// 配置表示是对配置文件的进一步封装，除了保存一份配置文件本身之外，还根据配置文件的内容推导出用于各种转换的映射
@@ -476,6 +523,38 @@ impl Representation {
             result.push(is_matched || is_max_length);
         }
         Ok(result)
+    }
+
+    pub fn transform_schemes(
+        &self,
+        schemes: &Vec<ShortCodeConfig>,
+    ) -> Result<Vec<CompiledShortCodeConfig>, Error> {
+        let mut configs = Vec::new();
+        for scheme in schemes {
+            let prefix = scheme.prefix;
+            let count = scheme.count.unwrap_or(1);
+            let select_keys = if let Some(keys) = &scheme.select_keys {
+                let mut transformed_keys = Vec::new();
+                for key in keys {
+                    let transformed_key = self
+                        .key_repr
+                        .get(&key)
+                        .ok_or(format!("简码的选择键 {key} 不在全局选择键中"))?;
+                    transformed_keys.push(*transformed_key);
+                }
+                transformed_keys
+            } else {
+                self.select_keys.clone()
+            };
+            if count as usize > select_keys.len() {
+                return Err("选重数量不能高于选择键数量".into());
+            }
+            configs.push(CompiledShortCodeConfig {
+                prefix,
+                select_keys: select_keys[..count].to_vec(),
+            });
+        }
+        Ok(configs)
     }
 
     pub fn get_space(&self) -> usize {

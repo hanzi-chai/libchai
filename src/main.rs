@@ -4,6 +4,7 @@
 //! 
 //! 具体用法详见 README.md 和 config.md。
 
+use chai::representation::Buffer;
 use chai::{representation::Representation, error::Error};
 use chai::encoder::Encoder;
 use chai::objectives::Objective;
@@ -24,13 +25,13 @@ fn main() -> Result<(), Error> {
             Cli::write_encode_results(codes);
         }
         Command::Evaluate => {
-            let mut buffer = encoder.init_buffer();
+            let mut buffer = Buffer::new(&encoder);
             let objective = Objective::new(&representation, encoder, assets)?;
             let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
             Cli::report_metric(metric);
         }
         Command::Optimize => {
-            let buffer = encoder.init_buffer();
+            let buffer = Buffer::new(&encoder);
             let objective = Objective::new(&representation, encoder, assets)?;
             let constraints = Constraints::new(&representation)?;
             let mut problem =

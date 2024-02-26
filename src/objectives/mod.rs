@@ -7,10 +7,12 @@ pub mod metric;
 
 use crate::config::ObjectiveConfig;
 use crate::config::PartialWeights;
+use crate::encoder::Encodable;
 use crate::encoder::Encoder;
 use crate::error::Error;
 use crate::representation::Assets;
 use crate::representation::Buffer;
+use crate::representation::CodeInfo;
 use crate::representation::Codes;
 use crate::representation::KeyMap;
 use crate::representation::Occupation;
@@ -46,7 +48,11 @@ impl Objective {
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
         let new_pair_equivalence =
             representation.transform_new_pair_equivalence(&assets.pair_equivalence);
-        let config = representation.config.optimization.as_ref().ok_or("优化配置不存在")?;
+        let config = representation
+            .config
+            .optimization
+            .as_ref()
+            .ok_or("优化配置不存在")?;
         let objective = Self {
             encoder,
             config: config.objective.clone(),
@@ -75,19 +81,20 @@ impl Objective {
     pub fn evaluate_partial(
         &self,
         codes: &Codes,
-        frequencies: &Frequencies,
+        frequencies: &Vec<Encodable>,
         weights: &PartialWeights,
     ) -> (PartialMetric, f64) {
+        let mut total_frequency = 0;
         // 初始化整体指标的变量
-        let mut total_duplication = 0.0;
-        let mut total_pairs = 0.0;
+        let mut total_duplication = 0;
+        let mut total_pairs = 0;
         // 新当量以键数为单位
-        let mut total_new_keys = 0.0;
+        let mut total_new_keys = 0;
         let mut total_new_keys_equivalence = 0.0;
         let mut total_new_keys_equivalence_modified = 0.0;
         let mut total_pair_equivalence = 0.0;
         let mut total_new_pair_equivalence = 0.0;
-        let mut total_levels = vec![0.0; weights.levels.as_ref().unwrap_or(&vec![]).len()];
+        let mut total_levels = vec![0; weights.levels.as_ref().unwrap_or(&vec![]).len()];
         // 初始化分级指标的变量
         let ntier = weights.tiers.as_ref().map_or(0, |v| v.len());
         let mut tiers_duplication = vec![0; ntier];
@@ -98,21 +105,27 @@ impl Objective {
                 tiers_levels.push(vec);
             }
         }
-        let mut distribution = vec![0.0; self.encoder.alphabet_radix];
+        let mut distribution = vec![0_u64; self.encoder.alphabet_radix];
         // 标记初始字符、结束字符的频率
-        let mut chuma = vec![0 as f64; self.encoder.radix];
-        let mut moma = vec![0.0 as f64; self.encoder.radix];
+        let mut chuma = vec![0_u64; self.encoder.radix];
+        let mut moma = vec![0_u64; self.encoder.radix];
         let max_pair_equivalence_index = self.pair_equivalence.len();
         let segment = self.encoder.radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
-        for (index, ((code, duplicated), frequency)) in zip(codes, frequencies).enumerate() {
-            let length = code.ilog(self.encoder.radix) as usize + 1;
+        for (index, (code_info, encodable)) in zip(codes, frequencies).enumerate() {
+            let frequency = encodable.frequency;
+            total_frequency += frequency;
+            let CodeInfo {
+                code,
+                duplication: duplicated,
+            } = code_info;
+            let length = code.ilog(self.encoder.radix) as u64 + 1;
             // 按键分布
             if weights.key_distribution.is_some() {
                 let mut current = *code;
                 while current > 0 {
                     let key = current % self.encoder.radix;
                     if key < distribution.len() {
-                        distribution[key] += *frequency;
+                        distribution[key] += frequency;
                     }
                     current /= self.encoder.radix;
                 }
@@ -120,7 +133,7 @@ impl Objective {
             // 杏码式用指当量，只统计最初的1码
             if let Some(_) = weights.new_key_equivalence {
                 total_new_keys_equivalence +=
-                    *frequency / self.ideal_distribution[*code % self.encoder.radix];
+                    frequency as f64 / self.ideal_distribution[*code % self.encoder.radix];
             }
             // 杏码式用指当量改
             if let Some(_) = weights.new_key_equivalence_modified {
@@ -130,24 +143,27 @@ impl Objective {
                 while codelast > self.encoder.radix {
                     codelast /= self.encoder.radix;
                 }
-                chuma[codefirst] = chuma[codefirst] + *frequency;
-                moma[codelast] = moma[codelast] + *frequency;
+                chuma[codefirst] = chuma[codefirst] + frequency;
+                moma[codelast] = moma[codelast] + frequency;
             }
             if let Some(_) = weights.pair_equivalence {
                 let mut code = *code;
                 while code > self.encoder.radix {
-                    total_pair_equivalence += self.pair_equivalence[code % max_pair_equivalence_index] * *frequency;
+                    total_pair_equivalence +=
+                        self.pair_equivalence[code % max_pair_equivalence_index] * frequency as f64;
                     code /= segment;
                 }
-                total_pairs += (length - 1) as f64 * frequency;
+                total_pairs += (length - 1) * frequency;
             }
             if let Some(_) = weights.new_pair_equivalence {
                 let mut code = *code;
                 while code > self.encoder.radix {
-                    total_pair_equivalence += self.new_pair_equivalence[code % max_pair_equivalence_index] * *frequency;
+                    total_new_pair_equivalence += self.new_pair_equivalence
+                        [code % max_pair_equivalence_index]
+                        * frequency as f64;
                     code /= segment;
                 }
-                total_new_keys += length as f64 * frequency;
+                total_new_keys += length * frequency;
             }
             // 重码
             if *duplicated {
@@ -164,7 +180,7 @@ impl Objective {
             // 简码
             if let Some(levels) = &weights.levels {
                 for (ilevel, level) in levels.iter().enumerate() {
-                    if level.length == length {
+                    if level.length == length as usize {
                         total_levels[ilevel] += frequency;
                     }
                 }
@@ -176,7 +192,7 @@ impl Objective {
                     if index < top {
                         if let Some(levels) = &tier.levels {
                             for (ilevel, level) in levels.iter().enumerate() {
-                                if level.length == length {
+                                if level.length == length as usize {
                                     tiers_levels[itier][ilevel] += 1;
                                 }
                             }
@@ -189,8 +205,9 @@ impl Objective {
             //将首末码与全局的首末码频率拼起来
             for i in 0..self.encoder.radix {
                 for j in 0..self.encoder.radix {
-                    total_new_keys_equivalence_modified +=
-                        self.pair_equivalence[j + i * self.encoder.radix] * chuma[i] * moma[j];
+                    total_new_keys_equivalence_modified += self.pair_equivalence
+                        [j + i * self.encoder.radix]
+                        * (chuma[i] * moma[j]) as f64;
                 }
             }
         }
@@ -209,42 +226,44 @@ impl Objective {
         let mut loss = 0.0;
         if let Some(key_distribution_weight) = weights.key_distribution {
             // 首先归一化
-            let total: f64 = distribution.iter().sum();
-            for i in distribution.iter_mut() {
-                *i /= total;
-            }
+            let total: u64 = distribution.iter().sum();
+            let distribution = distribution
+                .iter()
+                .map(|x| *x as f64 / total as f64)
+                .collect();
             let distance = self.get_distribution_distance(&distribution, &self.ideal_distribution);
             partial_metric.key_distribution = Some(distance);
             loss += distance * key_distribution_weight;
         }
         if let Some(equivalence_weight) = weights.new_key_equivalence {
-            let equivalence = total_new_keys_equivalence / total_new_keys;
+            let equivalence = total_new_keys_equivalence / total_new_keys as f64;
             partial_metric.new_key_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
         if let Some(equivalence_weight) = weights.new_key_equivalence_modified {
-            let equivalence = total_new_keys_equivalence_modified / total_new_keys;
+            let equivalence = total_new_keys_equivalence_modified / total_new_keys as f64;
             partial_metric.new_key_equivalence_modified = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
         if let Some(equivalence_weight) = weights.pair_equivalence {
-            let equivalence = total_pair_equivalence / total_pairs;
+            let equivalence = total_pair_equivalence / total_pairs as f64;
             partial_metric.pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
         if let Some(equivalence_weight) = weights.new_pair_equivalence {
-            let equivalence = total_new_pair_equivalence / total_new_keys;
+            let equivalence = total_new_pair_equivalence / total_new_keys as f64;
             partial_metric.new_pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
         if let Some(duplication_weight) = weights.duplication {
-            partial_metric.duplication = Some(total_duplication);
-            loss += total_duplication * duplication_weight;
+            let duplication = total_duplication as f64 / total_frequency as f64;
+            partial_metric.duplication = Some(duplication);
+            loss += duplication * duplication_weight;
         }
         if let Some(levels_weight) = &weights.levels {
             let mut levels: Vec<LevelMetric2> = Vec::new();
             for (ilevel, level) in levels_weight.iter().enumerate() {
-                let value = total_levels[ilevel];
+                let value = total_levels[ilevel] as f64 / total_frequency as f64;
                 loss += value * level.frequency;
                 levels.push(LevelMetric2 {
                     length: level.length,
@@ -303,18 +322,17 @@ impl Objective {
             characters_short: None,
             words_short: None,
         };
-        if let Some(characters) = &self.config.characters_full {
+        if let Some(characters_weight) = &self.config.characters_full {
+            let characters_info = &self.encoder.characters_info;
             let mut occupation = Occupation::new(self.pair_equivalence.len());
-            self.encoder.encode_character_full(
+            self.encoder.encode_full(
                 &candidate,
+                characters_info,
                 &mut buffer.characters_full,
-                &mut occupation
+                &mut occupation,
             );
-            let (partial, accum) = self.evaluate_partial(
-                &buffer.characters_full,
-                &self.encoder.characters_frequency,
-                characters,
-            );
+            let (partial, accum) =
+                self.evaluate_partial(&buffer.characters_full, characters_info, characters_weight);
             loss += accum;
             metric.characters_full = Some(partial);
             if let Some(characters_short) = &self.config.characters_short {
@@ -324,45 +342,60 @@ impl Objective {
                     &buffer.characters_full,
                     characters_short_buffer,
                     &mut occupation,
-                    self.encoder.short_code_schemes.as_ref().unwrap()
+                    self.encoder.short_code_schemes.as_ref().unwrap(),
                 );
                 let (partial, accum) = self.evaluate_partial(
                     characters_short_buffer,
-                    &self.encoder.characters_frequency,
+                    characters_info,
                     characters_short,
                 );
                 loss += accum;
                 metric.characters_short = Some(partial);
             }
         }
-        if let Some(words) = &self.config.words_full {
+        if let Some(words_weight) = &self.config.words_full {
+            let words_info = self.encoder.words_info.as_ref().unwrap();
             let mut occupation = Occupation::new(self.pair_equivalence.len());
             let words_buffer = buffer.words_full.as_mut().ok_or("组词规则未定义")?;
             self.encoder
-                .encode_words_full(&candidate, words_buffer, &mut occupation);
-            let (partial, accum) = self.evaluate_partial(
-                &words_buffer,
-                self.encoder.words_frequency.as_ref().unwrap(),
-                words,
-            );
+                .encode_full(&candidate, &words_info, words_buffer, &mut occupation);
+            let (partial, accum) = self.evaluate_partial(&words_buffer, &words_info, words_weight);
             loss += accum;
             metric.words_full = Some(partial);
             if let Some(words_short) = &self.config.words_short {
-                let words_short_buffer =
-                    buffer.words_short.as_mut().ok_or("简码模式未定义")?;
+                let words_short_buffer = buffer.words_short.as_mut().ok_or("简码模式未定义")?;
                 self.encoder.encode_short(
                     &words_buffer,
                     words_short_buffer,
                     &mut occupation,
-                    self.encoder.word_short_code_schemes.as_ref().unwrap()
+                    self.encoder.word_short_code_schemes.as_ref().unwrap(),
                 );
-                let (partial, accum) = self.evaluate_partial(
-                    &words_short_buffer,
-                    self.encoder.words_frequency.as_ref().unwrap(),
-                    words_short,
-                );
+                let (partial, accum) =
+                    self.evaluate_partial(&words_short_buffer, &words_info, words_short);
                 loss += accum;
                 metric.words_short = Some(partial);
+            }
+        }
+        if let Some(full) = &self.config.full {
+            let full_info = self.encoder.all_info.as_ref().unwrap();
+            let mut occupation = Occupation::new(self.pair_equivalence.len());
+            let full_buffer = buffer.all_full.as_mut().ok_or("全码模式未定义")?;
+            self.encoder
+                .encode_full(&candidate, &full_info, full_buffer, &mut occupation);
+            let (partial, accum) = self.evaluate_partial(&full_buffer, &full_info, full);
+            loss += accum;
+            metric.characters_full = Some(partial);
+            if let Some(short) = &self.config.short {
+                let short_buffer = buffer.all_short.as_mut().ok_or("简码模式未定义")?;
+                self.encoder.encode_short(
+                    &full_buffer,
+                    short_buffer,
+                    &mut occupation,
+                    self.encoder.short_code_schemes.as_ref().unwrap(),
+                );
+                let (partial, accum) = self.evaluate_partial(&short_buffer, &full_info, short);
+                loss += accum;
+                metric.characters_short = Some(partial);
             }
         }
         Ok((metric, loss))

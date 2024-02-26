@@ -45,6 +45,10 @@ pub struct Cli {
     #[arg(short, long, value_name = "FILE")]
     pub word_frequency: Option<PathBuf>,
 
+    /// 字词频表，默认为 assets 目录下的 frequency.txt
+    #[arg(short, long, value_name = "FILE")]
+    pub frequency: Option<PathBuf>,
+
     /// 单键用指当量表，默认为 assets 目录下的 key_equivalence.txt
     #[arg(short, long, value_name = "FILE")]
     pub key_distribution: Option<PathBuf>,
@@ -108,6 +112,14 @@ impl Cli {
             .deserialize()
             .map(|x| x.unwrap())
             .collect();
+        let f_path = self
+            .frequency
+            .clone()
+            .unwrap_or(assets_dir.join("frequency.txt"));
+        let frequency: HashMap<String, u64> = Self::get_reader(f_path)
+            .deserialize()
+            .map(|x| x.unwrap())
+            .collect();
         let keq_path = self
             .key_distribution
             .clone()
@@ -132,6 +144,7 @@ impl Cli {
         let assets = Assets {
             character_frequency,
             word_frequency,
+            frequency,
             key_distribution,
             pair_equivalence,
         };

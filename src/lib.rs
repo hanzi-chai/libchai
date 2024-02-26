@@ -20,7 +20,7 @@ use crate::{
 use console_error_panic_hook::set_once;
 use interface::Interface;
 use js_sys::Function;
-use representation::{RawSequenceMap, WordList};
+use representation::{Buffer, RawSequenceMap, WordList};
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
@@ -169,7 +169,7 @@ pub fn encode(js_input: JsValue) -> Result<JsValue, JsError> {
 pub fn evaluate(js_input: JsValue) -> Result<JsValue, JsError> {
     set_once();
     let (representation, encoder, assets) = prepare(js_input)?;
-    let mut buffer = encoder.init_buffer();
+    let mut buffer = Buffer::new(&encoder);
     let objective = Objective::new(&representation, encoder, assets)?;
     let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
     let metric = format!("{}", metric);
@@ -180,7 +180,7 @@ pub fn evaluate(js_input: JsValue) -> Result<JsValue, JsError> {
 pub fn optimize(js_input: JsValue, post_message: Function) -> Result<(), JsError> {
     set_once();
     let (representation, encoder, assets) = prepare(js_input)?;
-    let mut buffer = encoder.init_buffer();
+    let mut buffer = Buffer::new(&encoder);
     let objective = Objective::new(&representation, encoder, assets)?;
     let constraints = Constraints::new(&representation)?;
     let _ = objective.evaluate(&representation.initial, &mut buffer)?;

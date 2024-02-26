@@ -211,6 +211,8 @@ pub struct ObjectiveConfig {
     pub words_full: Option<PartialWeights>,
     pub characters_short: Option<PartialWeights>,
     pub words_short: Option<PartialWeights>,
+    pub full: Option<PartialWeights>,
+    pub short: Option<PartialWeights>,
 }
 
 #[skip_serializing_none]
