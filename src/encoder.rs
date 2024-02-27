@@ -275,7 +275,7 @@ impl Encoder {
                 let prefix = full % modulo;
                 for (index, key) in select_keys.iter().enumerate() {
                     // 如果是首选且不能自动上屏，就要加选择键
-                    let short = if index == 0 && *self.auto_select.get(*full).unwrap_or(&true) {
+                    let short = if index == 0 && *self.auto_select.get(prefix).unwrap_or(&true) {
                         prefix
                     } else {
                         prefix + key * modulo // 补选择键

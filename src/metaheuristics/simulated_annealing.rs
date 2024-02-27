@@ -8,7 +8,7 @@ use std::fmt::Display;
 use web_time::{Duration, Instant};
 
 /// 退火算法的参数，包括最高温、最低温、步数
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Parameters {
     pub t_max: f64,
     pub t_min: f64,

@@ -3,10 +3,10 @@
 //! 此模块基于 `clap` 包实现了命令行的参数设置，标准输出以及文件读写。
 //!
 
-use chai::config::Config;
-use chai::interface::Interface;
-use chai::objectives::metric::Metric;
-use chai::representation::{Assets, EncodeExport, Entry, RawSequenceMap, WordList};
+use crate::config::Config;
+use crate::interface::Interface;
+use crate::objectives::metric::Metric;
+use crate::representation::{Assets, EncodeExport, Entry, RawSequenceMap, WordList};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use csv::{Reader, ReaderBuilder};

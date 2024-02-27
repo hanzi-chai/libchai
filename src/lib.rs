@@ -8,6 +8,7 @@ pub mod metaheuristics;
 pub mod objectives;
 pub mod problem;
 pub mod representation;
+pub mod cli;
 
 use crate::constraints::Constraints;
 use crate::problem::ElementPlacementProblem;

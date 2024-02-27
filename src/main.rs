@@ -10,8 +10,7 @@ use chai::encoder::Encoder;
 use chai::objectives::Objective;
 use chai::constraints::Constraints;
 use chai::problem::ElementPlacementProblem;
-mod cli;
-use crate::cli::{Cli, Command};
+use chai::cli::{Cli, Command};
 use clap::Parser;
 
 fn main() -> Result<(), Error> {
