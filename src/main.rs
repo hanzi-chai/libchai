@@ -15,9 +15,9 @@ use clap::Parser;
 
 fn main() -> Result<(), Error> {
     let cli = Cli::parse();
-    let (config, characters, words, assets) = cli.prepare_file();
+    let (config, resource, assets) = cli.prepare_file();
     let representation = Representation::new(config)?;
-    let encoder = Encoder::new(&representation, characters, words, &assets)?;
+    let encoder = Encoder::new(&representation, resource, &assets)?;
     match cli.command {
         Command::Encode => {
             let codes = encoder.encode(&representation.initial, &representation);

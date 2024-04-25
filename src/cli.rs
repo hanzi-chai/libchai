@@ -6,7 +6,7 @@
 use crate::config::Config;
 use crate::interface::Interface;
 use crate::objectives::metric::Metric;
-use crate::representation::{Assets, EncodeExport, Entry, RawSequenceMap, WordList};
+use crate::representation::{AssembleList, Assets, EncodeExport, Entry, Frequency, Resource};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use csv::{Reader, ReaderBuilder};
@@ -29,20 +29,24 @@ pub struct Cli {
     /// 方案文件，默认为 config.yaml
     pub config: Option<PathBuf>,
 
-    /// 拆分表，默认为 elements.txt
+    /// 单字拆分表，默认为 elements.txt
     #[arg(short, long, value_name = "FILE")]
-    pub elements: Option<PathBuf>,
+    pub character_elements: Option<PathBuf>,
+
+    /// 词表，默认为 words.txt
+    #[arg(short, long, value_name = "FILE")]
+    pub word_elements: Option<PathBuf>,
 
     /// 词表，默认为 words.txt
     #[arg(long, value_name = "FILE")]
     pub words: Option<PathBuf>,
 
     /// 字频表，默认为 assets 目录下的 character_frequency.txt
-    #[arg(short, long, value_name = "FILE")]
+    #[arg(long, value_name = "FILE")]
     pub character_frequency: Option<PathBuf>,
 
     /// 词频表，默认为 assets 目录下的 word_frequency.txt
-    #[arg(short, long, value_name = "FILE")]
+    #[arg(long, value_name = "FILE")]
     pub word_frequency: Option<PathBuf>,
 
     /// 字词频表，默认为 assets 目录下的 frequency.txt
@@ -79,20 +83,30 @@ impl Cli {
             .unwrap();
     }
 
-    pub fn prepare_file(&self) -> (Config, RawSequenceMap, WordList, Assets) {
+    pub fn prepare_file(&self) -> (Config, Resource, Assets) {
         let config_path = self.config.clone().unwrap_or(PathBuf::from("config.yaml"));
         let config_content = fs::read_to_string(&config_path)
             .expect(&format!("文件 {} 不存在", config_path.display()));
         let config: Config = serde_yaml::from_str(&config_content).unwrap();
 
-        let elemets_path = self
-            .elements
+        let ce_path = self
+            .character_elements
             .clone()
-            .unwrap_or(PathBuf::from("elements.txt"));
-        let elements: RawSequenceMap = Self::get_reader(elemets_path)
+            .unwrap_or(PathBuf::from("character_elements.txt"));
+        let character_elements: AssembleList = Self::get_reader(ce_path)
             .deserialize()
             .map(|x| x.unwrap())
             .collect();
+
+        let word_elements: Option<AssembleList> = if let Some(we_path) = self.word_elements.clone()
+        {
+            Self::get_reader(we_path)
+                .deserialize()
+                .map(|x| x.unwrap())
+                .collect()
+        } else {
+            None
+        };
 
         // prepare assets
         let assets_dir = Path::new("assets");
@@ -100,7 +114,7 @@ impl Cli {
             .character_frequency
             .clone()
             .unwrap_or(assets_dir.join("character_frequency.txt"));
-        let character_frequency: HashMap<char, u64> = Self::get_reader(cf_path)
+        let character_frequency: Frequency = Self::get_reader(cf_path)
             .deserialize()
             .map(|x| x.unwrap())
             .collect();
@@ -108,7 +122,7 @@ impl Cli {
             .word_frequency
             .clone()
             .unwrap_or(assets_dir.join("word_frequency.txt"));
-        let word_frequency: HashMap<String, u64> = Self::get_reader(wf_path)
+        let word_frequency: Frequency = Self::get_reader(wf_path)
             .deserialize()
             .map(|x| x.unwrap())
             .collect();
@@ -116,7 +130,7 @@ impl Cli {
             .frequency
             .clone()
             .unwrap_or(assets_dir.join("frequency.txt"));
-        let frequency: HashMap<String, u64> = Self::get_reader(f_path)
+        let frequency: Frequency = Self::get_reader(f_path)
             .deserialize()
             .map(|x| x.unwrap())
             .collect();
@@ -148,7 +162,12 @@ impl Cli {
             key_distribution,
             pair_equivalence,
         };
-        return (config, elements, words, assets);
+        let resource = Resource {
+            character_elements,
+            word_elements,
+            words,
+        };
+        return (config, resource, assets);
     }
 
     pub fn export_code(path: &PathBuf, original: Vec<Entry>) {

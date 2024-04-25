@@ -4,7 +4,7 @@ use crate::config::{EncoderConfig, WordRule};
 use crate::error::Error;
 use crate::representation::{
     Assets, AutoSelect, Buffer, CodeInfo, Codes, EncodeExport, Entry, Key, KeyMap, Occupation,
-    RawSequenceMap, Representation, Sequence, SequenceMap, MAX_COMBINATION_LENGTH,
+    Representation, Resource, Sequence, SequenceMap, MAX_COMBINATION_LENGTH,
 };
 use std::{cmp::Reverse, collections::HashMap, fmt::Debug, iter::zip};
 
@@ -107,14 +107,13 @@ impl Encoder {
     /// 词只需要提供词表，它对应的拆分序列从字推出
     pub fn new(
         representation: &Representation,
-        sequence_map: RawSequenceMap,
-        words: Vec<String>,
+        resource: Resource,
         assets: &Assets,
     ) -> Result<Encoder, Error> {
         let encoder = &representation.config.encoder;
         // 预处理单字拆分表
-        let (weighted_sequences, sequence_map) =
-            representation.transform_elements(&sequence_map)?;
+        let (weighted_sequences, character_sequence_map) =
+            representation.transform_elements(&resource.character_elements)?;
 
         // 将拆分序列映射降序排列
         let mut characters_info: Vec<_> = weighted_sequences
@@ -135,15 +134,34 @@ impl Encoder {
         let mut words_info = None;
         let mut all_info = None;
         if let Some(rule) = &encoder.rules {
-            let mut words_raw = Self::build_word_sequence(
-                rule,
-                sequence_map,
-                words,
-                encoder.max_length,
-                &assets.word_frequency,
-            )?;
+            let mut words_raw: Vec<Encodable> = if let Some(word_elements) = &resource.word_elements {
+                let (weighted_sequences, _) =
+                    representation.transform_elements(word_elements)?;
+                weighted_sequences.into_iter().map(|(word, sequence, importance)| {
+                    let word_frequency = *assets.word_frequency.get(&word).unwrap_or(&0);
+                    let frequency = word_frequency * importance / 100;
+                    Encodable {
+                        name: word.to_string(),
+                        sequence,
+                        frequency,
+                    }
+                }).collect()
+            } else {
+                let result = Self::build_word_sequence(
+                    rule,
+                    character_sequence_map,
+                    resource.words,
+                    encoder.max_length,
+                    &assets.word_frequency,
+                )?;
+                result
+            };
             words_raw.sort_by_key(|x| Reverse(x.frequency));
-            let mut all_raw: Vec<_> = characters_info.iter().chain(words_raw.iter()).cloned().collect();
+            let mut all_raw: Vec<_> = characters_info
+                .iter()
+                .chain(words_raw.iter())
+                .cloned()
+                .collect();
             // 用字词混频中的频率覆盖原来的频率
             for item in all_raw.iter_mut() {
                 item.frequency = *assets.frequency.get(&item.name).unwrap_or(&0);
@@ -201,7 +219,7 @@ impl Encoder {
             let mut has_invalid_char = false;
             for (char_index, code_index) in rule {
                 let char = Self::signed_index(&chars, *char_index);
-                if let Some(sequence) = sequence_map.get(char) {
+                if let Some(sequence) = sequence_map.get(&char.to_string()) {
                     let value = Self::signed_index(sequence, *code_index);
                     word_elements.push(*value);
                 } else {
@@ -316,7 +334,12 @@ impl Encoder {
     pub fn encode(&self, keymap: &KeyMap, representation: &Representation) -> EncodeExport {
         let mut buffer = Buffer::new(&self);
         let mut occupation = Occupation::new(representation.get_space());
-        self.encode_full(keymap, &self.characters_info, &mut buffer.characters_full, &mut occupation);
+        self.encode_full(
+            keymap,
+            &self.characters_info,
+            &mut buffer.characters_full,
+            &mut occupation,
+        );
         if self.short_code_schemes.is_some() {
             self.encode_short(
                 &mut buffer.characters_full,
@@ -340,7 +363,12 @@ impl Encoder {
         }
         let mut word_entries: Option<Vec<Entry>> = None;
         if let Some(words) = self.words_info.as_ref() {
-            self.encode_full(keymap, words, buffer.words_full.as_mut().unwrap(), &mut occupation);
+            self.encode_full(
+                keymap,
+                words,
+                buffer.words_full.as_mut().unwrap(),
+                &mut occupation,
+            );
             if self.word_short_code_schemes.is_some() {
                 self.encode_short(
                     &mut buffer.words_full.as_mut().unwrap(),

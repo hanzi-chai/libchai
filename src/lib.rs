@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod config;
 pub mod constraints;
 pub mod data;
@@ -8,7 +9,6 @@ pub mod metaheuristics;
 pub mod objectives;
 pub mod problem;
 pub mod representation;
-pub mod cli;
 
 use crate::constraints::Constraints;
 use crate::problem::ElementPlacementProblem;
@@ -21,19 +21,11 @@ use crate::{
 use console_error_panic_hook::set_once;
 use interface::Interface;
 use js_sys::Function;
-use representation::{Buffer, RawSequenceMap, WordList};
-use serde::{Deserialize, Serialize};
+use representation::{Buffer, Input};
+use serde::Serialize;
 use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
 use wasm_bindgen::prelude::*;
-
-#[derive(Deserialize)]
-struct Input {
-    config: Config,
-    characters: RawSequenceMap,
-    words: WordList,
-    assets: Assets,
-}
 
 #[wasm_bindgen]
 pub struct WebInterface {
@@ -142,12 +134,11 @@ impl Interface for WebInterface {
 fn prepare(js_input: JsValue) -> Result<(Representation, Encoder, Assets), JsError> {
     let Input {
         config,
-        characters,
-        words,
+        resource,
         assets,
     } = from_value(js_input)?;
     let representation = Representation::new(config)?;
-    let encoder = Encoder::new(&representation, characters, words, &assets)?;
+    let encoder = Encoder::new(&representation, resource, &assets)?;
     Ok((representation, encoder, assets))
 }
 
