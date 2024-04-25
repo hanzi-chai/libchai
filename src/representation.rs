@@ -10,9 +10,23 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Reverse, collections::HashMap};
 
+#[derive(Deserialize)]
+pub struct Input {
+    pub config: Config,
+    pub resource: Resource,
+    pub assets: Assets,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Resource {
+    pub character_elements: AssembleList,
+    pub word_elements: Option<AssembleList>,
+    pub words: WordList,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assemble {
-    char: char,
+    object: String,
     sequence: String,
     #[serde(default = "Assemble::importance_default")]
     importance: u64,
@@ -24,17 +38,17 @@ impl Assemble {
     }
 }
 
-pub type RawSequenceMap = Vec<Assemble>;
+pub type AssembleList = Vec<Assemble>;
 pub type WordList = Vec<String>;
 pub type KeyDistribution = HashMap<char, f64>;
 pub type PairEquivalence = HashMap<String, f64>;
-pub type Frequency<T> = HashMap<T, u64>;
+pub type Frequency = HashMap<String, u64>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assets {
-    pub character_frequency: Frequency<char>,
-    pub word_frequency: Frequency<String>,
-    pub frequency: Frequency<String>,
+    pub character_frequency: Frequency,
+    pub word_frequency: Frequency,
+    pub frequency: Frequency,
     pub key_distribution: KeyDistribution,
     pub pair_equivalence: PairEquivalence,
 }
@@ -45,11 +59,11 @@ pub type Element = usize;
 /// 字或词的拆分序列
 pub type Sequence = Vec<Element>;
 
-/// 字到拆分序列（至少有一个，可能有多个）的映射
-pub type WeightedSequences = Vec<(char, Sequence, u64)>;
+/// 字词拆分序列列表
+pub type WeightedSequences = Vec<(String, Sequence, u64)>;
 
-/// 字到拆分序列的映射（多音字取最高频音）
-pub type SequenceMap = HashMap<char, Sequence>;
+/// 字词到拆分序列的映射（多音字取最高频音）
+pub type SequenceMap = HashMap<String, Sequence>;
 
 /// 编码用无符号整数表示
 pub type Code = usize;
@@ -316,7 +330,7 @@ impl Representation {
     /// 读取拆分表，将拆分序列中的每一个元素按照先前确定的元素 -> 整数映射来转换为整数向量
     pub fn transform_elements(
         &self,
-        raw_sequence_map: &RawSequenceMap,
+        raw_sequence_map: &AssembleList,
     ) -> Result<(WeightedSequences, SequenceMap), Error> {
         let mut weighted_sequences: WeightedSequences = Vec::new();
         let mut sequence_map = SequenceMap::new();
@@ -325,7 +339,7 @@ impl Representation {
             return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
         }
         for Assemble {
-            char,
+            object,
             sequence,
             importance,
         } in raw_sequence_map
@@ -335,7 +349,7 @@ impl Representation {
             let length = sequence.len();
             if length > max_length {
                 return Err(format!(
-                    "汉字「{char}」包含的元素数量为 {length}，超过了最大码长 {max_length}"
+                    "编码对象「{object}」包含的元素数量为 {length}，超过了最大码长 {max_length}"
                 )
                 .into());
             }
@@ -344,19 +358,19 @@ impl Representation {
                     converted_elems.push(*number);
                 } else {
                     return Err(format!(
-                        "汉字「{char}」包含的元素「{element}」无法在键盘映射中找到"
+                        "编码对象「{object}」包含的元素「{element}」无法在键盘映射中找到"
                     )
                     .into());
                 }
             }
-            weighted_sequences.push((*char, converted_elems, *importance));
+            weighted_sequences.push((object.clone(), converted_elems, *importance));
         }
-        weighted_sequences.sort_by_key(|x| (x.0, Reverse(x.2)));
-        for (char, sequence, _) in &weighted_sequences {
-            if sequence_map.contains_key(char) {
+        weighted_sequences.sort_by_key(|x| (x.0.clone(), Reverse(x.2)));
+        for (object, sequence, _) in &weighted_sequences {
+            if sequence_map.contains_key(object) {
                 continue;
             }
-            sequence_map.insert(*char, sequence.clone());
+            sequence_map.insert(object.clone(), sequence.clone());
         }
         Ok((weighted_sequences, sequence_map))
     }
