@@ -2,7 +2,7 @@
 
 use crate::{
     config::{Config, Mapped, MappedKey, ShortCodeConfig},
-    encoder::{CompiledShortCodeConfig, Encoder},
+    encoder::{CompiledShortCodeConfig, Encodable, Encoder},
     error::Error,
 };
 use regex::Regex;
@@ -69,19 +69,11 @@ pub type SequenceMap = HashMap<String, Sequence>;
 pub type Code = usize;
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct CodeInfo {
     pub code: Code,
     pub duplication: bool,
-}
-
-impl Default for CodeInfo {
-    fn default() -> Self {
-        Self {
-            code: 0,
-            duplication: false,
-        }
-    }
+    pub frequency: u64,
 }
 
 /// 一组编码
@@ -130,52 +122,45 @@ pub const MAX_COMBINATION_LENGTH: usize = 4;
 
 #[derive(Debug, Serialize)]
 pub struct Entry {
-    pub item: String,
-    pub full: String,
-    pub short: Option<String>,
+    pub item: Vec<String>,
+    pub full: Vec<String>,
+    pub short: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct EncodeExport {
-    pub characters: Vec<Entry>,
-    pub words: Option<Vec<Entry>>,
+    pub characters: Entry,
+    pub words: Entry,
 }
 
 #[derive(Debug)]
 pub struct Buffer {
+    pub full: Codes,
+    pub short: Codes,
     pub characters_full: Codes,
-    pub characters_short: Option<Codes>,
-    pub words_full: Option<Codes>,
-    pub words_short: Option<Codes>,
-    pub all_full: Option<Codes>,
-    pub all_short: Option<Codes>,
+    pub characters_short: Codes,
+    pub words_full: Codes,
+    pub words_short: Codes,
 }
 
 impl Buffer {
     pub fn new(encoder: &Encoder) -> Self {
-        let info = CodeInfo::default();
-        let mut buffer = Self {
-            characters_full: vec![info.clone(); encoder.characters_info.len()],
-            characters_short: None,
-            words_full: None,
-            words_short: None,
-            all_full: None,
-            all_short: None,
+        let make_placeholder = |x: &Encodable| CodeInfo {
+            code: 0,
+            duplication: false,
+            frequency: x.frequency,
         };
-        if encoder.short_code_schemes.is_some() {
-            buffer.characters_short = Some(vec![info.clone(); encoder.characters_info.len()]);
+        let it = encoder.info.iter();
+        let char_it = encoder.info.iter().filter(|x| x.length == 1);
+        let word_it = encoder.info.iter().filter(|x| x.length > 1);
+        Self {
+            full: it.clone().map(make_placeholder).collect(),
+            short: it.clone().map(make_placeholder).collect(),
+            characters_full: char_it.clone().map(make_placeholder).collect(),
+            characters_short: char_it.clone().map(make_placeholder).collect(),
+            words_full: word_it.clone().map(make_placeholder).collect(),
+            words_short: word_it.clone().map(make_placeholder).collect(),
         }
-        if let Some(words_info) = &encoder.words_info {
-            buffer.words_full = Some(vec![info.clone(); words_info.len()]);
-            if encoder.short_code_schemes.is_some() {
-                buffer.words_short = Some(vec![info.clone(); words_info.len()]);
-            }
-        }
-        if let Some(all_info) = &encoder.all_info {
-            buffer.all_full = Some(vec![info.clone(); all_info.len()]);
-            buffer.all_short = Some(vec![info.clone(); all_info.len()]);
-        }
-        buffer
     }
 }
 

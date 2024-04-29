@@ -54,8 +54,8 @@ fn length_4(b: &mut Bencher) -> Result<(), Error> {
 #[bench]
 fn length_4_char_only(b: &mut Bencher) -> Result<(), Error> {
     let cli = simulate_cli_input("config.yaml", "elements.txt");
-    let (mut config, resource, assets) = cli.prepare_file();
-    config.optimization.as_mut().unwrap().objective.words_full = None;
+    let (config, mut resource, assets) = cli.prepare_file();
+    resource.words.clear();
     process_cli_input(config, resource, assets, b)
 }
 

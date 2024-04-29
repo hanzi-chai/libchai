@@ -3,8 +3,8 @@
 use crate::config::{EncoderConfig, WordRule};
 use crate::error::Error;
 use crate::representation::{
-    Assets, AutoSelect, Buffer, CodeInfo, Codes, EncodeExport, Entry, Key, KeyMap, Occupation,
-    Representation, Resource, Sequence, SequenceMap, MAX_COMBINATION_LENGTH,
+    Assets, AutoSelect, Buffer, EncodeExport, Entry, Key, KeyMap, Occupation, Representation,
+    Resource, Sequence, SequenceMap, MAX_COMBINATION_LENGTH,
 };
 use std::{cmp::Reverse, collections::HashMap, fmt::Debug, iter::zip};
 
@@ -17,14 +17,13 @@ type Lookup = [Vec<(isize, isize)>; MAX_WORD_LENGTH - 1];
 #[derive(Debug, Clone)]
 pub struct Encodable {
     pub name: String,
+    pub length: usize,
     pub sequence: Sequence,
     pub frequency: u64,
 }
 
 pub struct Encoder {
-    pub characters_info: Vec<Encodable>,
-    pub words_info: Option<Vec<Encodable>>,
-    pub all_info: Option<Vec<Encodable>>,
+    pub info: Vec<Encodable>,
     config: EncoderConfig,
     auto_select: AutoSelect,
     pub radix: usize,
@@ -116,36 +115,37 @@ impl Encoder {
             representation.transform_elements(&resource.character_elements)?;
 
         // 将拆分序列映射降序排列
-        let mut characters_info: Vec<_> = weighted_sequences
+        let mut info: Vec<_> = weighted_sequences
             .into_iter()
             .map(|(char, sequence, importance)| {
                 let char_frequency = *assets.character_frequency.get(&char).unwrap_or(&0);
                 let frequency = char_frequency * importance / 100;
                 Encodable {
                     name: char.to_string(),
+                    length: 1,
                     sequence,
                     frequency,
                 }
             })
             .collect();
-        characters_info.sort_by_key(|x| Reverse(x.frequency));
 
         // 对词也是一样的操作
-        let mut words_info = None;
-        let mut all_info = None;
         if let Some(rule) = &encoder.rules {
-            let mut words_raw: Vec<Encodable> = if let Some(word_elements) = &resource.word_elements {
-                let (weighted_sequences, _) =
-                    representation.transform_elements(word_elements)?;
-                weighted_sequences.into_iter().map(|(word, sequence, importance)| {
-                    let word_frequency = *assets.word_frequency.get(&word).unwrap_or(&0);
-                    let frequency = word_frequency * importance / 100;
-                    Encodable {
-                        name: word.to_string(),
-                        sequence,
-                        frequency,
-                    }
-                }).collect()
+            let words_raw: Vec<Encodable> = if let Some(word_elements) = &resource.word_elements {
+                let (weighted_sequences, _) = representation.transform_elements(word_elements)?;
+                weighted_sequences
+                    .into_iter()
+                    .map(|(word, sequence, importance)| {
+                        let word_frequency = *assets.word_frequency.get(&word).unwrap_or(&0);
+                        let frequency = word_frequency * importance / 100;
+                        Encodable {
+                            name: word.to_string(),
+                            length: word.chars().count(),
+                            sequence,
+                            frequency,
+                        }
+                    })
+                    .collect()
             } else {
                 let result = Self::build_word_sequence(
                     rule,
@@ -156,20 +156,9 @@ impl Encoder {
                 )?;
                 result
             };
-            words_raw.sort_by_key(|x| Reverse(x.frequency));
-            let mut all_raw: Vec<_> = characters_info
-                .iter()
-                .chain(words_raw.iter())
-                .cloned()
-                .collect();
-            // 用字词混频中的频率覆盖原来的频率
-            for item in all_raw.iter_mut() {
-                item.frequency = *assets.frequency.get(&item.name).unwrap_or(&0);
-            }
-            all_raw.sort_by_key(|x| Reverse(x.frequency));
-            words_info = Some(words_raw);
-            all_info = Some(all_raw);
+            info.extend(words_raw.into_iter());
         }
+        info.sort_by_key(|x| Reverse(x.frequency));
 
         // 处理自动上屏
         let auto_select = representation.transform_auto_select()?;
@@ -184,9 +173,7 @@ impl Encoder {
             word_short_code_schemes = Some(representation.transform_schemes(schemes)?);
         };
         let encoder = Encoder {
-            characters_info,
-            words_info,
-            all_info,
+            info,
             auto_select,
             config: encoder.clone(),
             radix: representation.radix,
@@ -231,6 +218,7 @@ impl Encoder {
                 let frequency = *word_frequency.get(&word).unwrap_or(&0);
                 let encodable = Encodable {
                     name: word,
+                    length: chars.len(),
                     sequence: word_elements,
                     frequency,
                 };
@@ -240,14 +228,8 @@ impl Encoder {
         Ok(words_all)
     }
 
-    pub fn encode_full(
-        &self,
-        keymap: &KeyMap,
-        data: &Vec<Encodable>,
-        output: &mut Codes,
-        occupation: &mut Occupation,
-    ) {
-        for (encodable, pointer) in zip(data, output) {
+    pub fn encode_full(&self, keymap: &KeyMap, buffer: &mut Buffer, occupation: &mut Occupation) {
+        for (encodable, pointer) in zip(&self.info, &mut buffer.full) {
             let sequence = &encodable.sequence;
             let mut code = 0_usize;
             let mut weight = 1_usize;
@@ -260,25 +242,26 @@ impl Encoder {
             if !self.auto_select.get(code).unwrap_or(&true) {
                 code += self.select_keys[0] * weight;
             }
-            *pointer = CodeInfo {
-                code,
-                duplication: occupation.contains(code),
-            };
+            pointer.code = code;
+            pointer.duplication = occupation.contains(code);
             occupation.insert(code);
         }
     }
 
-    pub fn encode_short(
-        &self,
-        full_codes: &Codes,
-        short_codes: &mut Codes,
-        full_occupation: &Occupation,
-        schemes: &Vec<CompiledShortCodeConfig>,
-    ) {
+    pub fn encode_short(&self, buffer: &mut Buffer, full_occupation: &Occupation) {
         let mut short_occupation = Occupation::new(self.get_space());
-        for (code, pointer) in zip(full_codes, short_codes) {
+        for ((code, pointer), encodable) in zip(zip(&buffer.full, &mut buffer.short), &self.info) {
             let full = &code.code;
             let mut has_reduced = false;
+            let schemes = if encodable.length == 1 {
+                &self.short_code_schemes
+            } else {
+                &self.word_short_code_schemes
+            };
+            if schemes.is_none() {
+                continue;
+            }
+            let schemes = schemes.as_ref().unwrap();
             for scheme in schemes {
                 let CompiledShortCodeConfig {
                     prefix,
@@ -301,10 +284,8 @@ impl Encoder {
                     // 决定出这个简码
                     if !full_occupation.contains(short) && !short_occupation.contains(short) {
                         short_occupation.insert(short);
-                        *pointer = CodeInfo {
-                            code: short,
-                            duplication: false,
-                        };
+                        pointer.code = short;
+                        pointer.duplication = false;
                         has_reduced = true;
                         break;
                     }
@@ -314,10 +295,8 @@ impl Encoder {
                 }
             }
             if has_reduced == false {
-                *pointer = CodeInfo {
-                    code: *full,
-                    duplication: short_occupation.contains(*full),
-                };
+                pointer.code = *full;
+                pointer.duplication = short_occupation.contains(*full);
                 short_occupation.insert(*full);
             }
         }
@@ -331,70 +310,70 @@ impl Encoder {
         };
     }
 
+    pub fn split(&self, buffer: &mut Buffer) {
+        let mut i_characters = 0;
+        let mut i_words = 0;
+        for (encodable, pointer) in zip(&self.info, &buffer.full) {
+            if encodable.length == 1 {
+                buffer.characters_full[i_characters] = *pointer;
+                i_characters += 1;
+            } else {
+                buffer.words_full[i_words] = *pointer;
+                i_words += 1;
+            }
+        }
+        let mut i_characters = 0;
+        let mut i_words = 0;
+        for (encodable, pointer) in zip(&self.info, &buffer.short) {
+            if encodable.length == 1 {
+                buffer.characters_short[i_characters] = *pointer;
+                i_characters += 1;
+            } else {
+                buffer.words_short[i_words] = *pointer;
+                i_words += 1;
+            }
+        }
+    }
+
     pub fn encode(&self, keymap: &KeyMap, representation: &Representation) -> EncodeExport {
         let mut buffer = Buffer::new(&self);
         let mut occupation = Occupation::new(representation.get_space());
-        self.encode_full(
-            keymap,
-            &self.characters_info,
-            &mut buffer.characters_full,
-            &mut occupation,
-        );
-        if self.short_code_schemes.is_some() {
-            self.encode_short(
-                &mut buffer.characters_full,
-                buffer.characters_short.as_mut().unwrap(),
-                &mut occupation,
-                self.short_code_schemes.as_ref().unwrap(),
-            );
-        }
-        let mut character_entries: Vec<Entry> = Vec::new();
-        for (index, Encodable { name, .. }) in self.characters_info.iter().enumerate() {
-            let full = representation.repr_code(buffer.characters_full[index].code);
-            let short = buffer
-                .characters_short
-                .as_ref()
-                .map(|x| representation.repr_code(x[index].code));
-            character_entries.push(Entry {
-                item: name.to_string(),
-                full: full.iter().collect(),
-                short: short.map(|x| x.iter().collect()),
-            });
-        }
-        let mut word_entries: Option<Vec<Entry>> = None;
-        if let Some(words) = self.words_info.as_ref() {
-            self.encode_full(
-                keymap,
-                words,
-                buffer.words_full.as_mut().unwrap(),
-                &mut occupation,
-            );
-            if self.word_short_code_schemes.is_some() {
-                self.encode_short(
-                    &mut buffer.words_full.as_mut().unwrap(),
-                    buffer.words_short.as_mut().unwrap(),
-                    &mut occupation,
-                    self.word_short_code_schemes.as_ref().unwrap(),
-                );
-            }
-            let entries = words
+        self.encode_full(keymap, &mut buffer, &mut occupation);
+        self.encode_short(&mut buffer, &mut occupation);
+        self.split(&mut buffer);
+        let characters_info: Vec<_> = self.info.iter().filter(|x| x.length == 1).collect();
+        let mut character_entries = Entry {
+            item: characters_info.iter().map(|x| x.name.to_string()).collect(),
+            full: buffer
+                .characters_full
                 .iter()
-                .enumerate()
-                .map(|(index, Encodable { name, .. })| {
-                    let full =
-                        representation.repr_code(buffer.words_full.as_ref().unwrap()[index].code);
-                    let short = buffer
-                        .words_short
-                        .as_ref()
-                        .map(|x| representation.repr_code(x[index].code));
-                    Entry {
-                        item: name.to_string(),
-                        full: full.iter().collect(),
-                        short: short.map(|x| x.iter().collect()),
-                    }
-                })
-                .collect();
-            word_entries = Some(entries);
+                .map(|x| representation.repr_code(x.code).iter().collect())
+                .collect(),
+            short: None,
+        };
+        if self.short_code_schemes.is_some() {
+            character_entries.short = Some(buffer
+                .characters_short
+                .iter()
+                .map(|x| representation.repr_code(x.code).iter().collect())
+                .collect());
+        }
+        let words_info: Vec<_> = self.info.iter().filter(|x| x.length > 1).collect();
+        let mut word_entries = Entry {
+            item: words_info.iter().map(|x| x.name.to_string()).collect(),
+            full: buffer
+                .words_full
+                .iter()
+                .map(|x| representation.repr_code(x.code).iter().collect())
+                .collect(),
+            short: None
+        };
+        if self.word_short_code_schemes.is_some() {
+            word_entries.short = Some(buffer
+                .words_short
+                .iter()
+                .map(|x| representation.repr_code(x.code).iter().collect())
+                .collect());
         }
         EncodeExport {
             characters: character_entries,
