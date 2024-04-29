@@ -7,7 +7,6 @@ pub mod metric;
 
 use crate::config::ObjectiveConfig;
 use crate::config::PartialWeights;
-use crate::encoder::Encodable;
 use crate::encoder::Encoder;
 use crate::error::Error;
 use crate::representation::Assets;
@@ -81,7 +80,6 @@ impl Objective {
     pub fn evaluate_partial(
         &self,
         codes: &Codes,
-        frequencies: &Vec<Encodable>,
         weights: &PartialWeights,
     ) -> (PartialMetric, f64) {
         let mut total_frequency = 0;
@@ -111,13 +109,14 @@ impl Objective {
         let mut moma = vec![0_u64; self.encoder.radix];
         let max_pair_equivalence_index = self.pair_equivalence.len();
         let segment = self.encoder.radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
-        for (index, (code_info, encodable)) in zip(codes, frequencies).enumerate() {
-            let frequency = encodable.frequency;
-            total_frequency += frequency;
+        for (index, code_info) in codes.iter().enumerate() {
             let CodeInfo {
                 code,
                 duplication: duplicated,
+                frequency
             } = code_info;
+            let frequency = *frequency;
+            total_frequency += frequency;
             let length = code.ilog(self.encoder.radix) as u64 + 1;
             // 按键分布
             if weights.key_distribution.is_some() {
@@ -322,81 +321,39 @@ impl Objective {
             characters_short: None,
             words_short: None,
         };
+        let mut occupation = Occupation::new(self.pair_equivalence.len());
+        self.encoder.encode_full(candidate, buffer, &mut occupation);
+        if self.config.characters_short.is_some() || self.config.words_short.is_some() {
+            self.encoder.encode_short(buffer, &mut occupation);
+        }
+        self.encoder.split(buffer);
+        // 单字全码
         if let Some(characters_weight) = &self.config.characters_full {
-            let characters_info = &self.encoder.characters_info;
-            let mut occupation = Occupation::new(self.pair_equivalence.len());
-            self.encoder.encode_full(
-                &candidate,
-                characters_info,
-                &mut buffer.characters_full,
-                &mut occupation,
-            );
             let (partial, accum) =
-                self.evaluate_partial(&buffer.characters_full, characters_info, characters_weight);
+                self.evaluate_partial(&buffer.characters_full, characters_weight);
             loss += accum;
             metric.characters_full = Some(partial);
-            if let Some(characters_short) = &self.config.characters_short {
-                let characters_short_buffer =
-                    buffer.characters_short.as_mut().ok_or("简码模式未定义")?;
-                self.encoder.encode_short(
-                    &buffer.characters_full,
-                    characters_short_buffer,
-                    &mut occupation,
-                    self.encoder.short_code_schemes.as_ref().unwrap(),
-                );
-                let (partial, accum) = self.evaluate_partial(
-                    characters_short_buffer,
-                    characters_info,
-                    characters_short,
-                );
-                loss += accum;
-                metric.characters_short = Some(partial);
-            }
         }
+        // 单字简码
+        if let Some(characters_short) = &self.config.characters_short {
+            let (partial, accum) =
+                self.evaluate_partial(&buffer.characters_short, characters_short);
+            loss += accum;
+            metric.characters_short = Some(partial);
+        }
+        // 词语全码
         if let Some(words_weight) = &self.config.words_full {
-            let words_info = self.encoder.words_info.as_ref().unwrap();
-            let mut occupation = Occupation::new(self.pair_equivalence.len());
-            let words_buffer = buffer.words_full.as_mut().ok_or("组词规则未定义")?;
-            self.encoder
-                .encode_full(&candidate, &words_info, words_buffer, &mut occupation);
-            let (partial, accum) = self.evaluate_partial(&words_buffer, &words_info, words_weight);
+            let (partial, accum) =
+                self.evaluate_partial(&buffer.words_full, words_weight);
             loss += accum;
             metric.words_full = Some(partial);
-            if let Some(words_short) = &self.config.words_short {
-                let words_short_buffer = buffer.words_short.as_mut().ok_or("简码模式未定义")?;
-                self.encoder.encode_short(
-                    &words_buffer,
-                    words_short_buffer,
-                    &mut occupation,
-                    self.encoder.word_short_code_schemes.as_ref().unwrap(),
-                );
-                let (partial, accum) =
-                    self.evaluate_partial(&words_short_buffer, &words_info, words_short);
-                loss += accum;
-                metric.words_short = Some(partial);
-            }
         }
-        if let Some(full) = &self.config.full {
-            let full_info = self.encoder.all_info.as_ref().unwrap();
-            let mut occupation = Occupation::new(self.pair_equivalence.len());
-            let full_buffer = buffer.all_full.as_mut().ok_or("全码模式未定义")?;
-            self.encoder
-                .encode_full(&candidate, &full_info, full_buffer, &mut occupation);
-            let (partial, accum) = self.evaluate_partial(&full_buffer, &full_info, full);
+        // 词语简码
+        if let Some(words_short) = &self.config.words_short {
+            let (partial, accum) =
+                self.evaluate_partial(&buffer.words_short, words_short);
             loss += accum;
-            metric.characters_full = Some(partial);
-            if let Some(short) = &self.config.short {
-                let short_buffer = buffer.all_short.as_mut().ok_or("简码模式未定义")?;
-                self.encoder.encode_short(
-                    &full_buffer,
-                    short_buffer,
-                    &mut occupation,
-                    self.encoder.short_code_schemes.as_ref().unwrap(),
-                );
-                let (partial, accum) = self.evaluate_partial(&short_buffer, &full_info, short);
-                loss += accum;
-                metric.characters_short = Some(partial);
-            }
+            metric.words_short = Some(partial);
         }
         Ok((metric, loss))
     }

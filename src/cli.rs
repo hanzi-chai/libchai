@@ -12,6 +12,7 @@ use clap::{Parser, Subcommand};
 use csv::{Reader, ReaderBuilder};
 use std::collections::HashMap;
 use std::fs::File;
+use std::iter::zip;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -170,19 +171,22 @@ impl Cli {
         return (config, resource, assets);
     }
 
-    pub fn export_code(path: &PathBuf, original: Vec<Entry>) {
+    pub fn export_code(path: &PathBuf, original: Entry) {
+        if original.item.is_empty() {
+            return;
+        }
         let mut writer = csv::WriterBuilder::new()
             .delimiter(b'\t')
             .has_headers(false)
             .from_path(path)
             .unwrap();
-        for Entry { item, full, short } in original {
-            if let Some(short) = short {
+        if let Some(short) = original.short {
+            for (item, (full, short)) in zip(original.item.iter(), zip(original.full.iter(), short.iter())) {
                 writer.serialize((&item, &full, &short)).unwrap();
-                continue;
-            } else {
+            }
+        } else {
+            for (item, full) in zip(original.item.iter(), original.full.iter()) {
                 writer.serialize((&item, &full)).unwrap();
-                continue;
             }
         }
         writer.flush().unwrap();
@@ -192,9 +196,7 @@ impl Cli {
         let c_path = PathBuf::from("characters.txt");
         let w_path = PathBuf::from("words.txt");
         Self::export_code(&c_path, results.characters);
-        if let Some(words) = results.words {
-            Self::export_code(&w_path, words);
-        }
+        Self::export_code(&w_path, results.words);
         println!(
             "已完成编码，结果保存在 {} 和 {} 中",
             c_path.display(),
