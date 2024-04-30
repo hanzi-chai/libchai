@@ -26,10 +26,10 @@ pub struct Resource {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assemble {
-    object: String,
-    sequence: String,
+    pub object: String,
+    pub sequence: String,
     #[serde(default = "Assemble::importance_default")]
-    importance: u64,
+    pub importance: u64,
 }
 
 impl Assemble {
@@ -46,8 +46,6 @@ pub type Frequency = HashMap<String, u64>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assets {
-    pub character_frequency: Frequency,
-    pub word_frequency: Frequency,
     pub frequency: Frequency,
     pub key_distribution: KeyDistribution,
     pub pair_equivalence: PairEquivalence,
