@@ -111,22 +111,6 @@ impl Cli {
 
         // prepare assets
         let assets_dir = Path::new("assets");
-        let cf_path = self
-            .character_frequency
-            .clone()
-            .unwrap_or(assets_dir.join("character_frequency.txt"));
-        let character_frequency: Frequency = Self::get_reader(cf_path)
-            .deserialize()
-            .map(|x| x.unwrap())
-            .collect();
-        let wf_path = self
-            .word_frequency
-            .clone()
-            .unwrap_or(assets_dir.join("word_frequency.txt"));
-        let word_frequency: Frequency = Self::get_reader(wf_path)
-            .deserialize()
-            .map(|x| x.unwrap())
-            .collect();
         let f_path = self
             .frequency
             .clone()
@@ -154,11 +138,9 @@ impl Cli {
         let words = if let Some(_) = self.words {
             vec![]
         } else {
-            word_frequency.clone().into_keys().collect()
+            frequency.clone().into_keys().filter(|x| x.chars().count() > 1).collect()
         };
         let assets = Assets {
-            character_frequency,
-            word_frequency,
             frequency,
             key_distribution,
             pair_equivalence,

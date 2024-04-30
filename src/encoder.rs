@@ -3,9 +3,9 @@
 use crate::config::{EncoderConfig, WordRule};
 use crate::error::Error;
 use crate::representation::{
-    Assets, AutoSelect, Buffer, EncodeExport, Entry, Key, KeyMap, Occupation, Representation,
-    Resource, Sequence, SequenceMap, MAX_COMBINATION_LENGTH,
+    Assets, AutoSelect, Buffer, EncodeExport, Entry, Frequency, Key, KeyMap, Occupation, Representation, Resource, Sequence, SequenceMap, MAX_COMBINATION_LENGTH
 };
+use std::collections::HashSet;
 use std::{cmp::Reverse, collections::HashMap, fmt::Debug, iter::zip};
 
 // 支持二字词直到十字词
@@ -101,6 +101,45 @@ impl Encoder {
         Ok(quick_lookup)
     }
 
+    pub fn adapt(frequency: &Frequency, words: &HashSet<String>) -> Frequency {
+        let mut new_frequency = Frequency::new();
+        for (word, value) in frequency {
+            if words.contains(word) {
+                new_frequency.insert(word.clone(), new_frequency.get(word).unwrap_or(&0) + *value);
+            } else {
+                // 使用逆向最大匹配算法来分词
+                let chars: Vec<_> = word.chars().collect();
+                let mut end = chars.len();
+                let mut start = end - 1;
+                while end > 0 {
+                    let partial_word: String = chars[start..end].iter().collect();
+                    // 如果最后一个字不在词表里，就不要了
+                    if !words.contains(&partial_word) {
+                        end -= 1;
+                        start -= 1;
+                        continue;
+                    }
+                    // 继续向前匹配，看看是否能匹配到更长的词
+                    while start > 0 {
+                        start -= 1;
+                        let partial_word: String = chars[start..end].iter().collect();
+                        if !words.contains(&partial_word) {
+                            start += 1;
+                            break;
+                        }
+                    }
+                    // 确定最大匹配
+                    let maximum_match: String = chars[start..end].iter().collect();
+                    assert!(words.contains(&maximum_match), "词表里没有 {:} {:} {:?}", start, end, maximum_match);
+                    new_frequency.insert(maximum_match.clone(), new_frequency.get(&maximum_match).unwrap_or(&0) + *value);
+                    end = start;
+                    start = end - 1;
+                }
+            }
+        }
+        new_frequency
+    }
+
     /// 提供配置表示、拆分表、词表和共用资源来创建一个编码引擎
     /// 字需要提供拆分表
     /// 词只需要提供词表，它对应的拆分序列从字推出
@@ -113,12 +152,22 @@ impl Encoder {
         // 预处理单字拆分表
         let (weighted_sequences, character_sequence_map) =
             representation.transform_elements(&resource.character_elements)?;
+        
+        let mut all_words: HashSet<_> = resource.character_elements.iter().map(|x| x.object.clone()).collect();
+        if let Some(we) = &resource.word_elements {
+            for word in we {
+                all_words.insert(word.object.clone());
+            }
+        } else {
+            all_words.extend(resource.words.iter().cloned());
+        }
+        let frequency = Self::adapt(&assets.frequency, &all_words);
 
         // 将拆分序列映射降序排列
         let mut info: Vec<_> = weighted_sequences
             .into_iter()
             .map(|(char, sequence, importance)| {
-                let char_frequency = *assets.character_frequency.get(&char).unwrap_or(&0);
+                let char_frequency = *frequency.get(&char).unwrap_or(&0);
                 let frequency = char_frequency * importance / 100;
                 Encodable {
                     name: char.to_string(),
@@ -136,7 +185,7 @@ impl Encoder {
                 weighted_sequences
                     .into_iter()
                     .map(|(word, sequence, importance)| {
-                        let word_frequency = *assets.word_frequency.get(&word).unwrap_or(&0);
+                        let word_frequency = *frequency.get(&word).unwrap_or(&0);
                         let frequency = word_frequency * importance / 100;
                         Encodable {
                             name: word.to_string(),
@@ -152,7 +201,7 @@ impl Encoder {
                     character_sequence_map,
                     resource.words,
                     encoder.max_length,
-                    &assets.word_frequency,
+                    &assets.frequency,
                 )?;
                 result
             };
