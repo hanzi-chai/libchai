@@ -13,15 +13,8 @@ use std::{cmp::Reverse, collections::HashMap};
 #[derive(Deserialize)]
 pub struct Input {
     pub config: Config,
-    pub resource: Resource,
+    pub info: AssembleList,
     pub assets: Assets,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Resource {
-    pub character_elements: AssembleList,
-    pub word_elements: Option<AssembleList>,
-    pub words: WordList,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -314,9 +307,8 @@ impl Representation {
     pub fn transform_elements(
         &self,
         raw_sequence_map: &AssembleList,
-    ) -> Result<(WeightedSequences, SequenceMap), Error> {
+    ) -> Result<WeightedSequences, Error> {
         let mut weighted_sequences: WeightedSequences = Vec::new();
-        let mut sequence_map = SequenceMap::new();
         let max_length = self.config.encoder.max_length;
         if max_length >= 8 {
             return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
@@ -349,13 +341,7 @@ impl Representation {
             weighted_sequences.push((object.clone(), converted_elems, *importance));
         }
         weighted_sequences.sort_by_key(|x| (x.0.clone(), Reverse(x.2)));
-        for (object, sequence, _) in &weighted_sequences {
-            if sequence_map.contains_key(object) {
-                continue;
-            }
-            sequence_map.insert(object.clone(), sequence.clone());
-        }
-        Ok((weighted_sequences, sequence_map))
+        Ok(weighted_sequences)
     }
 
     /// 根据一个计算中得到的元素布局来生成一份新的配置文件，其余内容不变直接复制过来

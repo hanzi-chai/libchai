@@ -6,20 +6,20 @@
 use crate::config::Config;
 use crate::interface::Interface;
 use crate::objectives::metric::Metric;
-use crate::representation::{AssembleList, Assets, EncodeExport, Entry, Frequency, Resource};
+use crate::representation::{AssembleList, Assets, EncodeExport, Entry, Frequency};
 use chrono::Local;
 use clap::{Parser, Subcommand};
-use csv::{Reader, ReaderBuilder};
+use csv::ReaderBuilder;
+use serde::Deserialize;
 use std::collections::HashMap;
-use std::fs::File;
-use std::iter::zip;
+use std::iter::{zip, FromIterator};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
 /// 封装了全部命令行参数，并采用 `derive(Parser)` 来生成解析代码。
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(name = "汉字自动拆分系统")]
 #[command(author, version, about, long_about)]
 #[command(propagate_version = true)]
@@ -30,31 +30,15 @@ pub struct Cli {
     /// 方案文件，默认为 config.yaml
     pub config: Option<PathBuf>,
 
-    /// 单字拆分表，默认为 elements.txt
+    /// 拆分表，默认为 elements.txt
     #[arg(short, long, value_name = "FILE")]
-    pub character_elements: Option<PathBuf>,
+    pub elements: Option<PathBuf>,
 
-    /// 词表，默认为 words.txt
-    #[arg(short, long, value_name = "FILE")]
-    pub word_elements: Option<PathBuf>,
-
-    /// 词表，默认为 words.txt
-    #[arg(long, value_name = "FILE")]
-    pub words: Option<PathBuf>,
-
-    /// 字频表，默认为 assets 目录下的 character_frequency.txt
-    #[arg(long, value_name = "FILE")]
-    pub character_frequency: Option<PathBuf>,
-
-    /// 词频表，默认为 assets 目录下的 word_frequency.txt
-    #[arg(long, value_name = "FILE")]
-    pub word_frequency: Option<PathBuf>,
-
-    /// 字词频表，默认为 assets 目录下的 frequency.txt
+    /// 词频表，默认为 assets 目录下的 frequency.txt
     #[arg(short, long, value_name = "FILE")]
     pub frequency: Option<PathBuf>,
 
-    /// 单键用指当量表，默认为 assets 目录下的 key_equivalence.txt
+    /// 单键用指分布表，默认为 assets 目录下的 key_distribution.txt
     #[arg(short, long, value_name = "FILE")]
     pub key_distribution: Option<PathBuf>,
 
@@ -75,82 +59,49 @@ pub enum Command {
 }
 
 impl Cli {
-    fn get_reader(path: PathBuf) -> Reader<File> {
-        return ReaderBuilder::new()
+    fn read<I, T>(path: PathBuf) -> T
+    where
+        I: for<'de> Deserialize<'de>,
+        T: FromIterator<I>,
+    {
+        let mut reader = ReaderBuilder::new()
             .delimiter(b'\t')
             .has_headers(false)
             .flexible(true)
             .from_path(path)
             .unwrap();
+        reader.deserialize().map(|x| x.unwrap()).collect()
     }
 
-    pub fn prepare_file(&self) -> (Config, Resource, Assets) {
-        let config_path = self.config.clone().unwrap_or(PathBuf::from("config.yaml"));
+    pub fn prepare_file(&self) -> (Config, AssembleList, Assets) {
+        let Self {
+            config,
+            elements,
+            frequency,
+            key_distribution,
+            pair_equivalence,
+            ..
+        } = self.clone();
+        let config_path = config.unwrap_or(PathBuf::from("config.yaml"));
         let config_content = fs::read_to_string(&config_path)
             .expect(&format!("文件 {} 不存在", config_path.display()));
         let config: Config = serde_yaml::from_str(&config_content).unwrap();
+        let elements_path = elements.unwrap_or(PathBuf::from("elements.txt"));
+        let elements: AssembleList = Self::read(elements_path);
 
-        let ce_path = self
-            .character_elements
-            .clone()
-            .unwrap_or(PathBuf::from("character_elements.txt"));
-        let character_elements: AssembleList = Self::get_reader(ce_path)
-            .deserialize()
-            .map(|x| x.unwrap())
-            .collect();
-
-        let word_elements: Option<AssembleList> = if let Some(we_path) = self.word_elements.clone()
-        {
-            Self::get_reader(we_path)
-                .deserialize()
-                .map(|x| x.unwrap())
-                .collect()
-        } else {
-            None
-        };
-
-        // prepare assets
         let assets_dir = Path::new("assets");
-        let f_path = self
-            .frequency
-            .clone()
-            .unwrap_or(assets_dir.join("frequency.txt"));
-        let frequency: Frequency = Self::get_reader(f_path)
-            .deserialize()
-            .map(|x| x.unwrap())
-            .collect();
-        let keq_path = self
-            .key_distribution
-            .clone()
-            .unwrap_or(assets_dir.join("key_distribution.txt"));
-        let key_distribution: HashMap<char, f64> = Self::get_reader(keq_path)
-            .deserialize()
-            .map(|x| x.unwrap())
-            .collect();
-        let peq_path = self
-            .pair_equivalence
-            .clone()
-            .unwrap_or(assets_dir.join("pair_equivalence.txt"));
-        let pair_equivalence: HashMap<String, f64> = Self::get_reader(peq_path)
-            .deserialize()
-            .map(|x| x.unwrap())
-            .collect();
-        let words = if let Some(_) = self.words {
-            vec![]
-        } else {
-            frequency.clone().into_keys().filter(|x| x.chars().count() > 1).collect()
-        };
+        let f_path = frequency.unwrap_or(assets_dir.join("frequency.txt"));
+        let frequency: Frequency = Self::read(f_path);
+        let keq_path = key_distribution.unwrap_or(assets_dir.join("key_distribution.txt"));
+        let key_distribution: HashMap<char, f64> = Self::read(keq_path);
+        let peq_path = pair_equivalence.unwrap_or(assets_dir.join("pair_equivalence.txt"));
+        let pair_equivalence: HashMap<String, f64> = Self::read(peq_path);
         let assets = Assets {
             frequency,
             key_distribution,
             pair_equivalence,
         };
-        let resource = Resource {
-            character_elements,
-            word_elements,
-            words,
-        };
-        return (config, resource, assets);
+        return (config, elements, assets);
     }
 
     pub fn export_code(path: &PathBuf, original: Entry) {
@@ -163,7 +114,10 @@ impl Cli {
             .from_path(path)
             .unwrap();
         if let Some(short) = original.short {
-            for (item, (full, short)) in zip(original.item.iter(), zip(original.full.iter(), short.iter())) {
+            for (item, (full, short)) in zip(
+                original.item.iter(),
+                zip(original.full.iter(), short.iter()),
+            ) {
                 writer.serialize((&item, &full, &short)).unwrap();
             }
         } else {

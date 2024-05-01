@@ -5,7 +5,7 @@ use test::Bencher;
 
 use std::path::PathBuf;
 use chai::metaheuristics::Metaheuristics;
-use chai::representation::{Assets, Buffer, Resource};
+use chai::representation::{AssembleList, Assets, Buffer};
 use chai::{representation::Representation, error::Error};
 use chai::encoder::Encoder;
 use chai::objectives::Objective;
@@ -17,20 +17,16 @@ fn simulate_cli_input(config: &str, elements: &str) -> Cli {
     Cli {
         command: Command::Optimize,
         config: Some(PathBuf::from(config)),
-        character_elements: Some(PathBuf::from(elements)),
-        word_elements: None,
-        words: None,
-        character_frequency: None,
-        word_frequency: None,
+        elements: Some(PathBuf::from(elements)),
         frequency: None,
         key_distribution: None,
         pair_equivalence: None,
     }
 }
 
-fn process_cli_input(config: Config, resource: Resource, assets: Assets, b: &mut Bencher) -> Result<(), Error> {
+fn process_cli_input(config: Config, elements: AssembleList, assets: Assets, b: &mut Bencher) -> Result<(), Error> {
     let representation = Representation::new(config)?;
-    let encoder = Encoder::new(&representation, resource, &assets)?;
+    let encoder = Encoder::new(&representation, elements, &assets)?;
     let buffer = Buffer::new(&encoder);
     let objective = Objective::new(&representation, encoder, assets)?;
     let constraints = Constraints::new(&representation)?;
@@ -54,8 +50,8 @@ fn length_4(b: &mut Bencher) -> Result<(), Error> {
 #[bench]
 fn length_4_char_only(b: &mut Bencher) -> Result<(), Error> {
     let cli = simulate_cli_input("config.yaml", "elements.txt");
-    let (config, mut resource, assets) = cli.prepare_file();
-    resource.words.clear();
+    let (config, resource, assets) = cli.prepare_file();
+    let resource = resource.into_iter().filter(|x| x.object.chars().count() == 1).collect();
     process_cli_input(config, resource, assets, b)
 }
 
