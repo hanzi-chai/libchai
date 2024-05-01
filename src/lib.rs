@@ -134,11 +134,11 @@ impl Interface for WebInterface {
 fn prepare(js_input: JsValue) -> Result<(Representation, Encoder, Assets), JsError> {
     let Input {
         config,
-        resource,
+        info,
         assets,
     } = from_value(js_input)?;
     let representation = Representation::new(config)?;
-    let encoder = Encoder::new(&representation, resource, &assets)?;
+    let encoder = Encoder::new(&representation, info, &assets)?;
     Ok((representation, encoder, assets))
 }
 
