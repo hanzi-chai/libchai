@@ -19,16 +19,9 @@ pub struct Input {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assemble {
-    pub object: String,
+    pub name: String,
     pub sequence: String,
-    #[serde(default = "Assemble::importance_default")]
     pub importance: u64,
-}
-
-impl Assemble {
-    const fn importance_default() -> u64 {
-        100
-    }
 }
 
 pub type AssembleList = Vec<Assemble>;
@@ -314,7 +307,7 @@ impl Representation {
             return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
         }
         for Assemble {
-            object,
+            name,
             sequence,
             importance,
         } in raw_sequence_map
@@ -324,7 +317,7 @@ impl Representation {
             let length = sequence.len();
             if length > max_length {
                 return Err(format!(
-                    "编码对象「{object}」包含的元素数量为 {length}，超过了最大码长 {max_length}"
+                    "编码对象「{name}」包含的元素数量为 {length}，超过了最大码长 {max_length}"
                 )
                 .into());
             }
@@ -333,12 +326,12 @@ impl Representation {
                     converted_elems.push(*number);
                 } else {
                     return Err(format!(
-                        "编码对象「{object}」包含的元素「{element}」无法在键盘映射中找到"
+                        "编码对象「{name}」包含的元素「{element}」无法在键盘映射中找到"
                     )
                     .into());
                 }
             }
-            weighted_sequences.push((object.clone(), converted_elems, *importance));
+            weighted_sequences.push((name.clone(), converted_elems, *importance));
         }
         weighted_sequences.sort_by_key(|x| (x.0.clone(), Reverse(x.2)));
         Ok(weighted_sequences)
