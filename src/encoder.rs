@@ -95,7 +95,7 @@ impl Encoder {
         let encoder = &representation.config.encoder;
 
         // 预处理词频
-        let all_words: HashSet<_> = info.iter().map(|x| x.object.clone()).collect();
+        let all_words: HashSet<_> = info.iter().map(|x| x.name.clone()).collect();
         let frequency = Self::adapt(&assets.frequency, &all_words);
 
         // 预处理拆分序列
