@@ -22,6 +22,7 @@ use metric::LevelMetric2;
 use metric::Metric;
 use metric::PartialMetric;
 use metric::TierMetric;
+use rustc_hash::FxHashMap;
 use std::iter::zip;
 
 pub struct Objective {
@@ -30,6 +31,7 @@ pub struct Objective {
     ideal_distribution: Vec<f64>,
     pair_equivalence: Vec<f64>,
     new_pair_equivalence: Vec<f64>,
+    repr_key: FxHashMap<usize, char>,
 }
 
 pub type Frequencies = Vec<f64>;
@@ -47,6 +49,7 @@ impl Objective {
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
         let new_pair_equivalence =
             representation.transform_new_pair_equivalence(&assets.pair_equivalence);
+        let repr_key = representation.repr_key.clone();
         let config = representation
             .config
             .optimization
@@ -58,6 +61,7 @@ impl Objective {
             ideal_distribution,
             pair_equivalence,
             new_pair_equivalence,
+            repr_key,
         };
         Ok(objective)
     }
@@ -72,6 +76,55 @@ impl Objective {
             if frequency > ideal_frequency {
                 distance += frequency - ideal_frequency;
             }
+        }
+        distance
+    }
+
+    fn get_distribution_distance_yu(
+        &self,
+        distribution: &Vec<f64>,
+        ideal_distribution: &Vec<f64>,
+    ) -> f64 {
+        /*
+        宇碼式用指分佈偏差
+
+        This is a metric indicating whether the distribution of the
+        keys is ergonomic. It calculates the deviation of the empirical
+        distribution of frequencies from the ideal one. In an ideal
+        situation, the frequency of keys should follows the following
+        rule of thumbs:
+
+        - The middle row should be used more often.
+        - The middle and index fingers should be used more often.
+        - The keys covered by the index fingers should not be used too
+        frequently to avoid tiredness of index fingers.
+        - The keys covered by right-hand fingers should be used more
+        than the corresponding keys covered by left-hand fingers.
+
+        Users can adjust the ideal frequencies by via an input mapping
+        table.
+        */
+
+        let mut distance: f64 = 0.0;
+        let mut idx: usize = 0;
+        for (frequency, ideal_frequency) in zip(distribution, ideal_distribution) {
+            if frequency <= ideal_frequency {
+                distance += ideal_frequency - frequency;
+            } else {
+                // repr_key 還原 index 到其對應的按键。
+                distance = match self.repr_key[&idx] {
+                    'd' | 'k' => 0.0,                                                   // 不懲罰
+                    'e' | 'i' => (frequency - ideal_frequency) / 4.0 + ideal_frequency, // 少量懲罰
+                    'f' | 'j' | 's' | 'l' | 'a' => {
+                        (frequency - ideal_frequency) / 2.0 + ideal_frequency
+                    } // 中量懲罰
+                    'y' | 'q' | 'p' | 'b' | 'x' | 'z' => {
+                        (frequency - ideal_frequency) * 2.0 + ideal_frequency
+                    } // 加倍懲罰
+                    _ => frequency - ideal_frequency,
+                }
+            }
+            idx += 1;
         }
         distance
     }
@@ -113,7 +166,7 @@ impl Objective {
             let CodeInfo {
                 code,
                 duplication: duplicated,
-                frequency
+                frequency,
             } = code_info;
             let frequency = *frequency;
             total_frequency += frequency;
@@ -343,15 +396,13 @@ impl Objective {
         }
         // 词语全码
         if let Some(words_weight) = &self.config.words_full {
-            let (partial, accum) =
-                self.evaluate_partial(&buffer.words_full, words_weight);
+            let (partial, accum) = self.evaluate_partial(&buffer.words_full, words_weight);
             loss += accum;
             metric.words_full = Some(partial);
         }
         // 词语简码
         if let Some(words_short) = &self.config.words_short {
-            let (partial, accum) =
-                self.evaluate_partial(&buffer.words_short, words_short);
+            let (partial, accum) = self.evaluate_partial(&buffer.words_short, words_short);
             loss += accum;
             metric.words_short = Some(partial);
         }
