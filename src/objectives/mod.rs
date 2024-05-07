@@ -112,16 +112,17 @@ impl Objective {
                 distance += ideal_frequency - frequency;
             } else {
                 // repr_key 還原 index 到其對應的按键。
+                distance = frequency - ideal_frequency;
                 distance = match self.repr_key[&idx] {
                     'd' | 'k' => 0.0,                                                   // 不懲罰
-                    'e' | 'i' => (frequency - ideal_frequency) / 4.0 + ideal_frequency, // 少量懲罰
+                    'e' | 'i' => distance / 4.0, // 少量懲罰
                     'f' | 'j' | 's' | 'l' | 'a' => {
-                        (frequency - ideal_frequency) / 2.0 + ideal_frequency
+                        distance / 2.0
                     } // 中量懲罰
                     'y' | 'q' | 'p' | 'b' | 'x' | 'z' => {
-                        (frequency - ideal_frequency) * 2.0 + ideal_frequency
+                        distance * 2.0
                     } // 加倍懲罰
-                    _ => frequency - ideal_frequency,
+                    _ => distance  // 不作處理
                 }
             }
             idx += 1;
