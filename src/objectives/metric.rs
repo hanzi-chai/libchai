@@ -46,14 +46,7 @@ impl Display for TierMetric {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct FingeringMetric {
-    pub same_hand: Option<f64>,
-    pub same_finger_large_jump: Option<f64>,
-    pub same_finger_small_jump: Option<f64>,
-    pub little_finger_inteference: Option<f64>,
-    pub awkward_upside_down: Option<f64>,
-}
+pub type FingeringMetric = [Option<f64>; 8];
 
 #[derive(Debug, Clone)]
 pub struct PartialMetric {
@@ -89,6 +82,14 @@ impl Display for PartialMetric {
         }
         if let Some(equivalence) = self.new_pair_equivalence {
             f.write_str(&format!("杏码式组合当量：{:.4}；", equivalence))?;
+        }
+        let types = ["同手", "大跨", "小跨", "干扰", "错手", "三连", "备用", "备用"];
+        if let Some(fingering) = &self.fingering {
+            for (index, percent) in fingering.iter().enumerate() {
+                if let Some(percent) = percent {
+                    f.write_str(&format!("{}：{:.2}%；", types[index], percent * 100.0))?;
+                }
+            }
         }
         if let Some(levels) = &self.levels {
             for LevelMetric2 { length, frequency } in levels {

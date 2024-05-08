@@ -10,11 +10,11 @@ type Layout = [Vec<char>; 4];
 
 #[derive(Debug)]
 pub struct FingeringTypes {
-    same_hand: FingeringSet,
-    same_finger_large_jump: FingeringSet,
-    same_finger_small_jump: FingeringSet,
-    little_finger_interference: FingeringSet,
-    awkward_upside_down: FingeringSet,
+    pub same_hand: FingeringSet,
+    pub same_finger_large_jump: FingeringSet,
+    pub same_finger_small_jump: FingeringSet,
+    pub little_finger_interference: FingeringSet,
+    pub awkward_upside_down: FingeringSet,
 }
 
 pub fn get_partial_fingering_types(layout: &Layout) -> FingeringTypes {

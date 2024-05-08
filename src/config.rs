@@ -1,9 +1,9 @@
 //! 递归定义 YAML 配置文件中的所有字段，以及它们和一个 Rust 结构体之间的序列化、反序列化操作应该如何执行。
-//! 
+//!
 //! 这部分内容太多，就不一一注释了。后期会写一个「`config.yaml` 详解」来统一解释各种配置文件的字段。
-//! 
+//!
 
-use crate::data::{PrimitiveRepertoire, Glyph};
+use crate::data::{Glyph, PrimitiveRepertoire};
 use crate::metaheuristics::simulated_annealing::Parameters;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -27,7 +27,7 @@ pub struct Data {
     pub repertoire: Option<PrimitiveRepertoire>,
     pub glyph_customization: Option<HashMap<String, Glyph>>,
     pub reading_customization: Option<HashMap<String, Vec<String>>>,
-    pub tags: Option<Vec<String>>
+    pub tags: Option<Vec<String>>,
 }
 // config.data end
 
@@ -58,7 +58,7 @@ type Algebra = HashMap<String, Vec<Rule>>;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Rule {
     Xform { from: String, to: String },
-    Xlit { from: String, to: String }
+    Xlit { from: String, to: String },
 }
 // config.algebra end
 
@@ -76,14 +76,14 @@ pub struct FormConfig {
 #[serde(untagged)]
 pub enum MappedKey {
     Ascii(char),
-    Reference { element: String, index: usize }
+    Reference { element: String, index: usize },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Mapped {
     Basic(String),
-    Advanced(Vec<MappedKey>)
+    Advanced(Vec<MappedKey>),
 }
 // config.form end
 
@@ -177,15 +177,7 @@ pub struct TierWeights {
     pub levels: Option<Vec<LevelWeights>>,
 }
 
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FingeringWeights {
-    pub same_hand: Option<f64>,
-    pub same_finger_large_jump: Option<f64>,
-    pub same_finger_small_jump: Option<f64>,
-    pub little_finger_inteference: Option<f64>,
-    pub awkward_upside_down: Option<f64>,
-}
+pub type FingeringWeights = [Option<f64>; 8];
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]

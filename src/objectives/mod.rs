@@ -15,6 +15,7 @@ use crate::representation::CodeInfo;
 use crate::representation::Codes;
 use crate::representation::DistributionLoss;
 use crate::representation::KeyMap;
+use crate::representation::Label;
 use crate::representation::Occupation;
 use crate::representation::Representation;
 use crate::representation::MAX_COMBINATION_LENGTH;
@@ -25,12 +26,15 @@ use metric::PartialMetric;
 use metric::TierMetric;
 use std::iter::zip;
 
+use self::metric::FingeringMetric;
+
 pub struct Objective {
     config: ObjectiveConfig,
     encoder: Encoder,
     ideal_distribution: Vec<DistributionLoss>,
     pair_equivalence: Vec<f64>,
     new_pair_equivalence: Vec<f64>,
+    fingering_types: Vec<Label>,
 }
 
 pub type Frequencies = Vec<f64>;
@@ -48,6 +52,7 @@ impl Objective {
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
         let new_pair_equivalence =
             representation.transform_new_pair_equivalence(&assets.pair_equivalence);
+        let fingering_types = representation.transform_fingering_types();
         let config = representation
             .config
             .optimization
@@ -59,6 +64,7 @@ impl Objective {
             ideal_distribution,
             pair_equivalence,
             new_pair_equivalence,
+            fingering_types,
         };
         Ok(objective)
     }
@@ -112,6 +118,7 @@ impl Objective {
         let mut total_new_keys_equivalence_modified = 0.0;
         let mut total_pair_equivalence = 0.0;
         let mut total_new_pair_equivalence = 0.0;
+        let mut total_labels = [0_u64; 8];
         let mut total_levels = vec![0; weights.levels.as_ref().unwrap_or(&vec![]).len()];
         // 初始化分级指标的变量
         let ntier = weights.tiers.as_ref().map_or(0, |v| v.len());
@@ -127,7 +134,7 @@ impl Objective {
         // 标记初始字符、结束字符的频率
         let mut chuma = vec![0_u64; self.encoder.radix];
         let mut moma = vec![0_u64; self.encoder.radix];
-        let max_pair_equivalence_index = self.pair_equivalence.len();
+        let max_index = self.pair_equivalence.len();
         let segment = self.encoder.radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
         for (index, code_info) in codes.iter().enumerate() {
             let CodeInfo {
@@ -169,7 +176,7 @@ impl Objective {
                 let mut code = *code;
                 while code > self.encoder.radix {
                     total_pair_equivalence +=
-                        self.pair_equivalence[code % max_pair_equivalence_index] * frequency as f64;
+                        self.pair_equivalence[code % max_index] * frequency as f64;
                     code /= segment;
                 }
                 total_pairs += (length - 1) * frequency;
@@ -177,12 +184,23 @@ impl Objective {
             if let Some(_) = weights.new_pair_equivalence {
                 let mut code = *code;
                 while code > self.encoder.radix {
-                    total_new_pair_equivalence += self.new_pair_equivalence
-                        [code % max_pair_equivalence_index]
-                        * frequency as f64;
+                    total_new_pair_equivalence +=
+                        self.new_pair_equivalence[code % max_index] * frequency as f64;
                     code /= segment;
                 }
                 total_new_keys += length * frequency;
+            }
+            if let Some(fingering) = &weights.fingering {
+                let mut code = *code;
+                while code > self.encoder.radix {
+                    let label = self.fingering_types[code % max_index];
+                    for (i, weight) in fingering.iter().enumerate() {
+                        if let Some(_) = weight {
+                            total_labels[i] += frequency * label[i] as u64;
+                        }
+                    }
+                    code /= segment;
+                }
             }
             // 重码
             if *duplicated {
@@ -273,6 +291,16 @@ impl Objective {
             let equivalence = total_new_pair_equivalence / total_new_keys as f64;
             partial_metric.new_pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
+        }
+        if let Some(fingering_weight) = &weights.fingering {
+            let mut fingering = FingeringMetric::default();
+            for (i, weight) in fingering_weight.iter().enumerate() {
+                if let Some(weight) = weight {
+                    fingering[i] = Some(total_labels[i] as f64 / total_pairs as f64);
+                    loss += total_labels[i] as f64 * weight;
+                }
+            }
+            partial_metric.fingering = Some(fingering);
         }
         if let Some(duplication_weight) = weights.duplication {
             let duplication = total_duplication as f64 / total_frequency as f64;

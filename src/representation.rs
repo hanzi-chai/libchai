@@ -3,7 +3,7 @@
 use crate::{
     config::{Config, Mapped, MappedKey, ShortCodeConfig},
     encoder::{CompiledShortCodeConfig, Encodable, Encoder},
-    error::Error,
+    error::Error, objectives::fingering::get_fingering_types,
 };
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -75,6 +75,9 @@ pub type Key = usize;
 
 /// 元素映射用一个数组表示，下标是元素
 pub type KeyMap = Vec<Key>;
+
+/// 用指标记
+pub type Label = [u8; 8];
 
 /// 编码是否已被占据
 /// 用一个数组和一个哈希集合来表示，数组用来表示四码以内的编码，哈希集合用来表示四码以上的编码
@@ -421,6 +424,49 @@ impl Representation {
             for i in 0..(chars.len() - 1) {
                 let pair: String = [chars[i], chars[i + 1]].iter().collect();
                 total += pair_equivalence.get(&pair).unwrap_or(&0.0);
+            }
+            result.push(total);
+        }
+        result
+    }
+
+    /// 将编码空间内所有的编码组合预先计算好差指法标记
+    /// 标记压缩到一个 64 位整数中，每四位表示一个字符的差指法标记
+    /// 从低位到高位，依次是：同手、同指大跨排、同指小跨排、小指干扰、错手、三连击
+    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
+    pub fn transform_fingering_types(&self) -> Vec<Label> {
+        let fingering_types = get_fingering_types();
+        let mut result: Vec<Label> = Vec::with_capacity(self.get_space());
+        for code in 0..self.get_space() {
+            let chars = self.repr_code(code);
+            if chars.len() < 2 {
+                result.push(Label::default());
+                continue;
+            }
+            let mut total = Label::default();
+            for i in 0..(chars.len() - 1) {
+                let pair = (chars[i], chars[i + 1]);
+                if fingering_types.same_hand.contains(&pair) {
+                    total[0] += 1;
+                }
+                if fingering_types.same_finger_large_jump.contains(&pair) {
+                    total[1] += 1;
+                }
+                if fingering_types.same_finger_small_jump.contains(&pair) {
+                    total[2] += 1;
+                }
+                if fingering_types.little_finger_interference.contains(&pair) {
+                    total[3] += 1;
+                }
+                if fingering_types.awkward_upside_down.contains(&pair) {
+                    total[4] += 1;
+                }
+            }
+            for i in 0..(chars.len() - 2) {
+                let triple = (chars[i], chars[i + 1], chars[i + 2]);
+                if triple.0 == triple.1 && triple.1 == triple.2 {
+                    total[5] += 1;
+                }
             }
             result.push(total);
         }
