@@ -26,9 +26,16 @@ pub struct Assemble {
 
 pub type AssembleList = Vec<Assemble>;
 pub type WordList = Vec<String>;
-pub type KeyDistribution = HashMap<char, f64>;
+pub type KeyDistribution = HashMap<char, DistributionLoss>;
 pub type PairEquivalence = HashMap<String, f64>;
 pub type Frequency = HashMap<String, u64>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DistributionLoss {
+    pub ideal: f64,
+    pub lt_penalty: f64,
+    pub gt_penalty: f64,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assets {
@@ -158,7 +165,6 @@ pub struct Representation {
     pub key_repr: FxHashMap<char, Key>,
     pub repr_key: FxHashMap<Key, char>,
     pub radix: usize,
-    pub alphabet_radix: usize,
     pub select_keys: Vec<Key>,
 }
 
@@ -188,8 +194,7 @@ pub fn assemble(element: &String, index: usize) -> String {
 
 impl Representation {
     pub fn new(config: Config) -> Result<Self, Error> {
-        let (radix, alphabet_radix, select_keys, key_repr, repr_key) =
-            Self::transform_alphabet(&config)?;
+        let (radix, select_keys, key_repr, repr_key) = Self::transform_alphabet(&config)?;
         let (initial, element_repr, repr_element) = Self::transform_keymap(&config, &key_repr)?;
         let repr = Self {
             config,
@@ -199,7 +204,6 @@ impl Representation {
             key_repr,
             repr_key,
             radix,
-            alphabet_radix,
             select_keys,
         };
         Ok(repr)
@@ -210,16 +214,7 @@ impl Representation {
     /// n + 1, ..., m = 所有选择键
     pub fn transform_alphabet(
         config: &Config,
-    ) -> Result<
-        (
-            usize,
-            usize,
-            Vec<Key>,
-            FxHashMap<char, Key>,
-            FxHashMap<Key, char>,
-        ),
-        Error,
-    > {
+    ) -> Result<(usize, Vec<Key>, FxHashMap<char, Key>, FxHashMap<Key, char>), Error> {
         let mut key_repr: FxHashMap<char, Key> = FxHashMap::default();
         let mut repr_key: FxHashMap<Key, char> = FxHashMap::default();
         let mut index = 1_usize;
@@ -231,7 +226,6 @@ impl Representation {
             repr_key.insert(index, key);
             index += 1;
         }
-        let alphabet_radix = index;
         let default_select_keys = vec!['_'];
         let select_keys = config
             .encoder
@@ -252,13 +246,7 @@ impl Representation {
             index += 1;
         }
         let radix = index;
-        Ok((
-            radix,
-            alphabet_radix,
-            parsed_select_keys,
-            key_repr,
-            repr_key,
-        ))
+        Ok((radix, parsed_select_keys, key_repr, repr_key))
     }
 
     /// 读取元素映射，然后把每一个元素转换成无符号整数，从而可以用向量来表示一个元素布局，向量的下标就是元素对应的数
@@ -392,18 +380,29 @@ impl Representation {
     }
 
     /// 根据编码字符和未归一化的键位分布，生成一个理想的键位分布
-    pub fn generate_ideal_distribution(&self, key_distribution: &HashMap<char, f64>) -> Vec<f64> {
-        let mut result: Vec<f64> = (0..self.alphabet_radix)
+    pub fn generate_ideal_distribution(
+        &self,
+        key_distribution: &KeyDistribution,
+    ) -> Vec<DistributionLoss> {
+        let default_loss = DistributionLoss {
+            ideal: 0.1,
+            lt_penalty: 0.0,
+            gt_penalty: 1.0,
+        };
+        let mut result: Vec<DistributionLoss> = (0..self.radix)
             .map(|x| {
-                self.repr_key
-                    .get(&x)
-                    .map_or(0.0, |c| *key_distribution.get(c).unwrap_or(&0.1))
+                // 0 只是为了占位，不需要统计
+                if x == 0 {
+                    return default_loss.clone();
+                }
+                let key = self.repr_key.get(&x).unwrap();
+                key_distribution.get(key).unwrap_or(&default_loss).clone()
             })
             .collect();
         // 归一化
-        let sum: f64 = result.iter().sum();
+        let sum: f64 = result.iter().map(|x| x.ideal).sum();
         for i in result.iter_mut() {
-            *i /= sum;
+            i.ideal /= sum;
         }
         result
     }

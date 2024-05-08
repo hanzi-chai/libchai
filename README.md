@@ -20,24 +20,17 @@
 
 - `config.yaml`: 方案文件（米十五笔），具体的格式解释参见 [config.md](https://github.com/hanzi-chai/docs/blob/main/docs/tutorial/config.md)；这个文件也可以由[汉字自动拆分系统](https://chaifen.app/)生成；
 - `elements.txt`: 拆分表文件（米十五笔），每个字一行，每行的内容依次为汉字、制表符和以空格分隔的汉字拆分序列；这个文件也可由自动拆分系统生成；
-- `assets/character_frequency.txt`：字频文件，每个字一行，每行的内容为以制表符分隔的字和字频；
-- `assets/word_frequency.txt`：词频文件，每个字一行，每行的内容为以制表符分隔的词和词频；
-- `assets/key_equivalence.txt`：单键用指当量文件，每个按键一行，每行的内容为以制表符分隔的按键和当量；
+- `assets/frequency.txt`：词频文件，每个字一行，每行的内容为以制表符分隔的词和词频；
+- `assets/key_distribution.txt`：用指分布文件，每个按键一行，每行的内容为以制表符分隔的按键、目标频率、低频率惩罚系数、高频率惩罚系数；
 - `assets/pair_equivalence.txt`：双键速度当量文件，每个按键组合一行，每行的内容为以制表符分隔的按键组合和当量；
 
-可执行文件支持两个不同的命令：`encode` 和 `optimize`，例如
+可执行文件支持三个不同的命令：`encode`, `evaluate` 和 `optimize`，例如
 
-```bash
-./chai encode
-```
+- `encode`：将使用方案文件和拆分表计算出字词编码
+- `evaluate`：统计各类评测指标
+- `optimize`：将基于拆分表和方案文件中的配置优化元素布局
 
-将使用方案文件和拆分表计算出字词编码并统计各类评测指标，而
-
-```bash
-./chai optimize
-```
-
-将基于拆分表和方案文件中的配置优化元素布局。另外，如果方案文件和拆分表文件的路径不为以上的默认值，可以通过命令行参数提供，例如
+另外，如果方案文件和拆分表文件的路径不为以上的默认值，可以通过命令行参数提供，例如
 
 ```bash
 ./chai yima.yaml -e yima.txt optimize
