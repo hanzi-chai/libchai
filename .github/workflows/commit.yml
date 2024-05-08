@@ -9,63 +9,16 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       # 拉取代码
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install Zig
-        uses: goto-bus-stop/setup-zig@v2
-
       - name: Install Rust Toolchains
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          target: "x86_64-pc-windows-msvc,
-            x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl,
-            x86_64-apple-darwin, aarch64-apple-darwin"
+          target: "x86_64-unknown-linux-gnu"
 
-      - name: Install cargo-zigbuild
-        run: cargo install cargo-zigbuild
-
-      - name: x86_64-unknown-linux-gnu
-        run: cargo zigbuild --target x86_64-unknown-linux-gnu --bin chai --release
-
-      - name: x86_64-unknown-linux-musl
-        run: cargo zigbuild --target x86_64-unknown-linux-musl --bin chai --release
-
-      - name: universal2-apple-darwin
-        run: cargo zigbuild --target universal2-apple-darwin --bin chai --release
-
-      - name: Install cargo-xwin
-        run: cargo install cargo-xwin
-
-      - name: x86_64-pc-windows-msvc
-        run: cargo xwin build --target x86_64-pc-windows-msvc --bin chai --release
-
-      - name: Get Assets
-        run: |
-          mkdir -p dist/assets
-          cd dist/assets
-          wget "https://assets.chaifen.app/character_frequency.txt"
-          wget "https://assets.chaifen.app/word_frequency.txt"
-          wget "https://assets.chaifen.app/key_distribution.txt"
-          wget "https://assets.chaifen.app/pair_equivalence.txt"
-          cd ../..
-
-      - name: Copy Files
-        run: |
-          cp target/x86_64-unknown-linux-gnu/release/chai dist/chai-gnu
-          cp target/x86_64-unknown-linux-musl/release/chai dist/chai-musl
-          cp target/universal2-apple-darwin/release/chai dist/chai
-          cp target/x86_64-pc-windows-msvc/release/chai.exe dist/
-          cp *.md LICENSE dist/
-
-      - name: Get current date
-        id: date
-        run: echo "date=$(date +'%y%m%d')" >> $GITHUB_OUTPUT
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: "chai-${{ steps.date.outputs.date }}"
-          path: dist
+      - name: Build
+        run: cargo build --bin chai
