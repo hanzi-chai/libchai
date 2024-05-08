@@ -3,8 +3,8 @@
 use crate::config::EncoderConfig;
 use crate::error::Error;
 use crate::representation::{
-    AssembleList, Assets, AutoSelect, Buffer, EncodeExport, Entry, Frequency, Key, KeyMap,
-    Occupation, Representation, Sequence, MAX_COMBINATION_LENGTH,
+    Assemble, AssembleList, Assets, AutoSelect, Buffer, EncodeExport, Entry, Frequency, Key,
+    KeyMap, Occupation, Representation, Sequence, MAX_COMBINATION_LENGTH,
 };
 use std::collections::HashSet;
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
@@ -16,6 +16,7 @@ pub struct Encodable {
     pub length: usize,
     pub sequence: Sequence,
     pub frequency: u64,
+    pub level: i64,
 }
 
 pub struct Encoder {
@@ -44,13 +45,13 @@ impl Encoder {
                 // 使用逆向最大匹配算法来分词
                 let chars: Vec<_> = word.chars().collect();
                 let mut end = chars.len();
-                let mut start = end - 1;
+                let mut start;
                 while end > 0 {
+                    start = end - 1;
                     let partial_word: String = chars[start..end].iter().collect();
                     // 如果最后一个字不在词表里，就不要了
                     if !words.contains(&partial_word) {
                         end -= 1;
-                        start -= 1;
                         continue;
                     }
                     // 继续向前匹配，看看是否能匹配到更长的词
@@ -76,7 +77,6 @@ impl Encoder {
                         new_frequency.get(&maximum_match).unwrap_or(&0) + *value,
                     );
                     end = start;
-                    start = end - 1;
                 }
             }
         }
@@ -92,30 +92,37 @@ impl Encoder {
         assets: &Assets,
     ) -> Result<Encoder, Error> {
         let encoder = &representation.config.encoder;
+        let max_length = encoder.max_length;
+        if max_length >= 8 {
+            return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
+        }
 
         // 预处理词频
         let all_words: HashSet<_> = info.iter().map(|x| x.name.clone()).collect();
         let frequency = Self::adapt(&assets.frequency, &all_words);
 
-        // 预处理拆分序列
-        let weighted_sequences = representation.transform_elements(&info)?;
-
         // 将拆分序列映射降序排列
-        let mut info: Vec<_> = weighted_sequences
-            .into_iter()
-            .map(|(word, sequence, importance)| {
-                let char_frequency = *frequency.get(&word).unwrap_or(&0);
-                let frequency = char_frequency * importance / 100;
-                Encodable {
-                    name: word.clone(),
-                    length: word.chars().count(),
-                    sequence,
-                    frequency,
-                }
-            })
-            .collect();
+        let mut encodables = Vec::new();
+        for assemble in info {
+            let Assemble {
+                name,
+                importance,
+                level,
+                ..
+            } = assemble.clone();
+            let sequence = representation.transform_elements(assemble)?;
+            let char_frequency = *frequency.get(&name).unwrap_or(&0);
+            let frequency = char_frequency * importance / 100;
+            encodables.push(Encodable {
+                name: name.clone(),
+                length: name.chars().count(),
+                sequence,
+                frequency,
+                level,
+            });
+        }
 
-        info.sort_by_key(|x| Reverse(x.frequency));
+        encodables.sort_by_key(|x| Reverse(x.frequency));
 
         // 处理自动上屏
         let auto_select = representation.transform_auto_select()?;
@@ -130,7 +137,7 @@ impl Encoder {
             word_short_code_schemes = Some(representation.transform_schemes(schemes)?);
         };
         let encoder = Encoder {
-            info,
+            info: encodables,
             auto_select,
             config: encoder.clone(),
             radix: representation.radix,
@@ -163,7 +170,28 @@ impl Encoder {
 
     pub fn encode_short(&self, buffer: &mut Buffer, full_occupation: &Occupation) {
         let mut short_occupation = Occupation::new(self.get_space());
+        // 优先简码
         for ((code, pointer), encodable) in zip(zip(&buffer.full, &mut buffer.short), &self.info) {
+            if encodable.level == -1 {
+                continue;
+            }
+            let full = &code.code;
+            let modulo = self.radix.pow(encodable.level as u32);
+            let prefix = full % modulo;
+            let key = self.select_keys[0];
+            let short = if *self.auto_select.get(prefix).unwrap_or(&true) {
+                prefix
+            } else {
+                prefix + key * modulo
+            };
+            pointer.code = short;
+            pointer.duplication = false;
+        }
+        // 常规简码
+        for ((code, pointer), encodable) in zip(zip(&buffer.full, &mut buffer.short), &self.info) {
+            if encodable.level >= 0 {
+                continue;
+            }
             let full = &code.code;
             let mut has_reduced = false;
             let schemes = if encodable.length == 1 {

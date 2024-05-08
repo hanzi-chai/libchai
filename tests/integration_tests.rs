@@ -42,14 +42,14 @@ fn process_cli_input(config: Config, elements: AssembleList, assets: Assets, b: 
 
 #[bench]
 fn length_4(b: &mut Bencher) -> Result<(), Error> {
-    let cli = simulate_cli_input("config.yaml", "elements.txt");
+    let cli = simulate_cli_input("mswb.yaml", "mswb.txt");
     let (config, resource, assets) = cli.prepare_file();
     process_cli_input(config, resource, assets, b)
 }
 
 #[bench]
 fn length_4_char_only(b: &mut Bencher) -> Result<(), Error> {
-    let cli = simulate_cli_input("config.yaml", "elements.txt");
+    let cli = simulate_cli_input("mswb.yaml", "mswb.txt");
     let (config, resource, assets) = cli.prepare_file();
     let resource = resource.into_iter().filter(|x| x.name.chars().count() == 1).collect();
     process_cli_input(config, resource, assets, b)

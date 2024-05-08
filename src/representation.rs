@@ -8,7 +8,7 @@ use crate::{
 use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::{cmp::Reverse, collections::HashMap};
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 pub struct Input {
@@ -17,11 +17,19 @@ pub struct Input {
     pub assets: Assets,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Assemble {
     pub name: String,
     pub sequence: String,
     pub importance: u64,
+    #[serde(default = "Assemble::suggested_level_default")]
+    pub level: i64,
+}
+
+impl Assemble {
+    const fn suggested_level_default() -> i64 {
+        -1
+    }
 }
 
 pub type AssembleList = Vec<Assemble>;
@@ -49,12 +57,6 @@ pub type Element = usize;
 
 /// 字或词的拆分序列
 pub type Sequence = Vec<Element>;
-
-/// 字词拆分序列列表
-pub type WeightedSequences = Vec<(String, Sequence, u64)>;
-
-/// 字词到拆分序列的映射（多音字取最高频音）
-pub type SequenceMap = HashMap<String, Sequence>;
 
 /// 编码用无符号整数表示
 pub type Code = usize;
@@ -288,44 +290,29 @@ impl Representation {
     }
 
     /// 读取拆分表，将拆分序列中的每一个元素按照先前确定的元素 -> 整数映射来转换为整数向量
-    pub fn transform_elements(
-        &self,
-        raw_sequence_map: &AssembleList,
-    ) -> Result<WeightedSequences, Error> {
-        let mut weighted_sequences: WeightedSequences = Vec::new();
+    pub fn transform_elements(&self, assemble: Assemble) -> Result<Sequence, Error> {
         let max_length = self.config.encoder.max_length;
-        if max_length >= 8 {
-            return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
+        let name = assemble.name;
+        let raw_sequence: Vec<_> = assemble.sequence.split(' ').collect();
+        let mut sequence = Sequence::new();
+        let length = raw_sequence.len();
+        if length > max_length {
+            return Err(format!(
+                "编码对象「{name}」包含的元素数量为 {length}，超过了最大码长 {max_length}"
+            )
+            .into());
         }
-        for Assemble {
-            name,
-            sequence,
-            importance,
-        } in raw_sequence_map
-        {
-            let mut converted_elems: Vec<usize> = Vec::new();
-            let sequence: Vec<_> = sequence.split(' ').map(|x| x.to_string()).collect();
-            let length = sequence.len();
-            if length > max_length {
+        for element in raw_sequence {
+            if let Some(number) = self.element_repr.get(element) {
+                sequence.push(*number);
+            } else {
                 return Err(format!(
-                    "编码对象「{name}」包含的元素数量为 {length}，超过了最大码长 {max_length}"
+                    "编码对象「{name}」包含的元素「{element}」无法在键盘映射中找到"
                 )
                 .into());
             }
-            for element in &sequence {
-                if let Some(number) = self.element_repr.get(element) {
-                    converted_elems.push(*number);
-                } else {
-                    return Err(format!(
-                        "编码对象「{name}」包含的元素「{element}」无法在键盘映射中找到"
-                    )
-                    .into());
-                }
-            }
-            weighted_sequences.push((name.clone(), converted_elems, *importance));
         }
-        weighted_sequences.sort_by_key(|x| (x.0.clone(), Reverse(x.2)));
-        Ok(weighted_sequences)
+        Ok(sequence)
     }
 
     /// 根据一个计算中得到的元素布局来生成一份新的配置文件，其余内容不变直接复制过来
