@@ -13,6 +13,7 @@ use crate::representation::Assets;
 use crate::representation::Buffer;
 use crate::representation::CodeInfo;
 use crate::representation::Codes;
+use crate::representation::DistributionLoss;
 use crate::representation::KeyMap;
 use crate::representation::Occupation;
 use crate::representation::Representation;
@@ -22,16 +23,14 @@ use metric::LevelMetric2;
 use metric::Metric;
 use metric::PartialMetric;
 use metric::TierMetric;
-use rustc_hash::FxHashMap;
 use std::iter::zip;
 
 pub struct Objective {
     config: ObjectiveConfig,
     encoder: Encoder,
-    ideal_distribution: Vec<f64>,
+    ideal_distribution: Vec<DistributionLoss>,
     pair_equivalence: Vec<f64>,
     new_pair_equivalence: Vec<f64>,
-    repr_key: FxHashMap<usize, char>,
 }
 
 pub type Frequencies = Vec<f64>;
@@ -49,7 +48,6 @@ impl Objective {
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
         let new_pair_equivalence =
             representation.transform_new_pair_equivalence(&assets.pair_equivalence);
-        let repr_key = representation.repr_key.clone();
         let config = representation
             .config
             .optimization
@@ -61,71 +59,39 @@ impl Objective {
             ideal_distribution,
             pair_equivalence,
             new_pair_equivalence,
-            repr_key,
         };
         Ok(objective)
     }
 
+    /// 用指分佈偏差
+    // This is a metric indicating whether the distribution of the
+    // keys is ergonomic. It calculates the deviation of the empirical
+    // distribution of frequencies from the ideal one. In an ideal
+    // situation, the frequency of keys should follows the following
+    // rule of thumbs:
+
+    // - The middle row should be used more often.
+    // - The middle and index fingers should be used more often.
+    // - The keys covered by the index fingers should not be used too
+    // frequently to avoid tiredness of index fingers.
+    // - The keys covered by right-hand fingers should be used more
+    // than the corresponding keys covered by left-hand fingers.
+
+    // Users can adjust the ideal frequencies by via an input mapping
+    // table.
     fn get_distribution_distance(
         &self,
         distribution: &Vec<f64>,
-        ideal_distribution: &Vec<f64>,
+        ideal_distribution: &Vec<DistributionLoss>,
     ) -> f64 {
         let mut distance = 0.0;
-        for (frequency, ideal_frequency) in zip(distribution, ideal_distribution) {
-            if frequency > ideal_frequency {
-                distance += frequency - ideal_frequency;
-            }
-        }
-        distance
-    }
-
-    fn get_distribution_distance_yu(
-        &self,
-        distribution: &Vec<f64>,
-        ideal_distribution: &Vec<f64>,
-    ) -> f64 {
-        /*
-        宇碼式用指分佈偏差
-
-        This is a metric indicating whether the distribution of the
-        keys is ergonomic. It calculates the deviation of the empirical
-        distribution of frequencies from the ideal one. In an ideal
-        situation, the frequency of keys should follows the following
-        rule of thumbs:
-
-        - The middle row should be used more often.
-        - The middle and index fingers should be used more often.
-        - The keys covered by the index fingers should not be used too
-        frequently to avoid tiredness of index fingers.
-        - The keys covered by right-hand fingers should be used more
-        than the corresponding keys covered by left-hand fingers.
-
-        Users can adjust the ideal frequencies by via an input mapping
-        table.
-        */
-
-        let mut distance: f64 = 0.0;
-        let mut idx: usize = 0;
-        for (frequency, ideal_frequency) in zip(distribution, ideal_distribution) {
-            if frequency <= ideal_frequency {
-                distance += ideal_frequency - frequency;
+        for (frequency, loss) in zip(distribution, ideal_distribution) {
+            let diff = frequency - loss.ideal;
+            if diff > 0.0 {
+                distance += loss.gt_penalty * diff;
             } else {
-                // repr_key 還原 index 到其對應的按键。
-                distance = frequency - ideal_frequency;
-                distance = match self.repr_key[&idx] {
-                    'd' | 'k' => 0.0,                                                   // 不懲罰
-                    'e' | 'i' => distance / 4.0, // 少量懲罰
-                    'f' | 'j' | 's' | 'l' | 'a' => {
-                        distance / 2.0
-                    } // 中量懲罰
-                    'y' | 'q' | 'p' | 'b' | 'x' | 'z' => {
-                        distance * 2.0
-                    } // 加倍懲罰
-                    _ => distance  // 不作處理
-                }
+                distance -= loss.lt_penalty * diff;
             }
-            idx += 1;
         }
         distance
     }
@@ -157,7 +123,7 @@ impl Objective {
                 tiers_levels.push(vec);
             }
         }
-        let mut distribution = vec![0_u64; self.encoder.alphabet_radix];
+        let mut distribution = vec![0_u64; self.encoder.radix];
         // 标记初始字符、结束字符的频率
         let mut chuma = vec![0_u64; self.encoder.radix];
         let mut moma = vec![0_u64; self.encoder.radix];
@@ -186,7 +152,7 @@ impl Objective {
             // 杏码式用指当量，只统计最初的1码
             if let Some(_) = weights.new_key_equivalence {
                 total_new_keys_equivalence +=
-                    frequency as f64 / self.ideal_distribution[*code % self.encoder.radix];
+                    frequency as f64 / self.ideal_distribution[*code % self.encoder.radix].ideal;
             }
             // 杏码式用指当量改
             if let Some(_) = weights.new_key_equivalence_modified {

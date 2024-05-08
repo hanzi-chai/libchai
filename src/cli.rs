@@ -6,12 +6,11 @@
 use crate::config::Config;
 use crate::interface::Interface;
 use crate::objectives::metric::Metric;
-use crate::representation::{AssembleList, Assets, EncodeExport, Entry, Frequency};
+use crate::representation::{AssembleList, Assets, EncodeExport, Entry, Frequency, KeyDistribution, PairEquivalence};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use csv::ReaderBuilder;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::iter::{zip, FromIterator};
 use std::{
     fs,
@@ -93,9 +92,9 @@ impl Cli {
         let f_path = frequency.unwrap_or(assets_dir.join("frequency.txt"));
         let frequency: Frequency = Self::read(f_path);
         let keq_path = key_distribution.unwrap_or(assets_dir.join("key_distribution.txt"));
-        let key_distribution: HashMap<char, f64> = Self::read(keq_path);
+        let key_distribution: KeyDistribution = Self::read(keq_path);
         let peq_path = pair_equivalence.unwrap_or(assets_dir.join("pair_equivalence.txt"));
-        let pair_equivalence: HashMap<String, f64> = Self::read(peq_path);
+        let pair_equivalence: PairEquivalence = Self::read(peq_path);
         let assets = Assets {
             frequency,
             key_distribution,
