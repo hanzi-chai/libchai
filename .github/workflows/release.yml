@@ -1,0 +1,151 @@
+name: Release CI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      # 拉取代码
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get Assets
+        run: |
+          make assets
+          mkdir -p dist/assets
+          cp assets/* dist/assets
+          cp *.md LICENSE dist/
+
+      - name: Install Rust Toolchains
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: "x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl"
+
+      - name: Build
+        run: |
+          cargo build --target x86_64-unknown-linux-gnu --bin chai --release
+          cargo build --target x86_64-unknown-linux-musl --bin chai --release
+
+      - name: Archive
+        run: |
+          cp target/x86_64-unknown-linux-gnu/release/chai dist/chai
+          tar -czf chai_linux-gnu.tar.gz dist/*
+          cp target/x86_64-unknown-linux-musl/release/chai dist/chai
+          tar -czf chai_linux-musl.tar.gz dist/*
+
+      - name: Update CHANGELOG
+        id: changelog
+        uses: requarks/changelog-action@v1
+        with:
+          token: ${{ github.token }}
+          tag: ${{ github.ref_name }}
+          writeToFile: false
+          includeInvalidCommits: true
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "chai*.tar.gz"
+          allowUpdates: true
+          body: |
+            ${{ steps.changelog.outputs.changes }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      # 拉取代码
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get Assets
+        run: |
+          make assets
+          mkdir -p dist/assets
+          cp assets/* dist/assets
+          cp *.md LICENSE dist/
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+
+      - name: Install Rust Toolchains
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: "x86_64-apple-darwin, aarch64-apple-darwin"
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild
+
+      - name: Build
+        run: cargo zigbuild --target universal2-apple-darwin --bin chai --release
+
+      - name: Archive
+        run: |
+          cp target/universal2-apple-darwin/release/chai dist/chai
+          tar -czf chai_macos.tar.gz dist/*
+
+      - name: Update CHANGELOG
+        id: changelog
+        uses: requarks/changelog-action@v1
+        with:
+          token: ${{ github.token }}
+          tag: ${{ github.ref_name }}
+          writeToFile: false
+          includeInvalidCommits: true
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "chai_macos.tar.gz"
+          allowUpdates: true
+          body: |
+            ${{ steps.changelog.outputs.changes }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      # 拉取代码
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get Assets
+        run: |
+          choco install curl
+          make assets
+          mkdir -p dist/assets
+          cp assets/* dist/assets
+          cp *.md dist/
+          cp LICENSE dist/
+
+      - name: Install Rust Toolchains
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: "x86_64-pc-windows-msvc"
+
+      - name: Build
+        run: cargo build --bin chai --release
+
+      - name: Archive
+        run: |
+          cp target/release/chai.exe dist/
+          7z a -tzip chai_windows.zip dist
+
+      - name: Update CHANGELOG
+        id: changelog
+        uses: requarks/changelog-action@v1
+        with:
+          token: ${{ github.token }}
+          tag: ${{ github.ref_name }}
+          writeToFile: false
+          includeInvalidCommits: true
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "chai_windows.zip"
+          allowUpdates: true
+          body: |
+            ${{ steps.changelog.outputs.changes }}
+          token: ${{ secrets.GITHUB_TOKEN }}
