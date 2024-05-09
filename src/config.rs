@@ -192,6 +192,7 @@ pub struct PartialWeights {
     pub pair_equivalence: Option<f64>,
     //杏码的「速度（组合）当量」。
     pub new_pair_equivalence: Option<f64>,
+    pub extended_pair_equivalence: Option<f64>,
     pub fingering: Option<FingeringWeights>,
     pub levels: Option<Vec<LevelWeights>>,
 }

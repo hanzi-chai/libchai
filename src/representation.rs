@@ -65,8 +65,9 @@ pub type Code = usize;
 #[derive(Clone, Debug, Copy)]
 pub struct CodeInfo {
     pub code: Code,
-    pub duplication: bool,
     pub frequency: u64,
+    pub duplication: bool,
+    pub single: bool,
 }
 
 /// 一组编码
@@ -133,29 +134,20 @@ pub struct EncodeExport {
 pub struct Buffer {
     pub full: Codes,
     pub short: Codes,
-    pub characters_full: Codes,
-    pub characters_short: Codes,
-    pub words_full: Codes,
-    pub words_short: Codes,
 }
 
 impl Buffer {
     pub fn new(encoder: &Encoder) -> Self {
         let make_placeholder = |x: &Encodable| CodeInfo {
             code: 0,
-            duplication: false,
             frequency: x.frequency,
+            duplication: false,
+            single: x.name.chars().count() == 1,
         };
-        let it = encoder.info.iter();
-        let char_it = encoder.info.iter().filter(|x| x.length == 1);
-        let word_it = encoder.info.iter().filter(|x| x.length > 1);
+        let it = encoder.encodables.iter();
         Self {
             full: it.clone().map(make_placeholder).collect(),
             short: it.clone().map(make_placeholder).collect(),
-            characters_full: char_it.clone().map(make_placeholder).collect(),
-            characters_short: char_it.clone().map(make_placeholder).collect(),
-            words_full: word_it.clone().map(make_placeholder).collect(),
-            words_short: word_it.clone().map(make_placeholder).collect(),
         }
     }
 }

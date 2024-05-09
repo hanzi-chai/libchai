@@ -57,6 +57,7 @@ pub struct PartialMetric {
     pub new_key_equivalence_modified: Option<f64>,
     pub pair_equivalence: Option<f64>,
     pub new_pair_equivalence: Option<f64>,
+    pub extended_pair_equivalence: Option<f64>,
     pub fingering: Option<FingeringMetric>,
     pub levels: Option<Vec<LevelMetric2>>,
 }
@@ -82,6 +83,9 @@ impl Display for PartialMetric {
         }
         if let Some(equivalence) = self.new_pair_equivalence {
             f.write_str(&format!("杏码式组合当量：{:.4}；", equivalence))?;
+        }
+        if let Some(equivalence) = self.extended_pair_equivalence {
+            f.write_str(&format!("词间当量：{:.4}；", equivalence))?;
         }
         let types = ["同手", "大跨", "小跨", "干扰", "错手", "三连", "备用", "备用"];
         if let Some(fingering) = &self.fingering {

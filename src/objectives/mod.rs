@@ -107,6 +107,7 @@ impl Objective {
         &self,
         codes: &Codes,
         weights: &PartialWeights,
+        group: bool,
     ) -> (PartialMetric, f64) {
         let mut total_frequency = 0;
         // 初始化整体指标的变量
@@ -118,6 +119,9 @@ impl Objective {
         let mut total_new_keys_equivalence_modified = 0.0;
         let mut total_pair_equivalence = 0.0;
         let mut total_new_pair_equivalence = 0.0;
+        // 词间当量
+        let mut total_extended_pairs = 0;
+        let mut total_extended_pair_equivalence = 0.0;
         let mut total_labels = [0_u64; 8];
         let mut total_levels = vec![0; weights.levels.as_ref().unwrap_or(&vec![]).len()];
         // 初始化分级指标的变量
@@ -141,7 +145,11 @@ impl Objective {
                 code,
                 duplication: duplicated,
                 frequency,
+                single,
             } = code_info;
+            if group != *single {
+                continue;
+            }
             let frequency = *frequency;
             total_frequency += frequency;
             let length = code.ilog(self.encoder.radix) as u64 + 1;
@@ -156,12 +164,12 @@ impl Objective {
                     current /= self.encoder.radix;
                 }
             }
-            // 杏码式用指当量，只统计最初的1码
+            // 按键分布：杏码式用指当量，只统计最初的1码
             if let Some(_) = weights.new_key_equivalence {
                 total_new_keys_equivalence +=
                     frequency as f64 / self.ideal_distribution[*code % self.encoder.radix].ideal;
             }
-            // 杏码式用指当量改
+            // 按键分布：杏码式用指当量改
             if let Some(_) = weights.new_key_equivalence_modified {
                 //取得首末码
                 let codefirst = *code % self.encoder.radix;
@@ -172,6 +180,7 @@ impl Objective {
                 chuma[codefirst] = chuma[codefirst] + frequency;
                 moma[codelast] = moma[codelast] + frequency;
             }
+            // 组合当量
             if let Some(_) = weights.pair_equivalence {
                 let mut code = *code;
                 while code > self.encoder.radix {
@@ -190,6 +199,19 @@ impl Objective {
                 }
                 total_new_keys += length * frequency;
             }
+            // 词间当量
+            if let Some(_) = weights.extended_pair_equivalence {
+                let transitions = &self.encoder.transition_matrix[index];
+                let last_char = code / self.encoder.radix.pow(length as u32 - 1);
+                for (i, weight) in transitions {
+                    let next_char = codes[*i].code % self.encoder.radix;
+                    let combination = last_char + next_char * self.encoder.radix;
+                    let equivalence = self.pair_equivalence[combination];
+                    total_extended_pair_equivalence += equivalence * *weight as f64;
+                    total_extended_pairs += *weight;
+                }
+            }
+            // 差指法统计
             if let Some(fingering) = &weights.fingering {
                 let mut code = *code;
                 while code > self.encoder.radix {
@@ -255,6 +277,7 @@ impl Objective {
             new_key_equivalence_modified: None,
             pair_equivalence: None,
             new_pair_equivalence: None,
+            extended_pair_equivalence: None,
             fingering: None,
             duplication: None,
             levels: None,
@@ -290,6 +313,11 @@ impl Objective {
         if let Some(equivalence_weight) = weights.new_pair_equivalence {
             let equivalence = total_new_pair_equivalence / total_new_keys as f64;
             partial_metric.new_pair_equivalence = Some(equivalence);
+            loss += equivalence * equivalence_weight;
+        }
+        if let Some(equivalence_weight) = weights.extended_pair_equivalence {
+            let equivalence = total_extended_pair_equivalence / total_extended_pairs as f64;
+            partial_metric.extended_pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
         if let Some(fingering_weight) = &weights.fingering {
@@ -374,30 +402,27 @@ impl Objective {
         if self.config.characters_short.is_some() || self.config.words_short.is_some() {
             self.encoder.encode_short(buffer, &mut occupation);
         }
-        self.encoder.split(buffer);
         // 单字全码
         if let Some(characters_weight) = &self.config.characters_full {
-            let (partial, accum) =
-                self.evaluate_partial(&buffer.characters_full, characters_weight);
+            let (partial, accum) = self.evaluate_partial(&buffer.full, characters_weight, true);
             loss += accum;
             metric.characters_full = Some(partial);
         }
         // 单字简码
         if let Some(characters_short) = &self.config.characters_short {
-            let (partial, accum) =
-                self.evaluate_partial(&buffer.characters_short, characters_short);
+            let (partial, accum) = self.evaluate_partial(&buffer.short, characters_short, true);
             loss += accum;
             metric.characters_short = Some(partial);
         }
         // 词语全码
         if let Some(words_weight) = &self.config.words_full {
-            let (partial, accum) = self.evaluate_partial(&buffer.words_full, words_weight);
+            let (partial, accum) = self.evaluate_partial(&buffer.full, words_weight, false);
             loss += accum;
             metric.words_full = Some(partial);
         }
         // 词语简码
         if let Some(words_short) = &self.config.words_short {
-            let (partial, accum) = self.evaluate_partial(&buffer.words_short, words_short);
+            let (partial, accum) = self.evaluate_partial(&buffer.short, words_short, false);
             loss += accum;
             metric.words_short = Some(partial);
         }
