@@ -6,12 +6,14 @@
 use crate::config::Config;
 use crate::interface::Interface;
 use crate::objectives::metric::Metric;
-use crate::representation::{AssembleList, Assets, EncodeExport, Entry, Frequency, KeyDistribution, PairEquivalence};
+use crate::representation::{
+    AssembleList, Assets, Entry, Frequency, KeyDistribution, PairEquivalence,
+};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use csv::ReaderBuilder;
 use serde::Deserialize;
-use std::iter::{zip, FromIterator};
+use std::iter::FromIterator;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -103,40 +105,27 @@ impl Cli {
         return (config, elements, assets);
     }
 
-    pub fn export_code(path: &PathBuf, original: Entry) {
-        if original.item.is_empty() {
-            return;
-        }
+    pub fn write_encode_results(entries: Vec<Entry>) {
+        let path = PathBuf::from("code.txt");
         let mut writer = csv::WriterBuilder::new()
             .delimiter(b'\t')
             .has_headers(false)
-            .from_path(path)
+            .from_path(&path)
             .unwrap();
-        if let Some(short) = original.short {
-            for (item, (full, short)) in zip(
-                original.item.iter(),
-                zip(original.full.iter(), short.iter()),
-            ) {
-                writer.serialize((&item, &full, &short)).unwrap();
-            }
-        } else {
-            for (item, full) in zip(original.item.iter(), original.full.iter()) {
-                writer.serialize((&item, &full)).unwrap();
-            }
+        for Entry {
+            name,
+            full,
+            full_rank,
+            short,
+            short_rank,
+        } in entries
+        {
+            writer
+                .serialize((&name, &full, &full_rank.abs(), &short, &short_rank.abs()))
+                .unwrap();
         }
         writer.flush().unwrap();
-    }
-
-    pub fn write_encode_results(results: EncodeExport) {
-        let c_path = PathBuf::from("characters.txt");
-        let w_path = PathBuf::from("words.txt");
-        Self::export_code(&c_path, results.characters);
-        Self::export_code(&w_path, results.words);
-        println!(
-            "已完成编码，结果保存在 {} 和 {} 中",
-            c_path.display(),
-            w_path.display()
-        );
+        println!("已完成编码，结果保存在 {} 中", path.clone().display());
     }
 
     pub fn report_metric(metric: Metric) {

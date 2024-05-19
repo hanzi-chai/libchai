@@ -124,16 +124,16 @@ pub struct Metric {
 impl Display for Metric {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(characters) = &self.characters_full {
-            f.write_str(&format!("单字全码［{}］\n", characters))?;
+            f.write_str(&format!("一字全码［{}］\n", characters))?;
         }
         if let Some(words) = &self.words_full {
-            f.write_str(&format!("词语全码［{}］\n", words))?;
+            f.write_str(&format!("多字全码［{}］\n", words))?;
         }
         if let Some(characters_reduced) = &self.characters_short {
-            f.write_str(&format!("单字简码［{}］\n", characters_reduced))?;
+            f.write_str(&format!("一字简码［{}］\n", characters_reduced))?;
         }
         if let Some(words_reduced) = &self.words_short {
-            f.write_str(&format!("词语简码［{}］\n", words_reduced))?;
+            f.write_str(&format!("多字简码［{}］\n", words_reduced))?;
         }
         Ok(())
     }

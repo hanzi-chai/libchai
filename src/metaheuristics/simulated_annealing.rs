@@ -37,6 +37,9 @@ pub fn solve<T: Clone, M: Clone + Display>(
     for step in 0..steps {
         let progress = step as f64 / steps as f64;
         let temperature = t_max / (log_space * progress).exp();
+        if step % 1000 == 0 {
+            interface.report_schedule(step, temperature, format!("{}", annealing_rank.0));
+        }
         let next_candidate = problem.tweak_candidate(&annealing_candidate);
         let next_rank = problem.rank_candidate(&next_candidate);
         if step == 1000 {
@@ -57,9 +60,6 @@ pub fn solve<T: Clone, M: Clone + Display>(
                 progress > report_after.unwrap_or(0.9),
                 interface,
             );
-        }
-        if step % 1000 == 0 {
-            interface.report_schedule(step, temperature, format!("{}", annealing_rank.0));
         }
     }
     interface.report_schedule(steps, t_min, format!("{}", annealing_rank.0));

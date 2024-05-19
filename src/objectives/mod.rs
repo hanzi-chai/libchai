@@ -102,7 +102,7 @@ impl Objective {
         distance
     }
 
-    /// 计算一部分编码的指标，这里的部分可以是单字全码、单字简码、词语全码或词语简码
+    /// 计算一部分编码的指标，这里的部分可以是一字全码、一字简码、多字全码或多字简码
     pub fn evaluate_partial(
         &self,
         codes: &Codes,
@@ -143,19 +143,19 @@ impl Objective {
         for (index, code_info) in codes.iter().enumerate() {
             let CodeInfo {
                 code,
-                duplication: duplicated,
+                rank,
                 frequency,
                 single,
-            } = code_info;
-            if group != *single {
+            } = code_info.clone();
+            if group != single || code == 0 {
                 continue;
             }
-            let frequency = *frequency;
             total_frequency += frequency;
+            let code = self.encoder.get_actual_code(code, rank);
             let length = code.ilog(self.encoder.radix) as u64 + 1;
             // 按键分布
             if weights.key_distribution.is_some() {
-                let mut current = *code;
+                let mut current = code;
                 while current > 0 {
                     let key = current % self.encoder.radix;
                     if key < distribution.len() {
@@ -167,13 +167,13 @@ impl Objective {
             // 按键分布：杏码式用指当量，只统计最初的1码
             if let Some(_) = weights.new_key_equivalence {
                 total_new_keys_equivalence +=
-                    frequency as f64 / self.ideal_distribution[*code % self.encoder.radix].ideal;
+                    frequency as f64 / self.ideal_distribution[code % self.encoder.radix].ideal;
             }
             // 按键分布：杏码式用指当量改
             if let Some(_) = weights.new_key_equivalence_modified {
                 //取得首末码
-                let codefirst = *code % self.encoder.radix;
-                let mut codelast = *code;
+                let codefirst = code % self.encoder.radix;
+                let mut codelast = code;
                 while codelast > self.encoder.radix {
                     codelast /= self.encoder.radix;
                 }
@@ -182,7 +182,7 @@ impl Objective {
             }
             // 组合当量
             if let Some(_) = weights.pair_equivalence {
-                let mut code = *code;
+                let mut code = code;
                 while code > self.encoder.radix {
                     total_pair_equivalence +=
                         self.pair_equivalence[code % max_index] * frequency as f64;
@@ -191,7 +191,7 @@ impl Objective {
                 total_pairs += (length - 1) * frequency;
             }
             if let Some(_) = weights.new_pair_equivalence {
-                let mut code = *code;
+                let mut code = code;
                 while code > self.encoder.radix {
                     total_new_pair_equivalence +=
                         self.new_pair_equivalence[code % max_index] * frequency as f64;
@@ -213,7 +213,7 @@ impl Objective {
             }
             // 差指法统计
             if let Some(fingering) = &weights.fingering {
-                let mut code = *code;
+                let mut code = code;
                 while code > self.encoder.radix {
                     let label = self.fingering_types[code % max_index];
                     for (i, weight) in fingering.iter().enumerate() {
@@ -225,7 +225,7 @@ impl Objective {
                 }
             }
             // 重码
-            if *duplicated {
+            if rank > 0 {
                 total_duplication += frequency;
                 if let Some(tiers) = &weights.tiers {
                     for (itier, tier) in tiers.iter().enumerate() {
@@ -397,30 +397,31 @@ impl Objective {
             characters_short: None,
             words_short: None,
         };
-        let mut occupation = Occupation::new(self.pair_equivalence.len());
-        self.encoder.encode_full(candidate, buffer, &mut occupation);
-        if self.config.characters_short.is_some() || self.config.words_short.is_some() {
-            self.encoder.encode_short(buffer, &mut occupation);
-        }
-        // 单字全码
+        let mut full_occupation = Occupation::new(self.pair_equivalence.len());
+        let mut short_occupation = Occupation::new(self.pair_equivalence.len());
+        self.encoder
+            .encode_full(candidate, buffer, &mut full_occupation);
+        self.encoder
+            .encode_short(buffer, &mut full_occupation, &mut short_occupation);
+        // 一字全码
         if let Some(characters_weight) = &self.config.characters_full {
             let (partial, accum) = self.evaluate_partial(&buffer.full, characters_weight, true);
             loss += accum;
             metric.characters_full = Some(partial);
         }
-        // 单字简码
+        // 一字简码
         if let Some(characters_short) = &self.config.characters_short {
             let (partial, accum) = self.evaluate_partial(&buffer.short, characters_short, true);
             loss += accum;
             metric.characters_short = Some(partial);
         }
-        // 词语全码
+        // 多字全码
         if let Some(words_weight) = &self.config.words_full {
             let (partial, accum) = self.evaluate_partial(&buffer.full, words_weight, false);
             loss += accum;
             metric.words_full = Some(partial);
         }
-        // 词语简码
+        // 多字简码
         if let Some(words_short) = &self.config.words_short {
             let (partial, accum) = self.evaluate_partial(&buffer.short, words_short, false);
             loss += accum;

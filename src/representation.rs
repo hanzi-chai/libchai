@@ -1,14 +1,17 @@
 //! 内部数据结构的表示和定义
 
 use crate::{
-    config::{Config, Mapped, MappedKey, ShortCodeConfig},
-    encoder::{CompiledShortCodeConfig, Encodable, Encoder},
-    error::Error, objectives::fingering::get_fingering_types,
+    config::{Config, Mapped, MappedKey, Scheme, ShortCodeConfig},
+    encoder::{CompiledScheme, Encodable, Encoder},
+    error::Error,
+    objectives::fingering::get_fingering_types,
 };
 use regex::Regex;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+pub const MAX_WORD_LENGTH: usize = 10;
 
 #[derive(Deserialize)]
 pub struct Input {
@@ -66,7 +69,7 @@ pub type Code = usize;
 pub struct CodeInfo {
     pub code: Code,
     pub frequency: u64,
-    pub duplication: bool,
+    pub rank: i8,
     pub single: bool,
 }
 
@@ -85,30 +88,49 @@ pub type Label = [u8; 8];
 /// 编码是否已被占据
 /// 用一个数组和一个哈希集合来表示，数组用来表示四码以内的编码，哈希集合用来表示四码以上的编码
 pub struct Occupation {
-    pub vector: Vec<bool>,
-    pub hashset: FxHashSet<usize>,
+    pub vector: Vec<Slot>,
+    pub hashmap: FxHashMap<usize, u8>,
+}
+
+#[derive(Default, Clone)]
+pub struct Slot {
+    pub hash: u16,
+    pub count: u8,
 }
 
 impl Occupation {
     pub fn new(length: usize) -> Self {
-        let vector = vec![false; length];
-        let hashset = FxHashSet::default();
-        Self { vector, hashset }
-    }
-
-    pub fn insert(&mut self, index: usize) {
-        if index < self.vector.len() {
-            self.vector[index] = true;
-        } else {
-            self.hashset.insert(index);
+        let vector = vec![Slot::default(); length];
+        let hashset = FxHashMap::default();
+        Self {
+            vector,
+            hashmap: hashset,
         }
     }
 
-    pub fn contains(&self, index: usize) -> bool {
+    pub fn insert(&mut self, index: usize, hash: u16) {
         if index < self.vector.len() {
-            self.vector[index]
+            self.vector[index].hash = hash;
+            self.vector[index].count += 1;
         } else {
-            self.hashset.contains(&index)
+            self.hashmap
+                .insert(index, self.hashmap.get(&index).unwrap_or(&0) + 1);
+        }
+    }
+
+    pub fn rank(&self, index: usize) -> u8 {
+        if index < self.vector.len() {
+            self.vector[index].count
+        } else {
+            *self.hashmap.get(&index).unwrap_or(&0)
+        }
+    }
+
+    pub fn rank_hash(&self, index: usize, hash: u16) -> u8 {
+        if index < self.vector.len() {
+            self.vector[index].count - (self.vector[index].hash == hash) as u8
+        } else {
+            *self.hashmap.get(&index).unwrap_or(&0)
         }
     }
 }
@@ -119,15 +141,11 @@ pub const MAX_COMBINATION_LENGTH: usize = 4;
 
 #[derive(Debug, Serialize)]
 pub struct Entry {
-    pub item: Vec<String>,
-    pub full: Vec<String>,
-    pub short: Option<Vec<String>>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct EncodeExport {
-    pub characters: Entry,
-    pub words: Entry,
+    pub name: String,
+    pub full: String,
+    pub full_rank: i8,
+    pub short: String,
+    pub short_rank: i8,
 }
 
 #[derive(Debug)]
@@ -141,7 +159,7 @@ impl Buffer {
         let make_placeholder = |x: &Encodable| CodeInfo {
             code: 0,
             frequency: x.frequency,
-            duplication: false,
+            rank: 0,
             single: x.name.chars().count() == 1,
         };
         let it = encoder.encodables.iter();
@@ -525,11 +543,8 @@ impl Representation {
         Ok(result)
     }
 
-    pub fn transform_schemes(
-        &self,
-        schemes: &Vec<ShortCodeConfig>,
-    ) -> Result<Vec<CompiledShortCodeConfig>, Error> {
-        let mut configs = Vec::new();
+    pub fn transform_schemes(&self, schemes: &Vec<Scheme>) -> Result<Vec<CompiledScheme>, Error> {
+        let mut compiled_schemes = Vec::new();
         for scheme in schemes {
             let prefix = scheme.prefix;
             let count = scheme.count.unwrap_or(1);
@@ -549,12 +564,38 @@ impl Representation {
             if count as usize > select_keys.len() {
                 return Err("选重数量不能高于选择键数量".into());
             }
-            configs.push(CompiledShortCodeConfig {
+            compiled_schemes.push(CompiledScheme {
                 prefix,
                 select_keys: select_keys[..count].to_vec(),
             });
         }
-        Ok(configs)
+        Ok(compiled_schemes)
+    }
+
+    pub fn transform_short_code(
+        &self,
+        configs: Vec<ShortCodeConfig>,
+    ) -> Result<[Vec<CompiledScheme>; MAX_WORD_LENGTH], Error> {
+        let mut short_code: [Vec<CompiledScheme>; MAX_WORD_LENGTH] = Default::default();
+        for config in configs {
+            match config {
+                ShortCodeConfig::Equal {
+                    length_equal,
+                    schemes,
+                } => {
+                    short_code[length_equal - 1].extend(self.transform_schemes(&schemes)?);
+                }
+                ShortCodeConfig::Range {
+                    length_in_range: (from, to),
+                    schemes,
+                } => {
+                    for length in from..=to {
+                        short_code[length - 1].extend(self.transform_schemes(&schemes)?);
+                    }
+                }
+            }
+        }
+        Ok(short_code)
     }
 
     pub fn get_space(&self) -> usize {
