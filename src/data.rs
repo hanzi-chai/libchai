@@ -63,6 +63,13 @@ pub enum Glyph {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Reading {
+    pub pinyin: String,
+    pub importance: f64,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrimitiveCharacter {
     pub unicode: usize,
     pub tygf: u8,
@@ -71,7 +78,7 @@ pub struct PrimitiveCharacter {
     pub name: Option<String>,
     #[serialize_always] // JavaScript null
     pub gf0014_id: Option<usize>,
-    pub readings: Vec<String>,
+    pub readings: Vec<Reading>,
     pub glyphs: Vec<Glyph>,
     pub ambiguous: bool,
 }

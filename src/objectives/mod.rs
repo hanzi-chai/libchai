@@ -180,6 +180,10 @@ impl Objective {
                 chuma[codefirst] = chuma[codefirst] + frequency;
                 moma[codelast] = moma[codelast] + frequency;
             }
+            // 如果有组合当量或者差指法统计，那么都需要累积总组合数
+            if weights.pair_equivalence.is_some() || weights.fingering.is_some() {
+                total_pairs += (length - 1) * frequency;
+            }
             // 组合当量
             if let Some(_) = weights.pair_equivalence {
                 let mut code = code;
@@ -188,7 +192,6 @@ impl Objective {
                         self.pair_equivalence[code % max_index] * frequency as f64;
                     code /= segment;
                 }
-                total_pairs += (length - 1) * frequency;
             }
             if let Some(_) = weights.new_pair_equivalence {
                 let mut code = code;
@@ -270,6 +273,7 @@ impl Objective {
                 }
             }
         }
+        println!("{:?}", total_labels);
         let mut partial_metric = PartialMetric {
             tiers: None,
             key_distribution: None,

@@ -3,7 +3,7 @@
 //! 这部分内容太多，就不一一注释了。后期会写一个「`config.yaml` 详解」来统一解释各种配置文件的字段。
 //!
 
-use crate::data::{Glyph, PrimitiveRepertoire};
+use crate::data::{Glyph, PrimitiveRepertoire, Reading};
 use crate::metaheuristics::simulated_annealing::Parameters;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -26,7 +26,7 @@ pub struct Info {
 pub struct Data {
     pub repertoire: Option<PrimitiveRepertoire>,
     pub glyph_customization: Option<HashMap<String, Glyph>>,
-    pub reading_customization: Option<HashMap<String, Vec<String>>>,
+    pub reading_customization: Option<HashMap<String, Vec<Reading>>>,
     pub tags: Option<Vec<String>>,
 }
 // config.data end
@@ -189,6 +189,7 @@ pub struct TierWeights {
     pub levels: Option<Vec<LevelWeights>>,
 }
 
+// let types = ["同手", "大跨", "小跨", "干扰", "错手", "三连", "备用", "备用"];
 pub type FingeringWeights = [Option<f64>; 8];
 
 #[skip_serializing_none]

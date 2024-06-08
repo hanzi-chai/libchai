@@ -143,10 +143,11 @@ fn prepare(js_input: JsValue) -> Result<(Representation, Encoder, Assets), JsErr
 }
 
 #[wasm_bindgen]
-pub fn validate(js_config: JsValue) -> Result<(), JsError> {
+pub fn validate(js_config: JsValue) -> Result<JsValue, JsError> {
     set_once();
-    let _: Config = from_value(js_config)?;
-    Ok(())
+    let config: Config = from_value(js_config)?;
+    let config_str = serde_yaml::to_string(&config).unwrap();
+    Ok(to_value(&config_str)?)
 }
 
 #[wasm_bindgen]
