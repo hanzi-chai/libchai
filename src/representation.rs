@@ -62,7 +62,7 @@ pub type Element = usize;
 pub type Sequence = Vec<Element>;
 
 /// 编码用无符号整数表示
-pub type Code = usize;
+pub type Code = u64;
 
 ///
 #[derive(Clone, Debug, Copy)]
@@ -89,7 +89,7 @@ pub type Label = [u8; 8];
 /// 用一个数组和一个哈希集合来表示，数组用来表示四码以内的编码，哈希集合用来表示四码以上的编码
 pub struct Occupation {
     pub vector: Vec<Slot>,
-    pub hashmap: FxHashMap<usize, u8>,
+    pub hashmap: FxHashMap<Code, u8>,
 }
 
 #[derive(Default, Clone)]
@@ -108,8 +108,9 @@ impl Occupation {
         }
     }
 
-    pub fn insert(&mut self, index: usize, hash: u16) {
-        if index < self.vector.len() {
+    pub fn insert(&mut self, index: u64, hash: u16) {
+        if index < self.vector.len() as u64 {
+            let index = index as usize;
             self.vector[index].hash = hash;
             self.vector[index].count += 1;
         } else {
@@ -118,16 +119,18 @@ impl Occupation {
         }
     }
 
-    pub fn rank(&self, index: usize) -> u8 {
-        if index < self.vector.len() {
+    pub fn rank(&self, index: u64) -> u8 {
+        if index < self.vector.len() as u64 {
+            let index = index as usize;
             self.vector[index].count
         } else {
             *self.hashmap.get(&index).unwrap_or(&0)
         }
     }
 
-    pub fn rank_hash(&self, index: usize, hash: u16) -> u8 {
-        if index < self.vector.len() {
+    pub fn rank_hash(&self, index: u64, hash: u16) -> u8 {
+        if index < self.vector.len() as u64 {
+            let index = index as usize;
             self.vector[index].count - (self.vector[index].hash == hash) as u8
         } else {
             *self.hashmap.get(&index).unwrap_or(&0)
@@ -179,7 +182,7 @@ pub struct Representation {
     pub repr_element: FxHashMap<Element, String>,
     pub key_repr: FxHashMap<char, Key>,
     pub repr_key: FxHashMap<Key, char>,
-    pub radix: usize,
+    pub radix: u64,
     pub select_keys: Vec<Key>,
 }
 
@@ -210,7 +213,8 @@ pub fn assemble(element: &String, index: usize) -> String {
 impl Representation {
     pub fn new(config: Config) -> Result<Self, Error> {
         let (radix, select_keys, key_repr, repr_key) = Self::transform_alphabet(&config)?;
-        let (initial, element_repr, repr_element) = Self::transform_keymap(&config, &key_repr)?;
+        let (initial, element_repr, repr_element) =
+            Self::transform_keymap(&config, &key_repr, radix)?;
         let repr = Self {
             config,
             initial,
@@ -229,7 +233,7 @@ impl Representation {
     /// n + 1, ..., m = 所有选择键
     pub fn transform_alphabet(
         config: &Config,
-    ) -> Result<(usize, Vec<Key>, FxHashMap<char, Key>, FxHashMap<Key, char>), Error> {
+    ) -> Result<(u64, Vec<Key>, FxHashMap<char, Key>, FxHashMap<Key, char>), Error> {
         let mut key_repr: FxHashMap<char, Key> = FxHashMap::default();
         let mut repr_key: FxHashMap<Key, char> = FxHashMap::default();
         let mut index = 1_usize;
@@ -260,7 +264,7 @@ impl Representation {
             parsed_select_keys.push(index);
             index += 1;
         }
-        let radix = index;
+        let radix = index as u64;
         Ok((radix, parsed_select_keys, key_repr, repr_key))
     }
 
@@ -268,6 +272,7 @@ impl Representation {
     pub fn transform_keymap(
         config: &Config,
         key_repr: &FxHashMap<char, Key>,
+        radix: u64,
     ) -> Result<
         (
             KeyMap,
@@ -277,16 +282,23 @@ impl Representation {
         Error,
     > {
         let mut keymap: KeyMap = Vec::new();
-        let mut forward_converter: FxHashMap<String, usize> = FxHashMap::default();
-        let mut reverse_converter: FxHashMap<usize, String> = FxHashMap::default();
+        let mut element_repr: FxHashMap<String, usize> = FxHashMap::default();
+        let mut repr_element: FxHashMap<usize, String> = FxHashMap::default();
+        for x in 0..radix {
+            keymap.push(x as usize);
+        }
+        for (key, value) in key_repr {
+            element_repr.insert(key.to_string(), *value);
+            repr_element.insert(*value, key.to_string());
+        }
         for (element, mapped) in &config.form.mapping {
             let normalized = mapped.normalize();
             for (index, mapped_key) in normalized.iter().enumerate() {
                 if let MappedKey::Ascii(x) = mapped_key {
                     if let Some(key) = key_repr.get(&x) {
                         let name = assemble(element, index);
-                        forward_converter.insert(name.clone(), keymap.len());
-                        reverse_converter.insert(keymap.len(), name.clone());
+                        element_repr.insert(name.clone(), keymap.len());
+                        repr_element.insert(keymap.len(), name.clone());
                         keymap.push(*key);
                     } else {
                         return Err(
@@ -296,7 +308,7 @@ impl Representation {
                 }
             }
         }
-        Ok((keymap, forward_converter, reverse_converter))
+        Ok((keymap, element_repr, repr_element))
     }
 
     /// 读取拆分表，将拆分序列中的每一个元素按照先前确定的元素 -> 整数映射来转换为整数向量
@@ -368,12 +380,12 @@ impl Representation {
         let mut chars: Vec<char> = Vec::with_capacity(self.config.encoder.max_length);
         let mut remainder = code;
         while remainder > 0 {
-            let k = remainder % self.radix as usize;
-            remainder /= self.radix as usize;
+            let k = remainder % self.radix as u64;
+            remainder /= self.radix as u64;
             if k == 0 {
                 continue;
             }
-            let char = self.repr_key.get(&k).unwrap(); // 从内部表示转换为字符，不需要检查
+            let char = self.repr_key.get(&(k as usize)).unwrap(); // 从内部表示转换为字符，不需要检查
             chars.push(*char);
         }
         chars
@@ -395,7 +407,7 @@ impl Representation {
                 if x == 0 {
                     return default_loss.clone();
                 }
-                let key = self.repr_key.get(&x).unwrap();
+                let key = self.repr_key.get(&(x as usize)).unwrap();
                 key_distribution.get(key).unwrap_or(&default_loss).clone()
             })
             .collect();
@@ -412,7 +424,7 @@ impl Representation {
     pub fn transform_pair_equivalence(&self, pair_equivalence: &HashMap<String, f64>) -> Vec<f64> {
         let mut result: Vec<f64> = Vec::with_capacity(self.get_space());
         for code in 0..self.get_space() {
-            let chars = self.repr_code(code);
+            let chars = self.repr_code(code as u64);
             if chars.len() < 2 {
                 result.push(0.0);
                 continue;
@@ -435,7 +447,7 @@ impl Representation {
         let fingering_types = get_fingering_types();
         let mut result: Vec<Label> = Vec::with_capacity(self.get_space());
         for code in 0..self.get_space() {
-            let chars = self.repr_code(code);
+            let chars = self.repr_code(code as u64);
             if chars.len() < 2 {
                 result.push(Label::default());
                 continue;
@@ -478,7 +490,7 @@ impl Representation {
     ) -> Vec<f64> {
         let mut result: Vec<f64> = Vec::with_capacity(self.get_space());
         for code in 0..self.get_space() {
-            let chars = self.repr_code(code);
+            let chars = self.repr_code(code as u64);
             if chars.len() < 2 {
                 result.push(0.0);
                 continue;
@@ -528,7 +540,7 @@ impl Representation {
             }
         }
         for code in 0..self.get_space() {
-            let chars = self.repr_code(code);
+            let chars = self.repr_code(code as u64);
             let string: String = chars.iter().collect();
             let is_matched = if let Some(re) = &re {
                 re.is_match(&string)
@@ -600,6 +612,6 @@ impl Representation {
 
     pub fn get_space(&self) -> usize {
         let max_length = self.config.encoder.max_length.min(MAX_COMBINATION_LENGTH);
-        self.radix.pow(max_length as u32)
+        self.radix.pow(max_length as u32) as usize
     }
 }

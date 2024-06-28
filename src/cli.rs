@@ -194,7 +194,7 @@ impl Interface for Cli {
 
     fn report_solution(&self, config: Config, metric: String, save: bool) {
         let time = Local::now();
-        let prefix = format!("{}", time.format("%m-%d+%H_%M_%S_%3f"));
+        let prefix = time.format("%m-%d+%H_%M_%S_%3f").to_string();
         let config_path = format!("output/{}.yaml", prefix);
         let metric_path = format!("output/{}.txt", prefix);
         println!(

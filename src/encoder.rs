@@ -5,8 +5,7 @@ use rustc_hash::FxHashMap;
 use crate::config::EncoderConfig;
 use crate::error::Error;
 use crate::representation::{
-    Assemble, AssembleList, Assets, AutoSelect, Buffer, Entry, Frequency, Key, KeyMap, Occupation,
-    Representation, Sequence, MAX_COMBINATION_LENGTH, MAX_WORD_LENGTH,
+    Assemble, AssembleList, Assets, AutoSelect, Buffer, Code, Entry, Frequency, Key, KeyMap, Occupation, Representation, Sequence, MAX_COMBINATION_LENGTH, MAX_WORD_LENGTH
 };
 use std::collections::HashSet;
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
@@ -28,7 +27,7 @@ pub struct Encoder {
     pub transition_matrix: Vec<Vec<(usize, u64)>>,
     config: EncoderConfig,
     auto_select: AutoSelect,
-    pub radix: usize,
+    pub radix: u64,
     select_keys: Vec<Key>,
     pub short_code: Option<[Vec<CompiledScheme>; MAX_WORD_LENGTH]>,
 }
@@ -94,7 +93,7 @@ impl Encoder {
     /// 词只需要提供词表，它对应的拆分序列从字推出
     pub fn new(
         representation: &Representation,
-        info: AssembleList,
+        resource: AssembleList,
         assets: &Assets,
     ) -> Result<Encoder, Error> {
         let encoder = &representation.config.encoder;
@@ -104,12 +103,12 @@ impl Encoder {
         }
 
         // 预处理词频
-        let all_words: HashSet<_> = info.iter().map(|x| x.name.clone()).collect();
+        let all_words: HashSet<_> = resource.iter().map(|x| x.name.clone()).collect();
         let (frequency, transition_pairs) = Self::adapt(&assets.frequency, &all_words);
 
         // 将拆分序列映射降序排列
         let mut encodables = Vec::new();
-        for (index, assemble) in info.into_iter().enumerate() {
+        for (index, assemble) in resource.into_iter().enumerate() {
             let Assemble {
                 name,
                 importance,
@@ -119,7 +118,7 @@ impl Encoder {
             let sequence = representation.transform_elements(assemble)?;
             let char_frequency = *frequency.get(&name).unwrap_or(&0);
             let frequency = char_frequency * importance / 100;
-            let hash: u16 = name.chars().map(|x| x as u16).sum();
+            let hash: u16 = (name.chars().map(|x| x as u32).sum::<u32>()) as u16;
             encodables.push(Encodable {
                 name: name.clone(),
                 length: name.chars().count(),
@@ -168,25 +167,25 @@ impl Encoder {
         Ok(encoder)
     }
 
-    pub fn get_actual_code(&self, code: usize, rank: i8) -> usize {
-        if rank == 0 && *self.auto_select.get(code).unwrap_or(&true) {
+    pub fn get_actual_code(&self, code: u64, rank: i8) -> u64 {
+        if rank == 0 && *self.auto_select.get(code as usize).unwrap_or(&true) {
             return code;
         }
         let length = code.ilog(self.radix) + 1;
-        code + self
-            .select_keys
+        let select = *self.select_keys
             .get(rank.abs() as usize)
-            .unwrap_or(&self.select_keys[0])
-            * self.radix.pow(length)
+            .unwrap_or(&self.select_keys[0]) as u64
+            * self.radix.pow(length);
+        code + select
     }
 
     pub fn encode_full(&self, keymap: &KeyMap, buffer: &mut Buffer, occupation: &mut Occupation) {
         for (encodable, pointer) in zip(&self.encodables, &mut buffer.full) {
             let sequence = &encodable.sequence;
-            let mut code = 0_usize;
-            let mut weight = 1_usize;
+            let mut code = 0_u64;
+            let mut weight = 1_u64;
             for element in sequence {
-                code += keymap[*element] * weight;
+                code += keymap[*element] as u64 * weight;
                 weight *= self.radix;
             }
             pointer.code = code;
@@ -267,7 +266,7 @@ impl Encoder {
         self.encode_full(keymap, &mut buffer, &mut full_occupation);
         self.encode_short(&mut buffer, &full_occupation, &mut short_occupation);
         let mut entries: Vec<(usize, Entry)> = Vec::new();
-        let recover = |code: usize| representation.repr_code(code).iter().collect();
+        let recover = |code: Code| representation.repr_code(code).iter().collect();
         for (index, encodable) in self.encodables.iter().enumerate() {
             let entry = Entry {
                 name: encodable.name.clone(),
@@ -284,6 +283,6 @@ impl Encoder {
 
     pub fn get_space(&self) -> usize {
         let max_length = self.config.max_length.min(MAX_COMBINATION_LENGTH);
-        self.radix.pow(max_length as u32)
+        self.radix.pow(max_length as u32) as usize
     }
 }

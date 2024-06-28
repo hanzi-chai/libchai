@@ -134,11 +134,12 @@ impl Objective {
                 tiers_levels.push(vec);
             }
         }
-        let mut distribution = vec![0_u64; self.encoder.radix];
+        let radix = self.encoder.radix as usize;
+        let mut distribution = vec![0_u64; radix];
         // 标记初始字符、结束字符的频率
-        let mut chuma = vec![0_u64; self.encoder.radix];
-        let mut moma = vec![0_u64; self.encoder.radix];
-        let max_index = self.pair_equivalence.len();
+        let mut chuma = vec![0_u64; radix];
+        let mut moma = vec![0_u64; radix];
+        let max_index = self.pair_equivalence.len() as u64;
         let segment = self.encoder.radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
         for (index, code_info) in codes.iter().enumerate() {
             let CodeInfo {
@@ -158,25 +159,25 @@ impl Objective {
                 let mut current = code;
                 while current > 0 {
                     let key = current % self.encoder.radix;
-                    if key < distribution.len() {
-                        distribution[key] += frequency;
-                    }
+                    distribution.get_mut(key as usize).map(|x| *x += frequency);
                     current /= self.encoder.radix;
                 }
             }
             // 按键分布：杏码式用指当量，只统计最初的1码
             if let Some(_) = weights.new_key_equivalence {
+                let key = code % self.encoder.radix;
                 total_new_keys_equivalence +=
-                    frequency as f64 / self.ideal_distribution[code % self.encoder.radix].ideal;
+                    frequency as f64 / self.ideal_distribution[key as usize].ideal;
             }
             // 按键分布：杏码式用指当量改
             if let Some(_) = weights.new_key_equivalence_modified {
                 //取得首末码
-                let codefirst = code % self.encoder.radix;
+                let codefirst = (code % self.encoder.radix) as usize;
                 let mut codelast = code;
                 while codelast > self.encoder.radix {
                     codelast /= self.encoder.radix;
                 }
+                let codelast = codelast as usize;
                 chuma[codefirst] = chuma[codefirst] + frequency;
                 moma[codelast] = moma[codelast] + frequency;
             }
@@ -188,16 +189,18 @@ impl Objective {
             if let Some(_) = weights.pair_equivalence {
                 let mut code = code;
                 while code > self.encoder.radix {
+                    let partial_code = (code % max_index) as usize;
                     total_pair_equivalence +=
-                        self.pair_equivalence[code % max_index] * frequency as f64;
+                        self.pair_equivalence[partial_code] * frequency as f64;
                     code /= segment;
                 }
             }
             if let Some(_) = weights.new_pair_equivalence {
                 let mut code = code;
                 while code > self.encoder.radix {
+                    let partial_code = (code % max_index) as usize;
                     total_new_pair_equivalence +=
-                        self.new_pair_equivalence[code % max_index] * frequency as f64;
+                        self.new_pair_equivalence[partial_code] * frequency as f64;
                     code /= segment;
                 }
                 total_new_keys += length * frequency;
@@ -209,7 +212,7 @@ impl Objective {
                 for (i, weight) in transitions {
                     let next_char = codes[*i].code % self.encoder.radix;
                     let combination = last_char + next_char * self.encoder.radix;
-                    let equivalence = self.pair_equivalence[combination];
+                    let equivalence = self.pair_equivalence[combination as usize];
                     total_extended_pair_equivalence += equivalence * *weight as f64;
                     total_extended_pairs += *weight;
                 }
@@ -218,7 +221,7 @@ impl Objective {
             if let Some(fingering) = &weights.fingering {
                 let mut code = code;
                 while code > self.encoder.radix {
-                    let label = self.fingering_types[code % max_index];
+                    let label = self.fingering_types[(code % max_index) as usize];
                     for (i, weight) in fingering.iter().enumerate() {
                         if let Some(_) = weight {
                             total_labels[i] += frequency * label[i] as u64;
@@ -267,13 +270,13 @@ impl Objective {
             //将首末码与全局的首末码频率拼起来
             for i in 0..self.encoder.radix {
                 for j in 0..self.encoder.radix {
+                    let pair = (j + i * self.encoder.radix) as usize;
                     total_new_keys_equivalence_modified += self.pair_equivalence
-                        [j + i * self.encoder.radix]
-                        * (chuma[i] * moma[j]) as f64;
+                        [pair]
+                        * (chuma[i as usize] * moma[j as usize]) as f64;
                 }
             }
         }
-        println!("{:?}", total_labels);
         let mut partial_metric = PartialMetric {
             tiers: None,
             key_distribution: None,

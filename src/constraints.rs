@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 
 pub struct Constraints {
     pub alphabet: Vec<Key>,
+    pub radix: usize,
     pub elements: usize,
     pub fixed: HashSet<Element>,
     pub narrowed: HashMap<Element, Vec<Key>>,
@@ -101,6 +102,7 @@ impl Constraints {
         }
         Ok(Constraints {
             alphabet,
+            radix: representation.radix as usize,
             elements,
             fixed,
             narrowed,
@@ -110,7 +112,7 @@ impl Constraints {
     fn get_movable_element(&self) -> usize {
         let mut rng = thread_rng();
         loop {
-            let key = rng.gen_range(0..self.elements);
+            let key = rng.gen_range(self.radix..self.elements);
             if !self.fixed.contains(&key) {
                 return key;
             }
@@ -120,7 +122,7 @@ impl Constraints {
     fn get_swappable_element(&self) -> usize {
         let mut rng = thread_rng();
         loop {
-            let key = rng.gen_range(0..self.elements);
+            let key = rng.gen_range(self.radix..self.elements);
             if !self.fixed.contains(&key) {
                 return key;
             }

@@ -1,6 +1,6 @@
 [package]
 name = "libchai"
-version = "0.1.10"
+version = "0.1.11"
 authors = ["Songchen Tan <i@tansongchen.com>"]
 edition = "2018"
 
@@ -17,7 +17,6 @@ default = ["console_error_panic_hook"]
 
 [profile.release]
 strip = true
-lto = true
 
 [profile.benchmark]
 inherits = "dev"
