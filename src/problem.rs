@@ -1,15 +1,15 @@
 //! 优化问题的整体定义。
-//! 
+//!
 //! 目前只定义了最基础的元素布局问题，以后可能会定义更复杂的问题，如元素布局 + 元素选取等等。
-//! 
+//!
 
-use crate::config::{SolverConfig, SearchConfig};
+use crate::config::{SearchConfig, SolverConfig};
 use crate::constraints::Constraints;
 use crate::error::Error;
 use crate::interface::Interface;
 use crate::metaheuristics::{simulated_annealing, Metaheuristics};
-use crate::objectives::Objective;
 use crate::objectives::metric::Metric;
+use crate::objectives::Objective;
 use crate::representation::{Buffer, KeyMap, Representation};
 use rand::random;
 
@@ -31,8 +31,16 @@ impl ElementPlacementProblem {
         objective: Objective,
         buffer: Buffer,
     ) -> Result<Self, Error> {
-        let optimization = representation.config.optimization.as_ref().ok_or("优化配置不存在")?;
-        let solver = optimization.metaheuristic.clone();
+        let optimization = representation
+            .config
+            .optimization
+            .as_ref()
+            .ok_or("优化配置不存在")?;
+        let solver = optimization
+            .metaheuristic
+            .as_ref()
+            .ok_or("优化配置不存在")?
+            .clone();
         Ok(Self {
             representation,
             constraints,
@@ -53,14 +61,23 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     }
 
     fn rank_candidate(&mut self, candidate: &Solution) -> (Metric, f64) {
-        let (metric, loss) = self.objective.evaluate(candidate, &mut self.buffer).unwrap();
+        let (metric, loss) = self
+            .objective
+            .evaluate(candidate, &mut self.buffer)
+            .unwrap();
         return (metric, loss);
     }
 
     fn tweak_candidate(&mut self, candidate: &Solution) -> Solution {
-        let method = self.solver.search_method.as_ref().unwrap_or(&SearchConfig { random_move: 0.9, random_swap: 0.09, random_full_key_swap: 0.01 });
-        let ratio1 = method.random_move / (method.random_move + method.random_swap + method.random_full_key_swap);
-        let ratio2 = (method.random_move + method.random_swap) / (method.random_move + method.random_swap + method.random_full_key_swap);
+        let method = self.solver.search_method.as_ref().unwrap_or(&SearchConfig {
+            random_move: 0.9,
+            random_swap: 0.09,
+            random_full_key_swap: 0.01,
+        });
+        let ratio1 = method.random_move
+            / (method.random_move + method.random_swap + method.random_full_key_swap);
+        let ratio2 = (method.random_move + method.random_swap)
+            / (method.random_move + method.random_swap + method.random_full_key_swap);
         let randomnumber = random::<f64>();
         if randomnumber < ratio1 {
             self.constraints.constrained_random_move(candidate)
@@ -71,22 +88,35 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
         }
     }
 
-    fn save_candidate(&self, candidate: &Solution, rank: &(Metric, f64), write_to_file: bool, interface: &dyn Interface) {
+    fn save_candidate(
+        &self,
+        candidate: &Solution,
+        rank: &(Metric, f64),
+        write_to_file: bool,
+        interface: &dyn Interface,
+    ) {
         let new_config = self.representation.update_config(&candidate);
         let metric = format!("{}", rank.0);
         interface.report_solution(new_config, metric, write_to_file);
     }
 }
 
-impl ElementPlacementProblem {
-    pub fn solve(&mut self, interface: &dyn Interface) -> Solution {
-        interface.prepare_output();
-        let SolverConfig { parameters, runtime, report_after, .. } = self.solver.clone();
-        if let Some(parameters) = parameters {
-            simulated_annealing::solve(self, parameters.clone(), report_after, interface)
-        } else {
-            let runtime = runtime.unwrap_or(10);
-            simulated_annealing::autosolve(self, runtime, report_after, interface)
-        }
+pub fn solve(
+    problem: &mut ElementPlacementProblem,
+    solver: &SolverConfig,
+    interface: &dyn Interface,
+) -> Solution {
+    interface.prepare_output();
+    let SolverConfig {
+        parameters,
+        runtime,
+        report_after,
+        ..
+    } = solver.clone();
+    if let Some(parameters) = parameters {
+        simulated_annealing::solve(problem, parameters.clone(), report_after, interface)
+    } else {
+        let runtime = runtime.unwrap_or(10);
+        simulated_annealing::autosolve(problem, runtime, report_after, interface)
     }
 }

@@ -2,19 +2,21 @@
 
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelMetric1 {
     pub length: usize,
     pub frequency: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelMetric2 {
     pub length: usize,
     pub frequency: f64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TierMetric {
     pub top: Option<usize>,
     pub duplication: Option<usize>,
@@ -48,7 +50,7 @@ impl Display for TierMetric {
 
 pub type FingeringMetric = [Option<f64>; 8];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartialMetric {
     pub tiers: Option<Vec<TierMetric>>,
     pub duplication: Option<f64>,
@@ -113,7 +115,7 @@ impl Display for PartialMetric {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metric {
     pub characters_full: Option<PartialMetric>,
     pub characters_short: Option<PartialMetric>,

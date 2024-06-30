@@ -9,13 +9,14 @@ use chai::{representation::Representation, error::Error};
 use chai::encoder::Encoder;
 use chai::objectives::Objective;
 use chai::constraints::Constraints;
-use chai::problem::ElementPlacementProblem;
+use chai::problem::{solve, ElementPlacementProblem};
 use chai::cli::{Cli, Command};
 use clap::Parser;
 
 fn main() -> Result<(), Error> {
     let cli = Cli::parse();
     let (config, resource, assets) = cli.prepare_file();
+    let config2 = config.clone();
     let representation = Representation::new(config)?;
     let encoder = Encoder::new(&representation, resource, &assets)?;
     match cli.command {
@@ -35,7 +36,8 @@ fn main() -> Result<(), Error> {
             let constraints = Constraints::new(&representation)?;
             let mut problem =
                 ElementPlacementProblem::new(representation, constraints, objective, buffer)?;
-            problem.solve(&cli);
+            let solver = config2.optimization.map(|o| o.metaheuristic.unwrap()).unwrap();
+            solve(&mut problem, &solver, &cli);
         }
     }
     Ok(())

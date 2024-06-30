@@ -13,13 +13,6 @@ use std::collections::HashMap;
 
 pub const MAX_WORD_LENGTH: usize = 10;
 
-#[derive(Deserialize)]
-pub struct Input {
-    pub config: Config,
-    pub info: AssembleList,
-    pub assets: Assets,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Assemble {
     pub name: String,
@@ -48,7 +41,7 @@ pub struct DistributionLoss {
     pub gt_penalty: f64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Assets {
     pub frequency: Frequency,
     pub key_distribution: KeyDistribution,

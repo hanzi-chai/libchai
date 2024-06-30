@@ -258,7 +258,7 @@ pub struct SolverConfig {
 pub struct OptimizationConfig {
     pub objective: ObjectiveConfig,
     pub constraints: Option<ConstraintsConfig>,
-    pub metaheuristic: SolverConfig,
+    pub metaheuristic: Option<SolverConfig>,
 }
 // config.optimization end
 

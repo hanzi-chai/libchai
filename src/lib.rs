@@ -18,19 +18,16 @@ use crate::{
     objectives::Objective,
     representation::{Assets, Representation},
 };
+use config::{ObjectiveConfig, OptimizationConfig};
 use console_error_panic_hook::set_once;
 use interface::Interface;
 use js_sys::Function;
-use representation::{Buffer, Input};
+use problem::solve;
+use representation::{AssembleList, Buffer};
 use serde::Serialize;
 use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
 use wasm_bindgen::prelude::*;
-
-#[wasm_bindgen]
-pub struct WebInterface {
-    post_message: Function,
-}
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -53,9 +50,86 @@ enum Message {
     },
 }
 
+#[wasm_bindgen]
+pub struct WebInterface {
+    post_message: Function,
+    config: Config,
+    info: AssembleList,
+    assets: Assets,
+}
+
+#[wasm_bindgen]
+pub fn validate(js_config: JsValue) -> Result<JsValue, JsError> {
+    set_once();
+    let config: Config = from_value(js_config)?;
+    let config_str = serde_yaml::to_string(&config).unwrap();
+    Ok(to_value(&config_str)?)
+}
+
+#[wasm_bindgen]
 impl WebInterface {
-    pub fn new(post_message: Function) -> Self {
-        Self { post_message }
+    pub fn new(
+        post_message: Function,
+        js_config: JsValue,
+        js_info: JsValue,
+        js_assets: JsValue,
+    ) -> Result<WebInterface, JsError> {
+        set_once();
+        let config: Config = from_value(js_config)?;
+        let info: AssembleList = from_value(js_info)?;
+        let assets: Assets = from_value(js_assets)?;
+        Ok(Self {
+            post_message,
+            config,
+            info,
+            assets,
+        })
+    }
+
+    pub fn update_config(&mut self, js_config: JsValue) -> Result<(), JsError> {
+        self.config = from_value(js_config)?;
+        Ok(())
+    }
+
+    pub fn update_info(&mut self, js_info: JsValue) -> Result<(), JsError> {
+        self.info = from_value(js_info)?;
+        Ok(())
+    }
+
+    pub fn update_assets(&mut self, js_assets: JsValue) -> Result<(), JsError> {
+        self.assets = from_value(js_assets)?;
+        Ok(())
+    }
+
+    pub fn encode_evaluate(&self, js_objective: JsValue) -> Result<JsValue, JsError> {
+        let objective: ObjectiveConfig = from_value(js_objective)?;
+        let mut config = self.config.clone();
+        config.optimization = Some(OptimizationConfig {
+            objective,
+            constraints: None,
+            metaheuristic: None,
+        });
+        let representation = Representation::new(config)?;
+        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
+        let codes = encoder.encode(&representation.initial, &representation);
+        let mut buffer = Buffer::new(&encoder);
+        let objective = Objective::new(&representation, encoder, self.assets.clone())?;
+        let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
+        Ok(to_value(&(codes, metric))?)
+    }
+
+    pub fn optimize(&self) -> Result<(), JsError> {
+        let representation = Representation::new(self.config.clone())?;
+        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
+        let mut buffer = Buffer::new(&encoder);
+        let objective = Objective::new(&representation, encoder, self.assets.clone())?;
+        let constraints = Constraints::new(&representation)?;
+        let _ = objective.evaluate(&representation.initial, &mut buffer)?;
+        let mut problem =
+            ElementPlacementProblem::new(representation, constraints, objective, buffer)?;
+        let solver = self.config.optimization.as_ref().unwrap().metaheuristic.as_ref().unwrap();
+        solve(&mut problem, solver, self);
+        Ok(())
     }
 
     fn post(&self, message: Message) -> Result<(), JsValue> {
@@ -129,56 +203,4 @@ impl Interface for WebInterface {
             save,
         });
     }
-}
-
-fn prepare(js_input: JsValue) -> Result<(Representation, Encoder, Assets), JsError> {
-    let Input {
-        config,
-        info,
-        assets,
-    } = from_value(js_input)?;
-    let representation = Representation::new(config)?;
-    let encoder = Encoder::new(&representation, info, &assets)?;
-    Ok((representation, encoder, assets))
-}
-
-#[wasm_bindgen]
-pub fn validate(js_config: JsValue) -> Result<JsValue, JsError> {
-    set_once();
-    let config: Config = from_value(js_config)?;
-    let config_str = serde_yaml::to_string(&config).unwrap();
-    Ok(to_value(&config_str)?)
-}
-
-#[wasm_bindgen]
-pub fn encode(js_input: JsValue) -> Result<JsValue, JsError> {
-    set_once();
-    let (representation, encoder, _) = prepare(js_input)?;
-    let codes = encoder.encode(&representation.initial, &representation);
-    Ok(to_value(&codes)?)
-}
-
-#[wasm_bindgen]
-pub fn evaluate(js_input: JsValue) -> Result<JsValue, JsError> {
-    set_once();
-    let (representation, encoder, assets) = prepare(js_input)?;
-    let mut buffer = Buffer::new(&encoder);
-    let objective = Objective::new(&representation, encoder, assets)?;
-    let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
-    let metric = format!("{}", metric);
-    Ok(to_value(&metric)?)
-}
-
-#[wasm_bindgen]
-pub fn optimize(js_input: JsValue, post_message: Function) -> Result<(), JsError> {
-    set_once();
-    let (representation, encoder, assets) = prepare(js_input)?;
-    let mut buffer = Buffer::new(&encoder);
-    let objective = Objective::new(&representation, encoder, assets)?;
-    let constraints = Constraints::new(&representation)?;
-    let _ = objective.evaluate(&representation.initial, &mut buffer)?;
-    let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer)?;
-    let web_interface = WebInterface::new(post_message);
-    problem.solve(&web_interface);
-    Ok(())
 }
