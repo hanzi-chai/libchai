@@ -5,7 +5,8 @@ use rustc_hash::FxHashMap;
 use crate::config::EncoderConfig;
 use crate::error::Error;
 use crate::representation::{
-    Assemble, AssembleList, Assets, AutoSelect, Buffer, Code, Entry, Frequency, Key, KeyMap, Occupation, Representation, Sequence, MAX_COMBINATION_LENGTH, MAX_WORD_LENGTH
+    Assemble, AssembleList, Assets, AutoSelect, Buffer, Code, Entry, Frequency, Key, KeyMap,
+    Occupation, Representation, Sequence, MAX_COMBINATION_LENGTH, MAX_WORD_LENGTH,
 };
 use std::collections::HashSet;
 use std::{cmp::Reverse, fmt::Debug, iter::zip};
@@ -25,7 +26,7 @@ pub struct Encodable {
 pub struct Encoder {
     pub encodables: Vec<Encodable>,
     pub transition_matrix: Vec<Vec<(usize, u64)>>,
-    config: EncoderConfig,
+    pub config: EncoderConfig,
     auto_select: AutoSelect,
     pub radix: u64,
     select_keys: Vec<Key>,
@@ -167,12 +168,12 @@ impl Encoder {
         Ok(encoder)
     }
 
-    pub fn get_actual_code(&self, code: u64, rank: i8) -> u64 {
+    pub fn get_actual_code(&self, code: u64, rank: i8, length: u32) -> u64 {
         if rank == 0 && *self.auto_select.get(code as usize).unwrap_or(&true) {
             return code;
         }
-        let length = code.ilog(self.radix) + 1;
-        let select = *self.select_keys
+        let select = *self
+            .select_keys
             .get(rank.unsigned_abs() as usize)
             .unwrap_or(&self.select_keys[0]) as u64
             * self.radix.pow(length);
@@ -180,13 +181,14 @@ impl Encoder {
     }
 
     pub fn encode_full(&self, keymap: &KeyMap, buffer: &mut Buffer, occupation: &mut Occupation) {
+        let weights = (0..=self.config.max_length)
+            .map(|x| self.radix.pow(x as u32))
+            .collect::<Vec<_>>();
         for (encodable, pointer) in zip(&self.encodables, &mut buffer.full) {
             let sequence = &encodable.sequence;
             let mut code = 0_u64;
-            let mut weight = 1_u64;
-            for element in sequence {
+            for (element, weight) in zip(sequence, &weights) {
                 code += keymap[*element] as u64 * weight;
-                weight *= self.radix;
             }
             pointer.code = code;
             pointer.rank = occupation.rank(code) as i8;

@@ -141,6 +141,10 @@ impl Objective {
         let mut moma = vec![0_u64; radix];
         let max_index = self.pair_equivalence.len() as u64;
         let segment = self.encoder.radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
+        let mut length_breakpoints = vec![];
+        for i in 0..=(self.encoder.config.max_length + 1) {
+            length_breakpoints.push(self.encoder.radix.pow(i as u32));
+        }
         for (index, code_info) in codes.iter().enumerate() {
             let CodeInfo {
                 code,
@@ -152,8 +156,8 @@ impl Objective {
                 continue;
             }
             total_frequency += frequency;
-            let code = self.encoder.get_actual_code(code, rank);
-            let length = code.ilog(self.encoder.radix) as u64 + 1;
+            let length = length_breakpoints.iter().position(|&x| code < x).unwrap() as u64;
+            let code = self.encoder.get_actual_code(code, rank, length as u32);
             // 按键分布
             if weights.key_distribution.is_some() {
                 let mut current = code;
