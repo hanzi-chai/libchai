@@ -91,7 +91,7 @@ impl Constraints {
                                 .ok_or(format!("约束中的键 {key} 不在键盘映射中"))?,
                         );
                     }
-                    if transformed.len() == 0 {
+                    if transformed.is_empty() {
                         return Err("约束中的键列表不能为空".into());
                     }
                     narrowed.insert(element, transformed);

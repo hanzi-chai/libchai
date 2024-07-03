@@ -53,11 +53,11 @@ impl ElementPlacementProblem {
 
 impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     fn clone_candidate(&mut self, candidate: &Solution) -> Solution {
-        return candidate.clone();
+        candidate.clone()
     }
 
     fn generate_candidate(&mut self) -> Solution {
-        return self.representation.initial.clone();
+        self.representation.initial.clone()
     }
 
     fn rank_candidate(&mut self, candidate: &Solution) -> (Metric, f64) {
@@ -65,7 +65,7 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
             .objective
             .evaluate(candidate, &mut self.buffer)
             .unwrap();
-        return (metric, loss);
+        (metric, loss)
     }
 
     fn tweak_candidate(&mut self, candidate: &Solution) -> Solution {
@@ -95,7 +95,7 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
         write_to_file: bool,
         interface: &dyn Interface,
     ) {
-        let new_config = self.representation.update_config(&candidate);
+        let new_config = self.representation.update_config(candidate);
         let metric = format!("{}", rank.0);
         interface.report_solution(new_config, metric, write_to_file);
     }
@@ -114,7 +114,7 @@ pub fn solve(
         ..
     } = solver.clone();
     if let Some(parameters) = parameters {
-        simulated_annealing::solve(problem, parameters.clone(), report_after, interface)
+        simulated_annealing::solve(problem, parameters, report_after, interface)
     } else {
         let runtime = runtime.unwrap_or(10);
         simulated_annealing::autosolve(problem, runtime, report_after, interface)

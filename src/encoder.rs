@@ -173,7 +173,7 @@ impl Encoder {
         }
         let length = code.ilog(self.radix) + 1;
         let select = *self.select_keys
-            .get(rank.abs() as usize)
+            .get(rank.unsigned_abs() as usize)
             .unwrap_or(&self.select_keys[0]) as u64
             * self.radix.pow(length);
         code + select
@@ -222,7 +222,7 @@ impl Encoder {
             zip(zip(&buffer.full, &mut buffer.short), &self.encodables)
         {
             let schemes = &short_code[encodable.length - 1];
-            if schemes.len() == 0 || encodable.level >= 0 {
+            if schemes.is_empty() || encodable.level >= 0 {
                 continue;
             }
             let full = &code.code;
@@ -251,7 +251,7 @@ impl Encoder {
                 has_reduced = true;
                 break;
             }
-            if has_reduced == false {
+            if !has_reduced {
                 pointer.code = *full;
                 pointer.rank = short_occupation.rank_hash(*full, hash) as i8;
                 short_occupation.insert(*full, hash);
@@ -260,7 +260,7 @@ impl Encoder {
     }
 
     pub fn encode(&self, keymap: &KeyMap, representation: &Representation) -> Vec<Entry> {
-        let mut buffer = Buffer::new(&self);
+        let mut buffer = Buffer::new(self);
         let mut full_occupation = Occupation::new(representation.get_space());
         let mut short_occupation = Occupation::new(representation.get_space());
         self.encode_full(keymap, &mut buffer, &mut full_occupation);

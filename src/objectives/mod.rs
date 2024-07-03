@@ -147,7 +147,7 @@ impl Objective {
                 rank,
                 frequency,
                 single,
-            } = code_info.clone();
+            } = *code_info;
             if group != single || code == 0 {
                 continue;
             }
@@ -159,18 +159,20 @@ impl Objective {
                 let mut current = code;
                 while current > 0 {
                     let key = current % self.encoder.radix;
-                    distribution.get_mut(key as usize).map(|x| *x += frequency);
+                    if let Some(x) = distribution.get_mut(key as usize) {
+                        *x += frequency;
+                    }
                     current /= self.encoder.radix;
                 }
             }
             // 按键分布：杏码式用指当量，只统计最初的1码
-            if let Some(_) = weights.new_key_equivalence {
+            if weights.new_key_equivalence.is_some() {
                 let key = code % self.encoder.radix;
                 total_new_keys_equivalence +=
                     frequency as f64 / self.ideal_distribution[key as usize].ideal;
             }
             // 按键分布：杏码式用指当量改
-            if let Some(_) = weights.new_key_equivalence_modified {
+            if weights.new_key_equivalence_modified.is_some() {
                 //取得首末码
                 let codefirst = (code % self.encoder.radix) as usize;
                 let mut codelast = code;
@@ -178,15 +180,15 @@ impl Objective {
                     codelast /= self.encoder.radix;
                 }
                 let codelast = codelast as usize;
-                chuma[codefirst] = chuma[codefirst] + frequency;
-                moma[codelast] = moma[codelast] + frequency;
+                chuma[codefirst] += frequency;
+                moma[codelast] += frequency;
             }
             // 如果有组合当量或者差指法统计，那么都需要累积总组合数
             if weights.pair_equivalence.is_some() || weights.fingering.is_some() {
                 total_pairs += (length - 1) * frequency;
             }
             // 组合当量
-            if let Some(_) = weights.pair_equivalence {
+            if weights.pair_equivalence.is_some() {
                 let mut code = code;
                 while code > self.encoder.radix {
                     let partial_code = (code % max_index) as usize;
@@ -195,7 +197,7 @@ impl Objective {
                     code /= segment;
                 }
             }
-            if let Some(_) = weights.new_pair_equivalence {
+            if weights.new_pair_equivalence.is_some() {
                 let mut code = code;
                 while code > self.encoder.radix {
                     let partial_code = (code % max_index) as usize;
@@ -206,7 +208,7 @@ impl Objective {
                 total_new_keys += length * frequency;
             }
             // 词间当量
-            if let Some(_) = weights.extended_pair_equivalence {
+            if weights.extended_pair_equivalence.is_some() {
                 let transitions = &self.encoder.transition_matrix[index];
                 let last_char = code / self.encoder.radix.pow(length as u32 - 1);
                 for (i, weight) in transitions {
@@ -223,7 +225,7 @@ impl Objective {
                 while code > self.encoder.radix {
                     let label = self.fingering_types[(code % max_index) as usize];
                     for (i, weight) in fingering.iter().enumerate() {
-                        if let Some(_) = weight {
+                        if weight.is_some() {
                             total_labels[i] += frequency * label[i] as u64;
                         }
                     }
@@ -235,7 +237,7 @@ impl Objective {
                 total_duplication += frequency;
                 if let Some(tiers) = &weights.tiers {
                     for (itier, tier) in tiers.iter().enumerate() {
-                        let top = tier.top.unwrap_or(std::usize::MAX);
+                        let top = tier.top.unwrap_or(usize::MAX);
                         if index < top {
                             tiers_duplication[itier] += 1;
                         }
@@ -253,7 +255,7 @@ impl Objective {
             // 分级指标
             if let Some(tiers) = &weights.tiers {
                 for (itier, tier) in tiers.iter().enumerate() {
-                    let top = tier.top.unwrap_or(std::usize::MAX);
+                    let top = tier.top.unwrap_or(usize::MAX);
                     if index < top {
                         if let Some(levels) = &tier.levels {
                             for (ilevel, level) in levels.iter().enumerate() {
@@ -266,14 +268,13 @@ impl Objective {
                 }
             }
         }
-        if let Some(_) = weights.new_key_equivalence_modified {
+        if weights.new_key_equivalence_modified.is_some() {
             //将首末码与全局的首末码频率拼起来
             for i in 0..self.encoder.radix {
                 for j in 0..self.encoder.radix {
                     let pair = (j + i * self.encoder.radix) as usize;
-                    total_new_keys_equivalence_modified += self.pair_equivalence
-                        [pair]
-                        * (chuma[i as usize] * moma[j as usize]) as f64;
+                    total_new_keys_equivalence_modified +=
+                        self.pair_equivalence[pair] * (chuma[i as usize] * moma[j as usize]) as f64;
                 }
             }
         }
@@ -388,7 +389,7 @@ impl Objective {
             }
             partial_metric.tiers = Some(tiers);
         }
-        return (partial_metric, loss);
+        (partial_metric, loss)
     }
 
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
@@ -409,7 +410,7 @@ impl Objective {
         self.encoder
             .encode_full(candidate, buffer, &mut full_occupation);
         self.encoder
-            .encode_short(buffer, &mut full_occupation, &mut short_occupation);
+            .encode_short(buffer, &full_occupation, &mut short_occupation);
         // 一字全码
         if let Some(characters_weight) = &self.config.characters_full {
             let (partial, accum) = self.evaluate_partial(&buffer.full, characters_weight, true);

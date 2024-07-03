@@ -85,7 +85,7 @@ impl Cli {
         } = self.clone();
         let config_path = config.unwrap_or(PathBuf::from("config.yaml"));
         let config_content = fs::read_to_string(&config_path)
-            .expect(&format!("文件 {} 不存在", config_path.display()));
+            .unwrap_or_else(|_| panic!("文件 {} 不存在", config_path.display()));
         let config: Config = serde_yaml::from_str(&config_content).unwrap();
         let elements_path = elements.unwrap_or(PathBuf::from("elements.txt"));
         let elements: AssembleList = Self::read(elements_path);
@@ -102,7 +102,7 @@ impl Cli {
             key_distribution,
             pair_equivalence,
         };
-        return (config, elements, assets);
+        (config, elements, assets)
     }
 
     pub fn write_encode_results(entries: Vec<Entry>) {
@@ -136,7 +136,7 @@ impl Cli {
 
 impl Interface for Cli {
     fn prepare_output(&self) {
-        let _ = fs::create_dir_all("output").expect("should be able to create an output directory");
+        fs::create_dir_all("output").expect("should be able to create an output directory");
     }
 
     fn init_autosolve(&self) {

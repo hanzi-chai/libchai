@@ -57,7 +57,7 @@ pub type Sequence = Vec<Element>;
 /// 编码用无符号整数表示
 pub type Code = u64;
 
-///
+/// 编码信息
 #[derive(Clone, Debug, Copy)]
 pub struct CodeInfo {
     pub code: Code,
@@ -180,7 +180,7 @@ pub struct Representation {
 }
 
 impl Mapped {
-    pub fn len(&self) -> usize {
+    pub fn length(&self) -> usize {
         match self {
             Mapped::Basic(s) => s.len(),
             Mapped::Advanced(v) => v.len(),
@@ -190,7 +190,7 @@ impl Mapped {
     pub fn normalize(&self) -> Vec<MappedKey> {
         match self {
             Mapped::Advanced(vector) => vector.clone(),
-            Mapped::Basic(string) => string.chars().map(|x| MappedKey::Ascii(x)).collect(),
+            Mapped::Basic(string) => string.chars().map(MappedKey::Ascii).collect(),
         }
     }
 }
@@ -199,9 +199,16 @@ pub fn assemble(element: &String, index: usize) -> String {
     if index == 0 {
         element.to_string()
     } else {
-        format!("{}.{}", element.to_string(), index)
+        format!("{}.{}", element, index)
     }
 }
+
+type AlphabetInfo = (u64, Vec<Key>, FxHashMap<char, Key>, FxHashMap<Key, char>);
+type KeymapInfo = (
+    KeyMap,
+    FxHashMap<String, Element>,
+    FxHashMap<Element, String>,
+);
 
 impl Representation {
     pub fn new(config: Config) -> Result<Self, Error> {
@@ -224,9 +231,7 @@ impl Representation {
     /// 读取字母表和选择键列表，然后分别对它们的每一个按键转换成无符号整数
     /// 1, ... n = 所有常规编码键
     /// n + 1, ..., m = 所有选择键
-    pub fn transform_alphabet(
-        config: &Config,
-    ) -> Result<(u64, Vec<Key>, FxHashMap<char, Key>, FxHashMap<Key, char>), Error> {
+    pub fn transform_alphabet(config: &Config) -> Result<AlphabetInfo, Error> {
         let mut key_repr: FxHashMap<char, Key> = FxHashMap::default();
         let mut repr_key: FxHashMap<Key, char> = FxHashMap::default();
         let mut index = 1_usize;
@@ -244,12 +249,12 @@ impl Representation {
             .select_keys
             .as_ref()
             .unwrap_or(&default_select_keys);
-        if select_keys.len() < 1 {
+        if select_keys.is_empty() {
             return Err("选择键不能为空！".into());
         }
         let mut parsed_select_keys: Vec<Key> = vec![];
         for key in select_keys {
-            if key_repr.contains_key(&key) {
+            if key_repr.contains_key(key) {
                 return Err("编码键有重复！".into());
             };
             key_repr.insert(*key, index);
@@ -266,14 +271,7 @@ impl Representation {
         config: &Config,
         key_repr: &FxHashMap<char, Key>,
         radix: u64,
-    ) -> Result<
-        (
-            KeyMap,
-            FxHashMap<String, Element>,
-            FxHashMap<Element, String>,
-        ),
-        Error,
-    > {
+    ) -> Result<KeymapInfo, Error> {
         let mut keymap: KeyMap = Vec::new();
         let mut element_repr: FxHashMap<String, usize> = FxHashMap::default();
         let mut repr_element: FxHashMap<usize, String> = FxHashMap::default();
@@ -288,7 +286,7 @@ impl Representation {
             let normalized = mapped.normalize();
             for (index, mapped_key) in normalized.iter().enumerate() {
                 if let MappedKey::Ascii(x) = mapped_key {
-                    if let Some(key) = key_repr.get(&x) {
+                    if let Some(key) = key_repr.get(x) {
                         let name = assemble(element, index);
                         element_repr.insert(name.clone(), keymap.len());
                         repr_element.insert(keymap.len(), name.clone());
@@ -373,8 +371,8 @@ impl Representation {
         let mut chars: Vec<char> = Vec::with_capacity(self.config.encoder.max_length);
         let mut remainder = code;
         while remainder > 0 {
-            let k = remainder % self.radix as u64;
-            remainder /= self.radix as u64;
+            let k = remainder % self.radix;
+            remainder /= self.radix;
             if k == 0 {
                 continue;
             }
@@ -558,7 +556,7 @@ impl Representation {
                 for key in keys {
                     let transformed_key = self
                         .key_repr
-                        .get(&key)
+                        .get(key)
                         .ok_or(format!("简码的选择键 {key} 不在全局选择键中"))?;
                     transformed_keys.push(*transformed_key);
                 }
@@ -566,7 +564,7 @@ impl Representation {
             } else {
                 self.select_keys.clone()
             };
-            if count as usize > select_keys.len() {
+            if count > select_keys.len() {
                 return Err("选重数量不能高于选择键数量".into());
             }
             compiled_schemes.push(CompiledScheme {
