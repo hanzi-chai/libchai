@@ -187,6 +187,7 @@ pub struct TierWeights {
     pub top: Option<usize>,
     pub duplication: Option<f64>,
     pub levels: Option<Vec<LevelWeights>>,
+    pub fingering: Option<FingeringWeights>,
 }
 
 // let types = ["同手", "大跨", "小跨", "干扰", "错手", "三连", "备用", "备用"];
@@ -198,13 +199,7 @@ pub struct PartialWeights {
     pub tiers: Option<Vec<TierWeights>>,
     pub duplication: Option<f64>,
     pub key_distribution: Option<f64>,
-    //杏码的「用指当量」。
-    pub new_key_equivalence: Option<f64>,
-    //杏码的「用指当量」（改），假定连续输入时预测上一键从而计算组合当量（慢）。
-    pub new_key_equivalence_modified: Option<f64>,
     pub pair_equivalence: Option<f64>,
-    //杏码的「速度（组合）当量」。
-    pub new_pair_equivalence: Option<f64>,
     pub extended_pair_equivalence: Option<f64>,
     pub fingering: Option<FingeringWeights>,
     pub levels: Option<Vec<LevelWeights>>,
@@ -217,6 +212,7 @@ pub struct ObjectiveConfig {
     pub words_full: Option<PartialWeights>,
     pub characters_short: Option<PartialWeights>,
     pub words_short: Option<PartialWeights>,
+    pub fingering: Option<FingeringWeights>,
 }
 
 #[skip_serializing_none]

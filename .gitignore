@@ -5,6 +5,7 @@ bin/
 pkg/
 wasm-pack.log
 assets
+examples
 output
 package
 *.yaml

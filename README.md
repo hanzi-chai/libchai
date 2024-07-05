@@ -49,3 +49,7 @@
 在 `.cargo/config` 中有一个 `target.x86_64-pc-windows-gnu` 目标，是给 macOS 交叉编译 Windows 可执行文件用的，如果不做交叉编译或者不是为 Windows 平台编译的话可以忽略。
 
 `make package` 命令在 macOS 上运行的时候可以同时编译当前平台（x86_64 或 arm64）以及 Windows 的可执行文件，并打包为一个 zip 压缩文件，便于发布。
+
+## 性能测试
+
+需要首先运行 `make examples` 下载相关数据资源。然后 `cargo bench` 即可编译运行。

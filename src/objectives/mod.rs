@@ -19,21 +19,20 @@ use crate::representation::Label;
 use crate::representation::Occupation;
 use crate::representation::Representation;
 use crate::representation::MAX_COMBINATION_LENGTH;
-use metric::LevelMetric1;
-use metric::LevelMetric2;
+use metric::FingeringMetric;
+use metric::FingeringMetricUniform;
+use metric::LevelMetric;
+use metric::LevelMetricUniform;
 use metric::Metric;
 use metric::PartialMetric;
 use metric::TierMetric;
 use std::iter::zip;
-
-use self::metric::FingeringMetric;
 
 pub struct Objective {
     config: ObjectiveConfig,
     encoder: Encoder,
     ideal_distribution: Vec<DistributionLoss>,
     pair_equivalence: Vec<f64>,
-    new_pair_equivalence: Vec<f64>,
     fingering_types: Vec<Label>,
 }
 
@@ -50,8 +49,6 @@ impl Objective {
         let ideal_distribution =
             representation.generate_ideal_distribution(&assets.key_distribution);
         let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
-        let new_pair_equivalence =
-            representation.transform_new_pair_equivalence(&assets.pair_equivalence);
         let fingering_types = representation.transform_fingering_types();
         let config = representation
             .config
@@ -63,7 +60,6 @@ impl Objective {
             config: config.objective.clone(),
             ideal_distribution,
             pair_equivalence,
-            new_pair_equivalence,
             fingering_types,
         };
         Ok(objective)
@@ -110,41 +106,40 @@ impl Objective {
         group: bool,
     ) -> (PartialMetric, f64) {
         let mut total_frequency = 0;
-        // 初始化整体指标的变量
-        let mut total_duplication = 0;
         let mut total_pairs = 0;
-        // 新当量以键数为单位
-        let mut total_new_keys = 0;
-        let mut total_new_keys_equivalence = 0.0;
-        let mut total_new_keys_equivalence_modified = 0.0;
-        let mut total_pair_equivalence = 0.0;
-        let mut total_new_pair_equivalence = 0.0;
-        // 词间当量
         let mut total_extended_pairs = 0;
+        // 初始化全局指标的变量
+        // 1. 只有加权指标，没有计数指标
+        let radix = self.encoder.radix as usize;
+        let mut distribution = vec![0_u64; radix];
+        let mut total_pair_equivalence = 0.0;
         let mut total_extended_pair_equivalence = 0.0;
-        let mut total_labels = [0_u64; 8];
-        let mut total_levels = vec![0; weights.levels.as_ref().unwrap_or(&vec![]).len()];
+        // 2. 有加权指标，也有计数指标
+        let mut total_duplication = 0;
+        let mut total_fingering = [0_u64; 8];
+        let nlevel = weights.levels.as_ref().map_or(0, |v| v.len());
+        let mut total_levels = vec![0; nlevel];
         // 初始化分级指标的变量
         let ntier = weights.tiers.as_ref().map_or(0, |v| v.len());
         let mut tiers_duplication = vec![0; ntier];
-        let mut tiers_levels: Vec<Vec<usize>> = vec![];
+        let mut tiers_levels: Vec<Vec<u64>> = vec![];
         if let Some(tiers) = &weights.tiers {
             for tier in tiers {
-                let vec = vec![0_usize; tier.levels.as_ref().map_or(0, |v| v.len())];
+                let vec = vec![0; tier.levels.as_ref().map_or(0, |v| v.len())];
                 tiers_levels.push(vec);
             }
         }
-        let radix = self.encoder.radix as usize;
-        let mut distribution = vec![0_u64; radix];
-        // 标记初始字符、结束字符的频率
-        let mut chuma = vec![0_u64; radix];
-        let mut moma = vec![0_u64; radix];
+        let mut tiers_fingering = vec![[0_u64; 8]; ntier];
+
+        // 预处理
         let max_index = self.pair_equivalence.len() as u64;
         let segment = self.encoder.radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
         let mut length_breakpoints = vec![];
         for i in 0..=(self.encoder.config.max_length + 1) {
             length_breakpoints.push(self.encoder.radix.pow(i as u32));
         }
+
+        // 开始计算指标
         for (index, code_info) in codes.iter().enumerate() {
             let CodeInfo {
                 code,
@@ -155,10 +150,12 @@ impl Objective {
             if group != single || code == 0 {
                 continue;
             }
-            total_frequency += frequency;
             let length = length_breakpoints.iter().position(|&x| code < x).unwrap() as u64;
-            let code = self.encoder.get_actual_code(code, rank, length as u32);
-            // 按键分布
+            let (code, actual_length) = self.encoder.get_actual_code(code, rank, length as u32);
+            total_frequency += frequency;
+            total_pairs += (actual_length - 1) as u64 * frequency;
+            // 一、全局指标
+            // 1. 按键分布
             if weights.key_distribution.is_some() {
                 let mut current = code;
                 while current > 0 {
@@ -169,29 +166,7 @@ impl Objective {
                     current /= self.encoder.radix;
                 }
             }
-            // 按键分布：杏码式用指当量，只统计最初的1码
-            if weights.new_key_equivalence.is_some() {
-                let key = code % self.encoder.radix;
-                total_new_keys_equivalence +=
-                    frequency as f64 / self.ideal_distribution[key as usize].ideal;
-            }
-            // 按键分布：杏码式用指当量改
-            if weights.new_key_equivalence_modified.is_some() {
-                //取得首末码
-                let codefirst = (code % self.encoder.radix) as usize;
-                let mut codelast = code;
-                while codelast > self.encoder.radix {
-                    codelast /= self.encoder.radix;
-                }
-                let codelast = codelast as usize;
-                chuma[codefirst] += frequency;
-                moma[codelast] += frequency;
-            }
-            // 如果有组合当量或者差指法统计，那么都需要累积总组合数
-            if weights.pair_equivalence.is_some() || weights.fingering.is_some() {
-                total_pairs += (length - 1) * frequency;
-            }
-            // 组合当量
+            // 2. 组合当量
             if weights.pair_equivalence.is_some() {
                 let mut code = code;
                 while code > self.encoder.radix {
@@ -201,17 +176,7 @@ impl Objective {
                     code /= segment;
                 }
             }
-            if weights.new_pair_equivalence.is_some() {
-                let mut code = code;
-                while code > self.encoder.radix {
-                    let partial_code = (code % max_index) as usize;
-                    total_new_pair_equivalence +=
-                        self.new_pair_equivalence[partial_code] * frequency as f64;
-                    code /= segment;
-                }
-                total_new_keys += length * frequency;
-            }
-            // 词间当量
+            // 3. 词间当量
             if weights.extended_pair_equivalence.is_some() {
                 let transitions = &self.encoder.transition_matrix[index];
                 let last_char = code / self.encoder.radix.pow(length as u32 - 1);
@@ -223,32 +188,24 @@ impl Objective {
                     total_extended_pairs += *weight;
                 }
             }
-            // 差指法统计
+            // 4. 差指法
             if let Some(fingering) = &weights.fingering {
                 let mut code = code;
                 while code > self.encoder.radix {
                     let label = self.fingering_types[(code % max_index) as usize];
                     for (i, weight) in fingering.iter().enumerate() {
                         if weight.is_some() {
-                            total_labels[i] += frequency * label[i] as u64;
+                            total_fingering[i] += frequency * label[i] as u64;
                         }
                     }
                     code /= segment;
                 }
             }
-            // 重码
+            // 5. 重码
             if rank > 0 {
                 total_duplication += frequency;
-                if let Some(tiers) = &weights.tiers {
-                    for (itier, tier) in tiers.iter().enumerate() {
-                        let top = tier.top.unwrap_or(usize::MAX);
-                        if index < top {
-                            tiers_duplication[itier] += 1;
-                        }
-                    }
-                }
             }
-            // 简码
+            // 6. 简码
             if let Some(levels) = &weights.levels {
                 for (ilevel, level) in levels.iter().enumerate() {
                     if level.length == length as usize {
@@ -256,46 +213,54 @@ impl Objective {
                     }
                 }
             }
-            // 分级指标
+            // 二、分级指标
             if let Some(tiers) = &weights.tiers {
                 for (itier, tier) in tiers.iter().enumerate() {
-                    let top = tier.top.unwrap_or(usize::MAX);
-                    if index < top {
-                        if let Some(levels) = &tier.levels {
-                            for (ilevel, level) in levels.iter().enumerate() {
-                                if level.length == length as usize {
-                                    tiers_levels[itier][ilevel] += 1;
+                    if index >= tier.top.unwrap_or(codes.len()) {
+                        continue;
+                    }
+                    // 1. 重码
+                    if rank > 0 {
+                        tiers_duplication[itier] += 1;
+                    }
+                    // 2. 简码
+                    if let Some(levels) = &tier.levels {
+                        for (ilevel, level) in levels.iter().enumerate() {
+                            if level.length == length as usize {
+                                tiers_levels[itier][ilevel] += 1;
+                            }
+                        }
+                    }
+                    // 3. 差指法
+                    if let Some(fingering) = &tier.fingering {
+                        let mut code = code;
+                        while code > self.encoder.radix {
+                            let label = self.fingering_types[(code % max_index) as usize];
+                            for (i, weight) in fingering.iter().enumerate() {
+                                if weight.is_some() {
+                                    tiers_fingering[itier][i] += label[i] as u64;
                                 }
                             }
+                            code /= segment;
                         }
                     }
                 }
             }
         }
-        if weights.new_key_equivalence_modified.is_some() {
-            //将首末码与全局的首末码频率拼起来
-            for i in 0..self.encoder.radix {
-                for j in 0..self.encoder.radix {
-                    let pair = (j + i * self.encoder.radix) as usize;
-                    total_new_keys_equivalence_modified +=
-                        self.pair_equivalence[pair] * (chuma[i as usize] * moma[j as usize]) as f64;
-                }
-            }
-        }
+
+        // 初始化返回值和标量化的损失函数
         let mut partial_metric = PartialMetric {
             tiers: None,
             key_distribution: None,
-            new_key_equivalence: None,
-            new_key_equivalence_modified: None,
             pair_equivalence: None,
-            new_pair_equivalence: None,
             extended_pair_equivalence: None,
             fingering: None,
             duplication: None,
             levels: None,
         };
-
         let mut loss = 0.0;
+        // 一、全局指标
+        // 1. 按键分布
         if let Some(key_distribution_weight) = weights.key_distribution {
             // 首先归一化
             let total: u64 = distribution.iter().sum();
@@ -307,58 +272,49 @@ impl Objective {
             partial_metric.key_distribution = Some(distance);
             loss += distance * key_distribution_weight;
         }
-        if let Some(equivalence_weight) = weights.new_key_equivalence {
-            let equivalence = total_new_keys_equivalence / total_new_keys as f64;
-            partial_metric.new_key_equivalence = Some(equivalence);
-            loss += equivalence * equivalence_weight;
-        }
-        if let Some(equivalence_weight) = weights.new_key_equivalence_modified {
-            let equivalence = total_new_keys_equivalence_modified / total_new_keys as f64;
-            partial_metric.new_key_equivalence_modified = Some(equivalence);
-            loss += equivalence * equivalence_weight;
-        }
+        // 2. 组合当量
         if let Some(equivalence_weight) = weights.pair_equivalence {
             let equivalence = total_pair_equivalence / total_pairs as f64;
             partial_metric.pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
-        if let Some(equivalence_weight) = weights.new_pair_equivalence {
-            let equivalence = total_new_pair_equivalence / total_new_keys as f64;
-            partial_metric.new_pair_equivalence = Some(equivalence);
-            loss += equivalence * equivalence_weight;
-        }
+        // 3. 词间当量
         if let Some(equivalence_weight) = weights.extended_pair_equivalence {
             let equivalence = total_extended_pair_equivalence / total_extended_pairs as f64;
             partial_metric.extended_pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
+        // 4. 差指法
         if let Some(fingering_weight) = &weights.fingering {
             let mut fingering = FingeringMetric::default();
             for (i, weight) in fingering_weight.iter().enumerate() {
                 if let Some(weight) = weight {
-                    fingering[i] = Some(total_labels[i] as f64 / total_pairs as f64);
-                    loss += total_labels[i] as f64 * weight;
+                    fingering[i] = Some(total_fingering[i] as f64 / total_pairs as f64);
+                    loss += total_fingering[i] as f64 * weight;
                 }
             }
             partial_metric.fingering = Some(fingering);
         }
+        // 5. 重码
         if let Some(duplication_weight) = weights.duplication {
             let duplication = total_duplication as f64 / total_frequency as f64;
             partial_metric.duplication = Some(duplication);
             loss += duplication * duplication_weight;
         }
+        // 6. 简码
         if let Some(levels_weight) = &weights.levels {
-            let mut levels: Vec<LevelMetric2> = Vec::new();
+            let mut levels: Vec<LevelMetric> = Vec::new();
             for (ilevel, level) in levels_weight.iter().enumerate() {
                 let value = total_levels[ilevel] as f64 / total_frequency as f64;
                 loss += value * level.frequency;
-                levels.push(LevelMetric2 {
+                levels.push(LevelMetric {
                     length: level.length,
                     frequency: value,
                 });
             }
             partial_metric.levels = Some(levels);
         }
+        // 二、分级指标
         if let Some(tiers_weight) = &weights.tiers {
             let mut tiers: Vec<TierMetric> = tiers_weight
                 .iter()
@@ -366,29 +322,44 @@ impl Objective {
                     top: x.top,
                     duplication: None,
                     levels: None,
+                    fingering: None,
                 })
                 .collect();
-            for (itier, twights) in tiers_weight.iter().enumerate() {
-                let total = twights.top.unwrap_or(codes.len());
-                if let Some(duplication_weight) = twights.duplication {
+            for (itier, tier_weights) in tiers_weight.iter().enumerate() {
+                let count = tier_weights.top.unwrap_or(codes.len()) as f64;
+                // 1. 重码
+                if let Some(duplication_weight) = tier_weights.duplication {
                     let duplication = tiers_duplication[itier];
-                    loss += duplication as f64 / total as f64 * duplication_weight;
+                    loss += duplication as f64 / count * duplication_weight;
                     tiers[itier].duplication = Some(duplication);
                 }
-                if let Some(level_weight) = &twights.levels {
+                // 2. 简码
+                if let Some(level_weight) = &tier_weights.levels {
                     for (ilevel, level) in level_weight.iter().enumerate() {
-                        loss += tiers_levels[itier][ilevel] as f64 / total as f64 * level.frequency;
+                        loss += tiers_levels[itier][ilevel] as f64 / count * level.frequency;
                     }
                     tiers[itier].levels = Some(
                         level_weight
                             .iter()
                             .enumerate()
-                            .map(|(i, v)| LevelMetric1 {
+                            .map(|(i, v)| LevelMetricUniform {
                                 length: v.length,
                                 frequency: tiers_levels[itier][i],
                             })
                             .collect(),
                     );
+                }
+                // 3. 差指法
+                if let Some(fingering_weight) = &tier_weights.fingering {
+                    let mut fingering = FingeringMetricUniform::default();
+                    for (i, weight) in fingering_weight.iter().enumerate() {
+                        if let Some(weight) = weight {
+                            let value = tiers_fingering[itier][i];
+                            fingering[i] = Some(value);
+                            loss += value as f64 / count * weight;
+                        }
+                    }
+                    tiers[itier].fingering = Some(fingering);
                 }
             }
             partial_metric.tiers = Some(tiers);

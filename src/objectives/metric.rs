@@ -4,23 +4,30 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LevelMetric1 {
-    pub length: usize,
-    pub frequency: usize,
-}
+
+const FINGERING_LABELS: [&str; 8] = ["同手", "大跨", "小跨", "干扰", "错手", "三连", "备用", "备用"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LevelMetric2 {
+pub struct LevelMetric {
     pub length: usize,
     pub frequency: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LevelMetricUniform {
+    pub length: usize,
+    pub frequency: u64,
+}
+
+pub type FingeringMetric = [Option<f64>; 8];
+pub type FingeringMetricUniform = [Option<u64>; 8];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TierMetric {
     pub top: Option<usize>,
     pub duplication: Option<usize>,
-    pub levels: Option<Vec<LevelMetric1>>,
+    pub levels: Option<Vec<LevelMetricUniform>>,
+    pub fingering: Option<FingeringMetricUniform>,
 }
 
 impl Display for TierMetric {
@@ -35,7 +42,7 @@ impl Display for TierMetric {
             f.write_str(&format!("{}选重：{}；", specifier, duplication))?;
         }
         if let Some(levels) = &self.levels {
-            for LevelMetric1 { length, frequency } in levels {
+            for LevelMetricUniform { length, frequency } in levels {
                 f.write_str(&format!(
                     "{}{}键：{}；",
                     specifier,
@@ -44,24 +51,26 @@ impl Display for TierMetric {
                 ))?;
             }
         }
+        if let Some(fingering) = &self.fingering {
+            for (index, frequency) in fingering.iter().enumerate() {
+                if let Some(frequency) = frequency {
+                    f.write_str(&format!("{}：{}；", FINGERING_LABELS[index], frequency))?;
+                }
+            }
+        }
         Ok(())
     }
 }
-
-pub type FingeringMetric = [Option<f64>; 8];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartialMetric {
     pub tiers: Option<Vec<TierMetric>>,
     pub duplication: Option<f64>,
     pub key_distribution: Option<f64>,
-    pub new_key_equivalence: Option<f64>,
-    pub new_key_equivalence_modified: Option<f64>,
     pub pair_equivalence: Option<f64>,
-    pub new_pair_equivalence: Option<f64>,
     pub extended_pair_equivalence: Option<f64>,
     pub fingering: Option<FingeringMetric>,
-    pub levels: Option<Vec<LevelMetric2>>,
+    pub levels: Option<Vec<LevelMetric>>,
 }
 
 impl Display for PartialMetric {
@@ -74,31 +83,21 @@ impl Display for PartialMetric {
         if let Some(key_distribution) = self.key_distribution {
             f.write_str(&format!("用指分布偏差：{:.2}%；", key_distribution * 100.0))?;
         }
-        if let Some(equivalence) = self.new_key_equivalence {
-            f.write_str(&format!("杏码式用指当量：{:.4}；", equivalence))?;
-        }
-        if let Some(equivalence) = self.new_key_equivalence_modified {
-            f.write_str(&format!("杏码式用指当量改：{:.4}；", equivalence))?;
-        }
         if let Some(equivalence) = self.pair_equivalence {
             f.write_str(&format!("组合当量：{:.4}；", equivalence))?;
-        }
-        if let Some(equivalence) = self.new_pair_equivalence {
-            f.write_str(&format!("杏码式组合当量：{:.4}；", equivalence))?;
         }
         if let Some(equivalence) = self.extended_pair_equivalence {
             f.write_str(&format!("词间当量：{:.4}；", equivalence))?;
         }
-        let types = ["同手", "大跨", "小跨", "干扰", "错手", "三连", "备用", "备用"];
         if let Some(fingering) = &self.fingering {
             for (index, percent) in fingering.iter().enumerate() {
                 if let Some(percent) = percent {
-                    f.write_str(&format!("{}：{:.2}%；", types[index], percent * 100.0))?;
+                    f.write_str(&format!("{}：{:.2}%；", FINGERING_LABELS[index], percent * 100.0))?;
                 }
             }
         }
         if let Some(levels) = &self.levels {
-            for LevelMetric2 { length, frequency } in levels {
+            for LevelMetric { length, frequency } in levels {
                 f.write_str(&format!(
                     "{}键：{:.2}%；",
                     hanzi_numbers[length - 1],

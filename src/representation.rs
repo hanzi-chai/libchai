@@ -413,19 +413,19 @@ impl Representation {
     /// 将编码空间内所有的编码组合预先计算好速度当量
     /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
     pub fn transform_pair_equivalence(&self, pair_equivalence: &HashMap<String, f64>) -> Vec<f64> {
-        let mut result: Vec<f64> = Vec::with_capacity(self.get_space());
-        for code in 0..self.get_space() {
-            let chars = self.repr_code(code as u64);
-            if chars.len() < 2 {
-                result.push(0.0);
-                continue;
+        let mut result: Vec<f64> = vec![0.0; self.get_space()];
+        for (index, equivalence) in result.iter_mut().enumerate() {
+            let chars = self.repr_code(index as u64);
+            for correlation_length in [2, 3, 4] {
+                if chars.len() < correlation_length {
+                    break;
+                }
+                // N 键当量
+                for i in 0..=(chars.len() - correlation_length) {
+                    let substr: String = chars[i..(i + correlation_length)].iter().collect();
+                    *equivalence += pair_equivalence.get(&substr).unwrap_or(&0.0);
+                }
             }
-            let mut total = 0.0;
-            for i in 0..(chars.len() - 1) {
-                let pair: String = [chars[i], chars[i + 1]].iter().collect();
-                total += pair_equivalence.get(&pair).unwrap_or(&0.0);
-            }
-            result.push(total);
         }
         result
     }
@@ -466,49 +466,6 @@ impl Representation {
                 let triple = (chars[i], chars[i + 1], chars[i + 2]);
                 if triple.0 == triple.1 && triple.1 == triple.2 {
                     total[5] += 1;
-                }
-            }
-            result.push(total);
-        }
-        result
-    }
-
-    /// 将编码空间内所有的编码组合预先计算好新速度当量（杏码算法）
-    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
-    pub fn transform_new_pair_equivalence(
-        &self,
-        pair_equivalence: &HashMap<String, f64>,
-    ) -> Vec<f64> {
-        let mut result: Vec<f64> = Vec::with_capacity(self.get_space());
-        for code in 0..self.get_space() {
-            let chars = self.repr_code(code as u64);
-            if chars.len() < 2 {
-                result.push(0.0);
-                continue;
-            }
-            //遍历所有组合
-            let combinations = 2_usize.pow(chars.len() as u32);
-            let start = 2_usize.pow(chars.len() as u32 - 1) + 1;
-            let mut total = 0.0;
-            for s in (start..combinations).step_by(2) {
-                let mut thistime = 0.0;
-                let s_chars: Vec<char> = chars
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, char)| {
-                        if s & (1 << index) != 0 {
-                            Some(*char)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                for i in 0..(s_chars.len() - 1) {
-                    let pair: String = [s_chars[i], s_chars[i + 1]].iter().collect();
-                    thistime += pair_equivalence.get(&pair).unwrap_or(&0.0);
-                }
-                if thistime > total {
-                    total = thistime
                 }
             }
             result.push(total);

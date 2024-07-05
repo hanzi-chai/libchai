@@ -53,35 +53,27 @@ impl Encoder {
                 // 使用逆向最大匹配算法来分词
                 let chars: Vec<_> = word.chars().collect();
                 let mut end = chars.len();
-                let mut start;
                 let mut last_match: Option<String> = None;
                 while end > 0 {
-                    start = end - 1;
-                    let partial_word: String = chars[start..end].iter().collect();
+                    let mut start = end - 1;
                     // 如果最后一个字不在词表里，就不要了
-                    if !words.contains(&partial_word) {
+                    if !words.contains(&chars[start].to_string()) {
                         end -= 1;
                         continue;
                     }
                     // 继续向前匹配，看看是否能匹配到更长的词
-                    while start > 0 {
+                    while start > 0
+                        && words.contains(&chars[(start - 1)..end].iter().collect::<String>())
+                    {
                         start -= 1;
-                        let partial_word: String = chars[start..end].iter().collect();
-                        if !words.contains(&partial_word) {
-                            start += 1;
-                            break;
-                        }
                     }
                     // 确定最大匹配
-                    let maximum_match: String = chars[start..end].iter().collect();
-                    new_frequency.insert(
-                        maximum_match.clone(),
-                        new_frequency.get(&maximum_match).unwrap_or(&0) + *value,
-                    );
+                    let sub_word: String = chars[start..end].iter().collect();
+                    *new_frequency.entry(sub_word.clone()).or_default() += *value;
                     if let Some(last) = last_match {
-                        transition_pairs.push((maximum_match.clone(), last, *value));
+                        transition_pairs.push((sub_word.clone(), last, *value));
                     }
-                    last_match = Some(maximum_match);
+                    last_match = Some(sub_word);
                     end = start;
                 }
             }
@@ -168,16 +160,16 @@ impl Encoder {
         Ok(encoder)
     }
 
-    pub fn get_actual_code(&self, code: u64, rank: i8, length: u32) -> u64 {
+    pub fn get_actual_code(&self, code: u64, rank: i8, length: u32) -> (u64, u32) {
         if rank == 0 && *self.auto_select.get(code as usize).unwrap_or(&true) {
-            return code;
+            return (code, length);
         }
         let select = *self
             .select_keys
             .get(rank.unsigned_abs() as usize)
             .unwrap_or(&self.select_keys[0]) as u64
             * self.radix.pow(length);
-        code + select
+        (code + select, length + 1)
     }
 
     pub fn encode_full(&self, keymap: &KeyMap, buffer: &mut Buffer, occupation: &mut Occupation) {
