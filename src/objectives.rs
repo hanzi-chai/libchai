@@ -16,7 +16,6 @@ use crate::representation::Codes;
 use crate::representation::DistributionLoss;
 use crate::representation::KeyMap;
 use crate::representation::Label;
-use crate::representation::Occupation;
 use crate::representation::Representation;
 use crate::representation::MAX_COMBINATION_LENGTH;
 use metric::FingeringMetric;
@@ -30,7 +29,7 @@ use std::iter::zip;
 
 pub struct Objective {
     config: ObjectiveConfig,
-    encoder: Encoder,
+    encoder: Box<dyn Encoder>,
     ideal_distribution: Vec<DistributionLoss>,
     pair_equivalence: Vec<f64>,
     fingering_types: Vec<Label>,
@@ -43,7 +42,7 @@ impl Objective {
     /// 通过传入配置表示、编码器和共用资源来构造一个目标函数
     pub fn new(
         representation: &Representation,
-        encoder: Encoder,
+        encoder: Box<dyn Encoder>,
         assets: Assets,
     ) -> Result<Self, Error> {
         let ideal_distribution =
@@ -110,8 +109,8 @@ impl Objective {
         let mut total_extended_pairs = 0;
         // 初始化全局指标的变量
         // 1. 只有加权指标，没有计数指标
-        let radix = self.encoder.radix as usize;
-        let mut distribution = vec![0_u64; radix];
+        let radix = self.encoder.get_radix();
+        let mut distribution = vec![0_u64; radix as usize];
         let mut total_pair_equivalence = 0.0;
         let mut total_extended_pair_equivalence = 0.0;
         // 2. 有加权指标，也有计数指标
@@ -133,10 +132,10 @@ impl Objective {
 
         // 预处理
         let max_index = self.pair_equivalence.len() as u64;
-        let segment = self.encoder.radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
+        let segment = radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
         let mut length_breakpoints = vec![];
-        for i in 0..=(self.encoder.config.max_length + 1) {
-            length_breakpoints.push(self.encoder.radix.pow(i as u32));
+        for i in 0..=8 {
+            length_breakpoints.push(radix.pow(i as u32));
         }
 
         // 开始计算指标
@@ -159,17 +158,17 @@ impl Objective {
             if weights.key_distribution.is_some() {
                 let mut current = code;
                 while current > 0 {
-                    let key = current % self.encoder.radix;
+                    let key = current % radix;
                     if let Some(x) = distribution.get_mut(key as usize) {
                         *x += frequency;
                     }
-                    current /= self.encoder.radix;
+                    current /= radix;
                 }
             }
             // 2. 组合当量
             if weights.pair_equivalence.is_some() {
                 let mut code = code;
-                while code > self.encoder.radix {
+                while code > radix {
                     let partial_code = (code % max_index) as usize;
                     total_pair_equivalence +=
                         self.pair_equivalence[partial_code] * frequency as f64;
@@ -178,11 +177,11 @@ impl Objective {
             }
             // 3. 词间当量
             if weights.extended_pair_equivalence.is_some() {
-                let transitions = &self.encoder.transition_matrix[index];
-                let last_char = code / self.encoder.radix.pow(length as u32 - 1);
+                let transitions = self.encoder.get_transitions(index);
+                let last_char = code / radix.pow(length as u32 - 1);
                 for (i, weight) in transitions {
-                    let next_char = codes[*i].code % self.encoder.radix;
-                    let combination = last_char + next_char * self.encoder.radix;
+                    let next_char = codes[*i].code % radix;
+                    let combination = last_char + next_char * radix;
                     let equivalence = self.pair_equivalence[combination as usize];
                     total_extended_pair_equivalence += equivalence * *weight as f64;
                     total_extended_pairs += *weight;
@@ -191,7 +190,7 @@ impl Objective {
             // 4. 差指法
             if let Some(fingering) = &weights.fingering {
                 let mut code = code;
-                while code > self.encoder.radix {
+                while code > radix {
                     let label = self.fingering_types[(code % max_index) as usize];
                     for (i, weight) in fingering.iter().enumerate() {
                         if weight.is_some() {
@@ -234,7 +233,7 @@ impl Objective {
                     // 3. 差指法
                     if let Some(fingering) = &tier.fingering {
                         let mut code = code;
-                        while code > self.encoder.radix {
+                        while code > radix {
                             let label = self.fingering_types[(code % max_index) as usize];
                             for (i, weight) in fingering.iter().enumerate() {
                                 if weight.is_some() {
@@ -380,12 +379,9 @@ impl Objective {
             characters_short: None,
             words_short: None,
         };
-        let mut full_occupation = Occupation::new(self.pair_equivalence.len());
-        let mut short_occupation = Occupation::new(self.pair_equivalence.len());
-        self.encoder
-            .encode_full(candidate, buffer, &mut full_occupation);
-        self.encoder
-            .encode_short(buffer, &full_occupation, &mut short_occupation);
+        buffer.reset_occupation();
+        self.encoder.encode_full(candidate, buffer);
+        self.encoder.encode_short(buffer);
         // 一字全码
         if let Some(characters_weight) = &self.config.characters_full {
             let (partial, accum) = self.evaluate_partial(&buffer.full, characters_weight, true);

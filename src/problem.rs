@@ -7,7 +7,7 @@ use crate::config::{SearchConfig, SolverConfig};
 use crate::constraints::Constraints;
 use crate::error::Error;
 use crate::interface::Interface;
-use crate::metaheuristics::{simulated_annealing, Metaheuristics};
+use crate::metaheuristics::Metaheuristics;
 use crate::objectives::metric::Metric;
 use crate::objectives::Objective;
 use crate::representation::{Buffer, KeyMap, Representation};
@@ -98,25 +98,5 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
         let new_config = self.representation.update_config(candidate);
         let metric = format!("{}", rank.0);
         interface.report_solution(new_config, metric, write_to_file);
-    }
-}
-
-pub fn solve(
-    problem: &mut ElementPlacementProblem,
-    solver: &SolverConfig,
-    interface: &dyn Interface,
-) -> Solution {
-    interface.prepare_output();
-    let SolverConfig {
-        parameters,
-        runtime,
-        report_after,
-        ..
-    } = solver.clone();
-    if let Some(parameters) = parameters {
-        simulated_annealing::solve(problem, parameters, report_after, interface)
-    } else {
-        let runtime = runtime.unwrap_or(10);
-        simulated_annealing::autosolve(problem, runtime, report_after, interface)
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::{
     config::{Config, Mapped, MappedKey, Scheme, ShortCodeConfig},
-    encoder::{CompiledScheme, Encodable, Encoder},
+    encoder::{CompiledScheme, Encodable},
     error::Error,
     objectives::fingering::get_fingering_types,
 };
@@ -19,12 +19,12 @@ pub struct Assemble {
     pub sequence: String,
     pub importance: u64,
     #[serde(default = "Assemble::suggested_level_default")]
-    pub level: i64,
+    pub level: u64,
 }
 
 impl Assemble {
-    const fn suggested_level_default() -> i64 {
-        -1
+    const fn suggested_level_default() -> u64 {
+        u64::MAX
     }
 }
 
@@ -105,7 +105,7 @@ impl Occupation {
         if index < self.vector.len() as u64 {
             let index = index as usize;
             self.vector[index].hash = hash;
-            self.vector[index].count += 1;
+            self.vector[index].count = self.vector[index].count.saturating_add(1);
         } else {
             self.hashmap
                 .insert(index, self.hashmap.get(&index).unwrap_or(&0) + 1);
@@ -124,7 +124,11 @@ impl Occupation {
     pub fn rank_hash(&self, index: u64, hash: u16) -> u8 {
         if index < self.vector.len() as u64 {
             let index = index as usize;
-            self.vector[index].count - (self.vector[index].hash == hash) as u8
+            if self.vector[index].hash == hash {
+                0
+            } else {
+                self.vector[index].count
+            }
         } else {
             *self.hashmap.get(&index).unwrap_or(&0)
         }
@@ -144,25 +148,34 @@ pub struct Entry {
     pub short_rank: i8,
 }
 
-#[derive(Debug)]
 pub struct Buffer {
     pub full: Codes,
     pub short: Codes,
+    pub occupation: Occupation,
 }
 
 impl Buffer {
-    pub fn new(encoder: &Encoder) -> Self {
+    pub fn new(encodables: &Vec<Encodable>, space: usize) -> Self {
         let make_placeholder = |x: &Encodable| CodeInfo {
             code: 0,
             frequency: x.frequency,
             rank: 0,
             single: x.name.chars().count() == 1,
         };
-        let it = encoder.encodables.iter();
+        let it = encodables.iter();
         Self {
             full: it.clone().map(make_placeholder).collect(),
             short: it.clone().map(make_placeholder).collect(),
+            occupation: Occupation::new(space)
         }
+    }
+
+    pub fn reset_occupation(&mut self) {
+        self.occupation.vector.iter_mut().for_each(|x| {
+            x.count = 0;
+            x.hash = 0;
+        });
+        self.occupation.hashmap.clear();
     }
 }
 

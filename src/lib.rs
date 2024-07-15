@@ -20,9 +20,10 @@ use crate::{
 };
 use config::{ObjectiveConfig, OptimizationConfig};
 use console_error_panic_hook::set_once;
+use encoder::generic::GenericEncoder;
 use interface::Interface;
 use js_sys::Function;
-use problem::solve;
+use metaheuristics::solve;
 use representation::{AssembleList, Buffer};
 use serde::Serialize;
 use serde_wasm_bindgen::{from_value, to_value};
@@ -110,9 +111,10 @@ impl WebInterface {
             metaheuristic: None,
         });
         let representation = Representation::new(config)?;
-        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
+        let encoder = GenericEncoder::new(&representation, self.info.clone(), &self.assets)?;
         let codes = encoder.encode(&representation.initial, &representation);
-        let mut buffer = Buffer::new(&encoder);
+        let encoder = Box::new(encoder);
+        let mut buffer = Buffer::new(&encoder.encodables, encoder.get_space());
         let objective = Objective::new(&representation, encoder, self.assets.clone())?;
         let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
         Ok(to_value(&(codes, metric))?)
@@ -120,8 +122,9 @@ impl WebInterface {
 
     pub fn optimize(&self) -> Result<(), JsError> {
         let representation = Representation::new(self.config.clone())?;
-        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
-        let mut buffer = Buffer::new(&encoder);
+        let encoder = GenericEncoder::new(&representation, self.info.clone(), &self.assets)?;
+        let encoder = Box::new(encoder);
+        let mut buffer = Buffer::new(&encoder.encodables, encoder.get_space());
         let objective = Objective::new(&representation, encoder, self.assets.clone())?;
         let constraints = Constraints::new(&representation)?;
         let _ = objective.evaluate(&representation.initial, &mut buffer)?;

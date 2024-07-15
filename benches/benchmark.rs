@@ -1,4 +1,5 @@
 use chai::config::Config;
+use chai::encoder::generic::GenericEncoder;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use chai::cli::{Cli, Command};
@@ -32,9 +33,9 @@ fn process_cli_input(
     b: &mut Criterion,
 ) -> Result<(), Error> {
     let representation = Representation::new(config)?;
-    let encoder = Encoder::new(&representation, elements, &assets)?;
-    let buffer = Buffer::new(&encoder);
-    let objective = Objective::new(&representation, encoder, assets)?;
+    let encoder = GenericEncoder::new(&representation, elements, &assets)?;
+    let buffer = Buffer::new(&encoder.encodables, encoder.get_space());
+    let objective = Objective::new(&representation, Box::new(encoder), assets)?;
     let constraints = Constraints::new(&representation)?;
     let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer)?;
     let mut candidate = problem.generate_candidate();

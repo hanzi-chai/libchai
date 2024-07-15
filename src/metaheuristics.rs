@@ -5,7 +5,9 @@
 //! 但是，为了保证可扩展性，仍然保留了这个库中对于不同类型算法和不同类型问题的特征抽象，即只要一个问题定义了 Metaheuristic 这个 trait，就能用所有不同的算法求解；而任何一个算法都可以只依赖于 Metaheuristic 这个 trait 里提供的方法来求解一个问题。相当于建立了一个多对多的模块化设计，这样也许以后使用遗传算法等其他方法也不需要大改结构。
 //!
 
-use crate::interface::Interface;
+use std::fmt::Display;
+
+use crate::{config::SolverConfig, interface::Interface};
 pub mod simulated_annealing;
 
 /// 任何问题只要实现了这个 trait，就能用所有算法来求解
@@ -43,4 +45,29 @@ pub trait Metaheuristics<T, M> {
         write_to_file: bool,
         interface: &dyn Interface,
     );
+}
+
+pub fn solve<T: Clone, M: Clone + Display>(
+    problem: &mut dyn Metaheuristics<T, M>,
+    solver: &SolverConfig,
+    interface: &dyn Interface,
+) -> T {
+    interface.prepare_output();
+    let SolverConfig {
+        algorithm,
+        parameters,
+        runtime,
+        report_after,
+        ..
+    } = solver.clone();
+    if algorithm == "SimulatedAnnealing" {
+        if let Some(parameters) = parameters {
+            simulated_annealing::solve(problem, parameters, report_after, interface)
+        } else {
+            let runtime = runtime.unwrap_or(10);
+            simulated_annealing::autosolve(problem, runtime, report_after, interface)
+        }
+    } else {
+        panic!("Unknown algorithm: {}", algorithm)
+    }
 }
