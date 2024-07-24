@@ -10,7 +10,7 @@ use crate::interface::Interface;
 use crate::metaheuristics::Metaheuristics;
 use crate::objectives::metric::Metric;
 use crate::objectives::Objective;
-use crate::representation::{Buffer, KeyMap, Representation};
+use crate::representation::{KeyMap, Representation};
 use rand::random;
 
 // 未来可能会有更加通用的解定义
@@ -21,7 +21,6 @@ pub struct ElementPlacementProblem {
     constraints: Constraints,
     objective: Objective,
     solver: SolverConfig,
-    buffer: Buffer,
 }
 
 impl ElementPlacementProblem {
@@ -29,7 +28,6 @@ impl ElementPlacementProblem {
         representation: Representation,
         constraints: Constraints,
         objective: Objective,
-        buffer: Buffer,
     ) -> Result<Self, Error> {
         let optimization = representation
             .config
@@ -46,7 +44,6 @@ impl ElementPlacementProblem {
             constraints,
             objective,
             solver,
-            buffer,
         })
     }
 }
@@ -61,10 +58,7 @@ impl Metaheuristics<Solution, Metric> for ElementPlacementProblem {
     }
 
     fn rank_candidate(&mut self, candidate: &Solution) -> (Metric, f64) {
-        let (metric, loss) = self
-            .objective
-            .evaluate(candidate, &mut self.buffer)
-            .unwrap();
+        let (metric, loss) = self.objective.evaluate(candidate).unwrap();
         (metric, loss)
     }
 

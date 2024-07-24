@@ -121,7 +121,7 @@ impl Cli {
         } in entries
         {
             writer
-                .serialize((&name, &full, &full_rank.abs(), &short, &short_rank.abs()))
+                .serialize((&name, &full, &full_rank, &short, &short_rank))
                 .unwrap();
         }
         writer.flush().unwrap();

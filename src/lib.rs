@@ -14,21 +14,20 @@ use crate::constraints::Constraints;
 use crate::problem::ElementPlacementProblem;
 use crate::{
     config::Config,
-    encoder::Encoder,
     objectives::Objective,
     representation::{Assets, Representation},
 };
 use config::{ObjectiveConfig, OptimizationConfig};
 use console_error_panic_hook::set_once;
-use encoder::generic::GenericEncoder;
 use interface::Interface;
 use js_sys::Function;
 use metaheuristics::solve;
-use representation::{AssembleList, Buffer};
+use representation::AssembleList;
 use serde::Serialize;
 use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
 use wasm_bindgen::prelude::*;
+use crate::encoder::Encoder;
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -111,25 +110,21 @@ impl WebInterface {
             metaheuristic: None,
         });
         let representation = Representation::new(config)?;
-        let encoder = GenericEncoder::new(&representation, self.info.clone(), &self.assets)?;
+        let mut encoder = Encoder::new(&representation, self.info.clone(), &self.assets, false)?;
         let codes = encoder.encode(&representation.initial, &representation);
-        let encoder = Box::new(encoder);
-        let mut buffer = Buffer::new(&encoder.encodables, encoder.get_space());
-        let objective = Objective::new(&representation, encoder, self.assets.clone())?;
-        let (metric, _) = objective.evaluate(&representation.initial, &mut buffer)?;
+        let mut objective = Objective::new(&representation, encoder, self.assets.clone())?;
+        let (metric, _) = objective.evaluate(&representation.initial)?;
         Ok(to_value(&(codes, metric))?)
     }
 
     pub fn optimize(&self) -> Result<(), JsError> {
         let representation = Representation::new(self.config.clone())?;
-        let encoder = GenericEncoder::new(&representation, self.info.clone(), &self.assets)?;
-        let encoder = Box::new(encoder);
-        let mut buffer = Buffer::new(&encoder.encodables, encoder.get_space());
-        let objective = Objective::new(&representation, encoder, self.assets.clone())?;
+        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets, true)?;
+        let mut objective = Objective::new(&representation, encoder, self.assets.clone())?;
         let constraints = Constraints::new(&representation)?;
-        let _ = objective.evaluate(&representation.initial, &mut buffer)?;
+        let _ = objective.evaluate(&representation.initial)?;
         let mut problem =
-            ElementPlacementProblem::new(representation, constraints, objective, buffer)?;
+            ElementPlacementProblem::new(representation, constraints, objective)?;
         let solver = self.config.optimization.as_ref().unwrap().metaheuristic.as_ref().unwrap();
         solve(&mut problem, solver, self);
         Ok(())

@@ -2,7 +2,7 @@
 
 use crate::{
     config::{Config, Mapped, MappedKey, Scheme, ShortCodeConfig},
-    encoder::{CompiledScheme, Encodable},
+    encoder::CompiledScheme,
     error::Error,
     objectives::fingering::get_fingering_types,
 };
@@ -59,11 +59,31 @@ pub type Code = u64;
 
 /// 编码信息
 #[derive(Clone, Debug, Copy)]
-pub struct CodeInfo {
+pub struct CodeSubInfo {
     pub code: Code,
+    pub actual: Code,
+    pub rank: u8,
+    pub duplicate: bool,
+}
+
+impl Default for CodeSubInfo {
+    fn default() -> Self {
+        Self {
+            code: 0,
+            actual: 0,
+            rank: 0,
+            duplicate: false,
+        }
+    }
+}
+
+/// 编码信息
+#[derive(Clone, Debug, Copy)]
+pub struct CodeInfo {
+    pub length: usize,
     pub frequency: u64,
-    pub rank: i8,
-    pub single: bool,
+    pub full: CodeSubInfo,
+    pub short: CodeSubInfo,
 }
 
 /// 一组编码
@@ -78,63 +98,6 @@ pub type KeyMap = Vec<Key>;
 /// 用指标记
 pub type Label = [u8; 8];
 
-/// 编码是否已被占据
-/// 用一个数组和一个哈希集合来表示，数组用来表示四码以内的编码，哈希集合用来表示四码以上的编码
-pub struct Occupation {
-    pub vector: Vec<Slot>,
-    pub hashmap: FxHashMap<Code, u8>,
-}
-
-#[derive(Default, Clone)]
-pub struct Slot {
-    pub hash: u16,
-    pub count: u8,
-}
-
-impl Occupation {
-    pub fn new(length: usize) -> Self {
-        let vector = vec![Slot::default(); length];
-        let hashset = FxHashMap::default();
-        Self {
-            vector,
-            hashmap: hashset,
-        }
-    }
-
-    pub fn insert(&mut self, index: u64, hash: u16) {
-        if index < self.vector.len() as u64 {
-            let index = index as usize;
-            self.vector[index].hash = hash;
-            self.vector[index].count = self.vector[index].count.saturating_add(1);
-        } else {
-            self.hashmap
-                .insert(index, self.hashmap.get(&index).unwrap_or(&0) + 1);
-        }
-    }
-
-    pub fn rank(&self, index: u64) -> u8 {
-        if index < self.vector.len() as u64 {
-            let index = index as usize;
-            self.vector[index].count
-        } else {
-            *self.hashmap.get(&index).unwrap_or(&0)
-        }
-    }
-
-    pub fn rank_hash(&self, index: u64, hash: u16) -> u8 {
-        if index < self.vector.len() as u64 {
-            let index = index as usize;
-            if self.vector[index].hash == hash {
-                0
-            } else {
-                self.vector[index].count
-            }
-        } else {
-            *self.hashmap.get(&index).unwrap_or(&0)
-        }
-    }
-}
-
 pub type AutoSelect = Vec<bool>;
 
 pub const MAX_COMBINATION_LENGTH: usize = 4;
@@ -143,40 +106,9 @@ pub const MAX_COMBINATION_LENGTH: usize = 4;
 pub struct Entry {
     pub name: String,
     pub full: String,
-    pub full_rank: i8,
+    pub full_rank: u8,
     pub short: String,
-    pub short_rank: i8,
-}
-
-pub struct Buffer {
-    pub full: Codes,
-    pub short: Codes,
-    pub occupation: Occupation,
-}
-
-impl Buffer {
-    pub fn new(encodables: &Vec<Encodable>, space: usize) -> Self {
-        let make_placeholder = |x: &Encodable| CodeInfo {
-            code: 0,
-            frequency: x.frequency,
-            rank: 0,
-            single: x.name.chars().count() == 1,
-        };
-        let it = encodables.iter();
-        Self {
-            full: it.clone().map(make_placeholder).collect(),
-            short: it.clone().map(make_placeholder).collect(),
-            occupation: Occupation::new(space)
-        }
-    }
-
-    pub fn reset_occupation(&mut self) {
-        self.occupation.vector.iter_mut().for_each(|x| {
-            x.count = 0;
-            x.hash = 0;
-        });
-        self.occupation.hashmap.clear();
-    }
+    pub short_rank: u8,
 }
 
 /// 配置表示是对配置文件的进一步封装，除了保存一份配置文件本身之外，还根据配置文件的内容推导出用于各种转换的映射

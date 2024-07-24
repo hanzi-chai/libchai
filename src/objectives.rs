@@ -10,9 +10,8 @@ use crate::config::PartialWeights;
 use crate::encoder::Encoder;
 use crate::error::Error;
 use crate::representation::Assets;
-use crate::representation::Buffer;
 use crate::representation::CodeInfo;
-use crate::representation::Codes;
+use crate::representation::CodeSubInfo;
 use crate::representation::DistributionLoss;
 use crate::representation::KeyMap;
 use crate::representation::Label;
@@ -29,7 +28,7 @@ use std::iter::zip;
 
 pub struct Objective {
     config: ObjectiveConfig,
-    encoder: Box<dyn Encoder>,
+    encoder: Encoder,
     ideal_distribution: Vec<DistributionLoss>,
     pair_equivalence: Vec<f64>,
     fingering_types: Vec<Label>,
@@ -37,12 +36,25 @@ pub struct Objective {
 
 pub type Frequencies = Vec<f64>;
 
+pub enum PartialType {
+    CharactersFull,
+    CharactersShort,
+    WordsFull,
+    WordsShort,
+}
+
+impl PartialType {
+    pub fn is_characters(&self) -> bool {
+        matches!(self, Self::CharactersFull | Self::CharactersShort)
+    }
+}
+
 /// 目标函数
 impl Objective {
     /// 通过传入配置表示、编码器和共用资源来构造一个目标函数
     pub fn new(
         representation: &Representation,
-        encoder: Box<dyn Encoder>,
+        encoder: Encoder,
         assets: Assets,
     ) -> Result<Self, Error> {
         let ideal_distribution =
@@ -100,29 +112,28 @@ impl Objective {
     /// 计算一部分编码的指标，这里的部分可以是一字全码、一字简码、多字全码或多字简码
     pub fn evaluate_partial(
         &self,
-        codes: &Codes,
-        weights: &PartialWeights,
-        group: bool,
+        partial_type: &PartialType,
+        partial_weights: &PartialWeights,
     ) -> (PartialMetric, f64) {
         let mut total_frequency = 0;
         let mut total_pairs = 0;
         let mut total_extended_pairs = 0;
         // 初始化全局指标的变量
         // 1. 只有加权指标，没有计数指标
-        let radix = self.encoder.get_radix();
+        let radix = self.encoder.config.radix;
         let mut distribution = vec![0_u64; radix as usize];
         let mut total_pair_equivalence = 0.0;
         let mut total_extended_pair_equivalence = 0.0;
         // 2. 有加权指标，也有计数指标
         let mut total_duplication = 0;
         let mut total_fingering = [0_u64; 8];
-        let nlevel = weights.levels.as_ref().map_or(0, |v| v.len());
+        let nlevel = partial_weights.levels.as_ref().map_or(0, |v| v.len());
         let mut total_levels = vec![0; nlevel];
         // 初始化分级指标的变量
-        let ntier = weights.tiers.as_ref().map_or(0, |v| v.len());
+        let ntier = partial_weights.tiers.as_ref().map_or(0, |v| v.len());
         let mut tiers_duplication = vec![0; ntier];
         let mut tiers_levels: Vec<Vec<u64>> = vec![];
-        if let Some(tiers) = &weights.tiers {
+        if let Some(tiers) = &partial_weights.tiers {
             for tier in tiers {
                 let vec = vec![0; tier.levels.as_ref().map_or(0, |v| v.len())];
                 tiers_levels.push(vec);
@@ -139,23 +150,31 @@ impl Objective {
         }
 
         // 开始计算指标
-        for (index, code_info) in codes.iter().enumerate() {
+        for (index, code_info) in self.encoder.buffer.iter().enumerate() {
             let CodeInfo {
-                code,
-                rank,
                 frequency,
-                single,
+                length: word_length,
+                full,
+                short,
             } = *code_info;
-            if group != single || code == 0 {
+            let CodeSubInfo {
+                actual: code, duplicate, ..
+            } = match partial_type {
+                PartialType::CharactersFull | PartialType::WordsFull => full,
+                PartialType::CharactersShort | PartialType::WordsShort => short,
+            };
+            if (partial_type.is_characters() && word_length > 1)
+                || (!partial_type.is_characters() && word_length == 1)
+                || code == 0
+            {
                 continue;
             }
             let length = length_breakpoints.iter().position(|&x| code < x).unwrap() as u64;
-            let (code, actual_length) = self.encoder.get_actual_code(code, rank, length as u32);
             total_frequency += frequency;
-            total_pairs += (actual_length - 1) as u64 * frequency;
+            total_pairs += (length - 1) as u64 * frequency;
             // 一、全局指标
             // 1. 按键分布
-            if weights.key_distribution.is_some() {
+            if partial_weights.key_distribution.is_some() {
                 let mut current = code;
                 while current > 0 {
                     let key = current % radix;
@@ -166,7 +185,7 @@ impl Objective {
                 }
             }
             // 2. 组合当量
-            if weights.pair_equivalence.is_some() {
+            if partial_weights.pair_equivalence.is_some() {
                 let mut code = code;
                 while code > radix {
                     let partial_code = (code % max_index) as usize;
@@ -176,11 +195,11 @@ impl Objective {
                 }
             }
             // 3. 词间当量
-            if weights.extended_pair_equivalence.is_some() {
-                let transitions = self.encoder.get_transitions(index);
+            if partial_weights.extended_pair_equivalence.is_some() {
+                let transitions = &self.encoder.transition_matrix[index];
                 let last_char = code / radix.pow(length as u32 - 1);
                 for (i, weight) in transitions {
-                    let next_char = codes[*i].code % radix;
+                    let next_char = self.encoder.buffer[*i].full.code % radix;
                     let combination = last_char + next_char * radix;
                     let equivalence = self.pair_equivalence[combination as usize];
                     total_extended_pair_equivalence += equivalence * *weight as f64;
@@ -188,7 +207,7 @@ impl Objective {
                 }
             }
             // 4. 差指法
-            if let Some(fingering) = &weights.fingering {
+            if let Some(fingering) = &partial_weights.fingering {
                 let mut code = code;
                 while code > radix {
                     let label = self.fingering_types[(code % max_index) as usize];
@@ -201,11 +220,11 @@ impl Objective {
                 }
             }
             // 5. 重码
-            if rank > 0 {
+            if duplicate {
                 total_duplication += frequency;
             }
             // 6. 简码
-            if let Some(levels) = &weights.levels {
+            if let Some(levels) = &partial_weights.levels {
                 for (ilevel, level) in levels.iter().enumerate() {
                     if level.length == length as usize {
                         total_levels[ilevel] += frequency;
@@ -213,13 +232,13 @@ impl Objective {
                 }
             }
             // 二、分级指标
-            if let Some(tiers) = &weights.tiers {
+            if let Some(tiers) = &partial_weights.tiers {
                 for (itier, tier) in tiers.iter().enumerate() {
-                    if index >= tier.top.unwrap_or(codes.len()) {
+                    if index >= tier.top.unwrap_or(self.encoder.buffer.len()) {
                         continue;
                     }
                     // 1. 重码
-                    if rank > 0 {
+                    if duplicate {
                         tiers_duplication[itier] += 1;
                     }
                     // 2. 简码
@@ -260,7 +279,7 @@ impl Objective {
         let mut loss = 0.0;
         // 一、全局指标
         // 1. 按键分布
-        if let Some(key_distribution_weight) = weights.key_distribution {
+        if let Some(key_distribution_weight) = partial_weights.key_distribution {
             // 首先归一化
             let total: u64 = distribution.iter().sum();
             let distribution = distribution
@@ -272,19 +291,19 @@ impl Objective {
             loss += distance * key_distribution_weight;
         }
         // 2. 组合当量
-        if let Some(equivalence_weight) = weights.pair_equivalence {
+        if let Some(equivalence_weight) = partial_weights.pair_equivalence {
             let equivalence = total_pair_equivalence / total_pairs as f64;
             partial_metric.pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
         // 3. 词间当量
-        if let Some(equivalence_weight) = weights.extended_pair_equivalence {
+        if let Some(equivalence_weight) = partial_weights.extended_pair_equivalence {
             let equivalence = total_extended_pair_equivalence / total_extended_pairs as f64;
             partial_metric.extended_pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }
         // 4. 差指法
-        if let Some(fingering_weight) = &weights.fingering {
+        if let Some(fingering_weight) = &partial_weights.fingering {
             let mut fingering = FingeringMetric::default();
             for (i, weight) in fingering_weight.iter().enumerate() {
                 if let Some(weight) = weight {
@@ -295,13 +314,13 @@ impl Objective {
             partial_metric.fingering = Some(fingering);
         }
         // 5. 重码
-        if let Some(duplication_weight) = weights.duplication {
+        if let Some(duplication_weight) = partial_weights.duplication {
             let duplication = total_duplication as f64 / total_frequency as f64;
             partial_metric.duplication = Some(duplication);
             loss += duplication * duplication_weight;
         }
         // 6. 简码
-        if let Some(levels_weight) = &weights.levels {
+        if let Some(levels_weight) = &partial_weights.levels {
             let mut levels: Vec<LevelMetric> = Vec::new();
             for (ilevel, level) in levels_weight.iter().enumerate() {
                 let value = total_levels[ilevel] as f64 / total_frequency as f64;
@@ -314,7 +333,7 @@ impl Objective {
             partial_metric.levels = Some(levels);
         }
         // 二、分级指标
-        if let Some(tiers_weight) = &weights.tiers {
+        if let Some(tiers_weight) = &partial_weights.tiers {
             let mut tiers: Vec<TierMetric> = tiers_weight
                 .iter()
                 .map(|x| TierMetric {
@@ -325,7 +344,7 @@ impl Objective {
                 })
                 .collect();
             for (itier, tier_weights) in tiers_weight.iter().enumerate() {
-                let count = tier_weights.top.unwrap_or(codes.len()) as f64;
+                let count = tier_weights.top.unwrap_or(self.encoder.buffer.len()) as f64;
                 // 1. 重码
                 if let Some(duplication_weight) = tier_weights.duplication {
                     let duplication = tiers_duplication[itier];
@@ -367,11 +386,7 @@ impl Objective {
     }
 
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
-    pub fn evaluate(
-        &self,
-        candidate: &KeyMap,
-        buffer: &mut Buffer,
-    ) -> Result<(Metric, f64), Error> {
+    pub fn evaluate(&mut self, candidate: &KeyMap) -> Result<(Metric, f64), Error> {
         let mut loss = 0.0;
         let mut metric = Metric {
             characters_full: None,
@@ -379,30 +394,30 @@ impl Objective {
             characters_short: None,
             words_short: None,
         };
-        buffer.reset_occupation();
-        self.encoder.encode_full(candidate, buffer);
-        self.encoder.encode_short(buffer);
+        self.encoder.prepare(candidate);
         // 一字全码
         if let Some(characters_weight) = &self.config.characters_full {
-            let (partial, accum) = self.evaluate_partial(&buffer.full, characters_weight, true);
+            let (partial, accum) =
+                self.evaluate_partial(&PartialType::CharactersFull, characters_weight);
             loss += accum;
             metric.characters_full = Some(partial);
         }
         // 一字简码
         if let Some(characters_short) = &self.config.characters_short {
-            let (partial, accum) = self.evaluate_partial(&buffer.short, characters_short, true);
+            let (partial, accum) =
+                self.evaluate_partial(&PartialType::CharactersShort, characters_short);
             loss += accum;
             metric.characters_short = Some(partial);
         }
         // 多字全码
         if let Some(words_weight) = &self.config.words_full {
-            let (partial, accum) = self.evaluate_partial(&buffer.full, words_weight, false);
+            let (partial, accum) = self.evaluate_partial(&PartialType::WordsFull, words_weight);
             loss += accum;
             metric.words_full = Some(partial);
         }
         // 多字简码
         if let Some(words_short) = &self.config.words_short {
-            let (partial, accum) = self.evaluate_partial(&buffer.short, words_short, false);
+            let (partial, accum) = self.evaluate_partial(&PartialType::WordsShort, words_short);
             loss += accum;
             metric.words_short = Some(partial);
         }

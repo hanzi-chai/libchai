@@ -1,5 +1,4 @@
 use chai::config::Config;
-use chai::encoder::generic::GenericEncoder;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use chai::cli::{Cli, Command};
@@ -8,7 +7,7 @@ use chai::encoder::Encoder;
 use chai::metaheuristics::Metaheuristics;
 use chai::objectives::Objective;
 use chai::problem::ElementPlacementProblem;
-use chai::representation::{AssembleList, Assets, Buffer};
+use chai::representation::{AssembleList, Assets};
 use chai::{error::Error, representation::Representation};
 use std::path::PathBuf;
 
@@ -33,11 +32,10 @@ fn process_cli_input(
     b: &mut Criterion,
 ) -> Result<(), Error> {
     let representation = Representation::new(config)?;
-    let encoder = GenericEncoder::new(&representation, elements, &assets)?;
-    let buffer = Buffer::new(&encoder.encodables, encoder.get_space());
-    let objective = Objective::new(&representation, Box::new(encoder), assets)?;
+    let encoder = Encoder::new(&representation, elements, &assets, true)?;
+    let objective = Objective::new(&representation, encoder, assets)?;
     let constraints = Constraints::new(&representation)?;
-    let mut problem = ElementPlacementProblem::new(representation, constraints, objective, buffer)?;
+    let mut problem = ElementPlacementProblem::new(representation, constraints, objective)?;
     let mut candidate = problem.generate_candidate();
     b.bench_function("Evaluation", |b| {
         b.iter(|| {
@@ -46,6 +44,11 @@ fn process_cli_input(
         })
     });
     Ok(())
+}
+
+fn length_3(b: &mut Criterion) {
+    let (config, resource, assets) = simulate_cli_input("easy");
+    process_cli_input(config, resource, assets, b).unwrap();
 }
 
 fn length_4(b: &mut Criterion) {
@@ -68,5 +71,5 @@ fn length_6(b: &mut Criterion) {
     process_cli_input(config, resource, assets, b).unwrap();
 }
 
-criterion_group!(benches, length_4, length_4_char_only, length_6);
+criterion_group!(benches, length_3, length_4, length_4_char_only, length_6);
 criterion_main!(benches);
