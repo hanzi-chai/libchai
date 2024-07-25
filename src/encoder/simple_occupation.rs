@@ -5,18 +5,23 @@ use std::iter::zip;
 /// 编码是否已被占据
 /// 用一个数组和一个哈希集合来表示，数组用来表示四码以内的编码，哈希集合用来表示四码以上的编码
 pub struct SimpleOccupation {
-    pub vector: Vec<u8>,
+    pub full_space: Vec<u8>,
+    pub short_space: Vec<u8>,
 }
 
 impl SimpleOccupation {
     pub fn new(length: usize) -> Self {
         Self {
-            vector: vec![0; length],
+            full_space: vec![0; length],
+            short_space: vec![0; length],
         }
     }
 
     pub fn reset(&mut self) {
-        self.vector.iter_mut().for_each(|x| {
+        self.full_space.iter_mut().for_each(|x| {
+            *x = 0;
+        });
+        self.short_space.iter_mut().for_each(|x| {
             *x = 0;
         });
     }
@@ -34,9 +39,11 @@ impl Driver for SimpleOccupation {
             for (element, weight) in zip(sequence, &weights) {
                 code += keymap[*element] as u64 * weight;
             }
-            pointer.full.duplicate = self.vector[code as usize] > 0;
+            let rank = self.full_space[code as usize];
+            pointer.full.code = code;
+            pointer.full.duplicate = rank > 0;
             pointer.full.actual = config.wrap_actual(code, 0, weights[sequence.len()]);
-            self.vector[code as usize] = self.vector[code as usize].saturating_add(1);
+            self.full_space[code as usize] = rank.saturating_add(1);
         }
     }
 
@@ -54,17 +61,17 @@ impl Driver for SimpleOccupation {
                 continue;
             }
             let short = pointer.full.code % weights[encodable.level as usize];
-            let rank = self.vector[short as usize];
+            let rank = self.short_space[short as usize];
             pointer.short.duplicate = rank > 0;
             pointer.short.actual = config.wrap_actual(short, rank, encodable.level);
-            self.vector[short as usize] = rank.saturating_add(1);
+            self.short_space[short as usize] = rank.saturating_add(1);
         }
         // 常规简码
         for (pointer, encodable) in zip(buffer.iter_mut(), &config.encodables) {
-            let schemes = &short_code[encodable.length - 1];
-            if schemes.is_empty() || encodable.level != u64::MAX {
+            if encodable.level != u64::MAX {
                 continue;
             }
+            let schemes = &short_code[encodable.length - 1];
             let mut has_short = false;
             let full = pointer.full;
             for scheme in schemes {
@@ -74,25 +81,27 @@ impl Driver for SimpleOccupation {
                 } = scheme;
                 let weight = weights[*prefix];
                 // 如果根本没有这么多码，就放弃
-                if pointer.full.code < weight {
+                if full.code < weight {
                     continue;
                 }
                 // 将全码截取一部分出来
-                let short = pointer.full.code % weight;
-                let rank = self.vector[short as usize];
+                let short = full.code % weight;
+                let rank = self.full_space[short as usize] + self.short_space[short as usize];
                 if rank >= select_keys.len() as u8 {
                     continue;
                 }
                 pointer.short.actual = config.wrap_actual(short, rank, weight);
                 pointer.short.duplicate = false;
-                self.vector[short as usize] = self.vector[short as usize].saturating_add(1);
-                self.vector[full.code as usize] = self.vector[full.code as usize].saturating_sub(1);
+                self.short_space[short as usize] =
+                    self.short_space[short as usize].saturating_add(1);
                 has_short = true;
                 break;
             }
             if !has_short {
+                let rank = self.short_space[full.code as usize];
                 pointer.short.actual = full.actual;
-                pointer.short.duplicate = self.vector[full.code as usize] > 0;
+                pointer.short.duplicate = rank != 0;
+                self.short_space[full.code as usize] = rank.saturating_add(1);
             }
         }
     }

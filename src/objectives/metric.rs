@@ -25,7 +25,7 @@ pub type FingeringMetricUniform = [Option<u64>; 8];
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TierMetric {
     pub top: Option<usize>,
-    pub duplication: Option<usize>,
+    pub duplication: Option<u64>,
     pub levels: Option<Vec<LevelMetricUniform>>,
     pub fingering: Option<FingeringMetricUniform>,
 }
