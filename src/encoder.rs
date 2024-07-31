@@ -3,16 +3,14 @@
 use crate::error::Error;
 use crate::representation::{
     Assemble, AssembleList, Assets, AutoSelect, Code, CodeInfo, CodeSubInfo, Codes, Entry,
-    Frequency, Key, KeyMap, Representation, Sequence, MAX_COMBINATION_LENGTH, MAX_WORD_LENGTH,
+    Frequency, Key, KeyMap, Representation, Sequence, MAX_WORD_LENGTH,
 };
-use occupation::Occupation;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cmp::Reverse;
 
-mod occupation;
-
-mod simple_occupation;
-use simple_occupation::SimpleOccupation;
+pub mod c3;
+pub mod occupation;
+pub mod simple_occupation;
 
 /// 一个可编码对象
 #[derive(Debug, Clone)]
@@ -74,8 +72,7 @@ pub fn adapt(
 }
 
 pub trait Driver {
-    fn encode_full(&mut self, keymap: &KeyMap, config: &EncoderConfig, buffer: &mut Codes);
-    fn encode_short(&mut self, config: &EncoderConfig, buffer: &mut Codes);
+    fn run(&mut self, keymap: &KeyMap, config: &EncoderConfig, buffer: &mut Codes);
 }
 
 pub struct EncoderConfig {
@@ -121,7 +118,7 @@ impl Encoder {
         representation: &Representation,
         resource: AssembleList,
         assets: &Assets,
-        simple: bool,
+        driver: Box<dyn Driver>,
     ) -> Result<Self, Error> {
         let encoder = &representation.config.encoder;
         let max_length = encoder.max_length;
@@ -200,12 +197,6 @@ impl Encoder {
             first_key: representation.select_keys[0],
             short_code,
         };
-        let space = representation.get_space();
-        let driver: Box<dyn Driver> = if simple && max_length <= MAX_COMBINATION_LENGTH {
-            Box::new(SimpleOccupation::new(space))
-        } else {
-            Box::new(Occupation::new(space))
-        };
         let encoder = Self {
             transition_matrix,
             buffer,
@@ -216,9 +207,7 @@ impl Encoder {
     }
 
     pub fn prepare(&mut self, keymap: &KeyMap) {
-        self.driver
-            .encode_full(keymap, &self.config, &mut self.buffer);
-        self.driver.encode_short(&self.config, &mut self.buffer);
+        self.driver.run(keymap, &self.config, &mut self.buffer);
     }
 
     pub fn encode(&mut self, keymap: &KeyMap, representation: &Representation) -> Vec<Entry> {

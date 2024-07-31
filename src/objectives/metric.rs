@@ -4,8 +4,9 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-
-const FINGERING_LABELS: [&str; 8] = ["同手", "大跨", "小跨", "干扰", "错手", "三连", "备用", "备用"];
+const FINGERING_LABELS: [&str; 8] = [
+    "同手", "大跨", "小跨", "干扰", "错手", "三连", "备用", "备用",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelMetric {
@@ -92,7 +93,11 @@ impl Display for PartialMetric {
         if let Some(fingering) = &self.fingering {
             for (index, percent) in fingering.iter().enumerate() {
                 if let Some(percent) = percent {
-                    f.write_str(&format!("{}：{:.2}%；", FINGERING_LABELS[index], percent * 100.0))?;
+                    f.write_str(&format!(
+                        "{}：{:.2}%；",
+                        FINGERING_LABELS[index],
+                        percent * 100.0
+                    ))?;
                 }
             }
         }

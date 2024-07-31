@@ -1,8 +1,3 @@
-
-use crate::config::PartialWeights;
-use crate::representation::CodeSubInfo;
-use crate::representation::DistributionLoss;
-use crate::representation::MAX_COMBINATION_LENGTH;
 use super::metric::FingeringMetric;
 use super::metric::FingeringMetricUniform;
 use super::metric::LevelMetric;
@@ -10,6 +5,10 @@ use super::metric::LevelMetricUniform;
 use super::metric::PartialMetric;
 use super::metric::TierMetric;
 use super::Objective;
+use crate::config::PartialWeights;
+use crate::representation::CodeSubInfo;
+use crate::representation::DistributionLoss;
+use crate::representation::MAX_COMBINATION_LENGTH;
 use std::iter::zip;
 
 pub struct Cache {
@@ -33,7 +32,12 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn new(partial_weights: &PartialWeights, radix: u64, total_count: usize, max_index: u64) -> Self {
+    pub fn new(
+        partial_weights: &PartialWeights,
+        radix: u64,
+        total_count: usize,
+        max_index: u64,
+    ) -> Self {
         let total_frequency = 0;
         let total_pairs = 0;
         let total_extended_pairs = 0;
@@ -101,14 +105,25 @@ impl Cache {
     }
 
     #[inline(always)]
-    pub fn accumulate(&mut self, index: usize, frequency: u64, code_info: CodeSubInfo, objective: &Objective, partial_weights: &PartialWeights) {
+    pub fn accumulate(
+        &mut self,
+        index: usize,
+        frequency: u64,
+        code_info: CodeSubInfo,
+        objective: &Objective,
+        partial_weights: &PartialWeights,
+    ) {
         let CodeSubInfo {
             actual: code,
             duplicate,
             ..
         } = code_info;
         let radix = self.radix;
-        let length = self.length_breakpoints.iter().position(|&x| code < x).unwrap() as u64;
+        let length = self
+            .length_breakpoints
+            .iter()
+            .position(|&x| code < x)
+            .unwrap() as u64;
         self.total_frequency += frequency;
         self.total_pairs += (length - 1) as u64 * frequency;
         // 一、全局指标
@@ -205,7 +220,11 @@ impl Cache {
         }
     }
 
-    pub fn finalize(&self, partial_weights: &PartialWeights, ideal_distribution: &Vec<DistributionLoss>) -> (PartialMetric, f64) {
+    pub fn finalize(
+        &self,
+        partial_weights: &PartialWeights,
+        ideal_distribution: &Vec<DistributionLoss>,
+    ) -> (PartialMetric, f64) {
         // 初始化返回值和标量化的损失函数
         let mut partial_metric = PartialMetric {
             tiers: None,
@@ -222,7 +241,8 @@ impl Cache {
         if let Some(key_distribution_weight) = partial_weights.key_distribution {
             // 首先归一化
             let total: u64 = self.distribution.iter().sum();
-            let distribution = self.distribution
+            let distribution = self
+                .distribution
                 .iter()
                 .map(|x| *x as f64 / total as f64)
                 .collect();
@@ -238,7 +258,8 @@ impl Cache {
         }
         // 3. 词间当量
         if let Some(equivalence_weight) = partial_weights.extended_pair_equivalence {
-            let equivalence = self.total_extended_pair_equivalence / self.total_extended_pairs as f64;
+            let equivalence =
+                self.total_extended_pair_equivalence / self.total_extended_pairs as f64;
             partial_metric.extended_pair_equivalence = Some(equivalence);
             loss += equivalence * equivalence_weight;
         }

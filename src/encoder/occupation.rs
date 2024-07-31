@@ -78,12 +78,12 @@ impl Occupation {
 }
 
 impl Driver for Occupation {
-    fn encode_full(&mut self, keymap: &KeyMap, config: &EncoderConfig, full: &mut Codes) {
+    fn run(&mut self, keymap: &KeyMap, config: &EncoderConfig, buffer: &mut Codes) {
         self.reset();
         let weights: Vec<_> = (0..=config.max_length)
             .map(|x| config.radix.pow(x as u32))
             .collect();
-        for (encodable, pointer) in zip(&config.encodables, full) {
+        for (encodable, pointer) in zip(&config.encodables, buffer.iter_mut()) {
             let sequence = &encodable.sequence;
             let mut code = 0_u64;
             for (element, weight) in zip(sequence, &weights) {
@@ -99,9 +99,6 @@ impl Driver for Occupation {
             };
             self.full_space.insert(code, encodable.hash);
         }
-    }
-
-    fn encode_short(&mut self, config: &EncoderConfig, buffer: &mut Codes) {
         if config.short_code.is_none() || config.short_code.as_ref().unwrap().is_empty() {
             return;
         }
@@ -146,7 +143,8 @@ impl Driver for Occupation {
                 }
                 // 首先将全码截取一部分出来
                 let short = full.code % weight;
-                let rank = self.full_space.rank_hash(short, hash) + self.short_space.rank_hash(short, hash);
+                let rank = self.full_space.rank_hash(short, hash)
+                    + self.short_space.rank_hash(short, hash);
                 if rank >= select_keys.len() as u8 {
                     continue;
                 }

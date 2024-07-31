@@ -104,11 +104,43 @@ impl Objective {
         // 开始计算指标
         for (index, code_info) in self.encoder.buffer.iter().enumerate() {
             if code_info.length == 1 {
-                cf_cache.as_mut().map(|x| x.accumulate(index, code_info.frequency, code_info.full, &self, &self.config.characters_full.as_ref().unwrap()));
-                cs_cache.as_mut().map(|x| x.accumulate(index, code_info.frequency, code_info.short, &self, &self.config.characters_short.as_ref().unwrap()));
+                cf_cache.as_mut().map(|x| {
+                    x.accumulate(
+                        index,
+                        code_info.frequency,
+                        code_info.full,
+                        &self,
+                        &self.config.characters_full.as_ref().unwrap(),
+                    )
+                });
+                cs_cache.as_mut().map(|x| {
+                    x.accumulate(
+                        index,
+                        code_info.frequency,
+                        code_info.short,
+                        &self,
+                        &self.config.characters_short.as_ref().unwrap(),
+                    )
+                });
             } else {
-                wf_cache.as_mut().map(|x| x.accumulate(index, code_info.frequency, code_info.full, &self, &self.config.words_full.as_ref().unwrap()));
-                ws_cache.as_mut().map(|x| x.accumulate(index, code_info.frequency, code_info.short, &self, &self.config.words_short.as_ref().unwrap()));
+                wf_cache.as_mut().map(|x| {
+                    x.accumulate(
+                        index,
+                        code_info.frequency,
+                        code_info.full,
+                        &self,
+                        &self.config.words_full.as_ref().unwrap(),
+                    )
+                });
+                ws_cache.as_mut().map(|x| {
+                    x.accumulate(
+                        index,
+                        code_info.frequency,
+                        code_info.short,
+                        &self,
+                        &self.config.words_short.as_ref().unwrap(),
+                    )
+                });
             }
         }
 

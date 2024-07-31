@@ -28,12 +28,13 @@ impl SimpleOccupation {
 }
 
 impl Driver for SimpleOccupation {
-    fn encode_full(&mut self, keymap: &KeyMap, config: &EncoderConfig, full: &mut Codes) {
+    fn run(&mut self, keymap: &KeyMap, config: &EncoderConfig, buffer: &mut Codes) {
         self.reset();
+        // 1. 全码
         let weights: Vec<_> = (0..=config.max_length)
             .map(|x| config.radix.pow(x as u32))
             .collect();
-        for (encodable, pointer) in zip(&config.encodables, full.iter_mut()) {
+        for (encodable, pointer) in zip(&config.encodables, buffer.iter_mut()) {
             let sequence = &encodable.sequence;
             let mut code = 0_u64;
             for (element, weight) in zip(sequence, &weights) {
@@ -45,9 +46,6 @@ impl Driver for SimpleOccupation {
             pointer.full.actual = config.wrap_actual(code, 0, weights[sequence.len()]);
             self.full_space[code as usize] = rank.saturating_add(1);
         }
-    }
-
-    fn encode_short(&mut self, config: &EncoderConfig, buffer: &mut Codes) {
         if config.short_code.is_none() || config.short_code.as_ref().unwrap().is_empty() {
             return;
         }
@@ -55,7 +53,7 @@ impl Driver for SimpleOccupation {
             .map(|x| config.radix.pow(x as u32))
             .collect();
         let short_code = config.short_code.as_ref().unwrap();
-        // 优先简码
+        // 2. 优先简码
         for (pointer, encodable) in zip(buffer.iter_mut(), &config.encodables) {
             if encodable.level == u64::MAX {
                 continue;
@@ -66,7 +64,7 @@ impl Driver for SimpleOccupation {
             pointer.short.actual = config.wrap_actual(short, rank, encodable.level);
             self.short_space[short as usize] = rank.saturating_add(1);
         }
-        // 常规简码
+        // 3. 常规简码
         for (pointer, encodable) in zip(buffer.iter_mut(), &config.encodables) {
             if encodable.level != u64::MAX {
                 continue;

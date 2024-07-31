@@ -6,40 +6,45 @@
 
 use chai::cli::{Cli, Command};
 use chai::constraints::Constraints;
-use chai::encoder::Encoder;
-use chai::metaheuristics::solve;
+use chai::encoder::occupation::Occupation;
+use chai::encoder::simple_occupation::SimpleOccupation;
+use chai::encoder::{Driver, Encoder};
 use chai::objectives::Objective;
-use chai::problem::ElementPlacementProblem;
+use chai::problem::Problem;
 use chai::{error::Error, representation::Representation};
 use clap::Parser;
 
 fn main() -> Result<(), Error> {
     let cli = Cli::parse();
     let (config, resource, assets) = cli.prepare_file();
-    let config2 = config.clone();
     let representation = Representation::new(config)?;
+    let space = representation.get_space();
+    let driver = Box::new(Occupation::new(space));
+    let constraints = Constraints::new(&representation)?;
     match cli.command {
         Command::Encode => {
-            let mut encoder = Encoder::new(&representation, resource, &assets, false)?;
+            let mut encoder = Encoder::new(&representation, resource, &assets, driver)?;
             let codes = encoder.encode(&representation.initial, &representation);
             Cli::write_encode_results(codes);
         }
         Command::Evaluate => {
-            let encoder = Encoder::new(&representation, resource, &assets, false)?;
+            let encoder = Encoder::new(&representation, resource, &assets, driver)?;
             let mut objective = Objective::new(&representation, encoder, assets)?;
             let (metric, _) = objective.evaluate(&representation.initial)?;
             Cli::report_metric(metric);
         }
         Command::Optimize => {
-            let encoder = Encoder::new(&representation, resource, &assets, true)?;
+            let config = representation.config.clone();
+            let solver = config.optimization.unwrap().metaheuristic.unwrap();
+            let driver: Box<dyn Driver> = if representation.config.encoder.max_length <= 4 {
+                Box::new(SimpleOccupation::new(representation.get_space()))
+            } else {
+                Box::new(Occupation::new(representation.get_space()))
+            };
+            let encoder = Encoder::new(&representation, resource, &assets, driver)?;
             let objective = Objective::new(&representation, encoder, assets)?;
-            let constraints = Constraints::new(&representation)?;
-            let mut problem = ElementPlacementProblem::new(representation, constraints, objective)?;
-            let solver = config2
-                .optimization
-                .map(|o| o.metaheuristic.unwrap())
-                .unwrap();
-            solve(&mut problem, &solver, &cli);
+            let mut problem = Problem::new(representation, constraints, objective)?;
+            solver.solve(&mut problem, &cli);
         }
     }
     Ok(())

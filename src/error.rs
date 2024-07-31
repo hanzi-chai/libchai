@@ -2,21 +2,19 @@ use wasm_bindgen::JsError;
 
 #[derive(Debug, Clone)]
 pub struct Error {
-    pub message: String
+    pub message: String,
 }
 
 impl From<String> for Error {
     fn from(value: String) -> Self {
-        Self {
-            message: value
-        }
+        Self { message: value }
     }
 }
 
 impl From<&str> for Error {
     fn from(value: &str) -> Self {
         Self {
-            message: value.to_string()
+            message: value.to_string(),
         }
     }
 }

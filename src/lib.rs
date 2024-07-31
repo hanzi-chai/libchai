@@ -11,23 +11,26 @@ pub mod problem;
 pub mod representation;
 
 use crate::constraints::Constraints;
-use crate::problem::ElementPlacementProblem;
+use crate::encoder::occupation::Occupation;
+use crate::encoder::Encoder;
+use crate::problem::Problem;
 use crate::{
     config::Config,
     objectives::Objective,
     representation::{Assets, Representation},
 };
-use config::{ObjectiveConfig, OptimizationConfig};
+use config::{ObjectiveConfig, OptimizationConfig, SolverConfig};
 use console_error_panic_hook::set_once;
+use encoder::simple_occupation::SimpleOccupation;
+use encoder::Driver;
 use interface::Interface;
 use js_sys::Function;
-use metaheuristics::solve;
+use metaheuristics::Metaheuristic;
 use representation::AssembleList;
 use serde::Serialize;
 use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
 use wasm_bindgen::prelude::*;
-use crate::encoder::Encoder;
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -110,7 +113,13 @@ impl WebInterface {
             metaheuristic: None,
         });
         let representation = Representation::new(config)?;
-        let mut encoder = Encoder::new(&representation, self.info.clone(), &self.assets, false)?;
+        let driver = Occupation::new(representation.get_space());
+        let mut encoder = Encoder::new(
+            &representation,
+            self.info.clone(),
+            &self.assets,
+            Box::new(driver),
+        )?;
         let codes = encoder.encode(&representation.initial, &representation);
         let mut objective = Objective::new(&representation, encoder, self.assets.clone())?;
         let (metric, _) = objective.evaluate(&representation.initial)?;
@@ -118,15 +127,29 @@ impl WebInterface {
     }
 
     pub fn optimize(&self) -> Result<(), JsError> {
+        let solver = self
+            .config
+            .optimization
+            .as_ref()
+            .unwrap()
+            .metaheuristic
+            .as_ref()
+            .unwrap();
         let representation = Representation::new(self.config.clone())?;
-        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets, true)?;
-        let mut objective = Objective::new(&representation, encoder, self.assets.clone())?;
         let constraints = Constraints::new(&representation)?;
-        let _ = objective.evaluate(&representation.initial)?;
-        let mut problem =
-            ElementPlacementProblem::new(representation, constraints, objective)?;
-        let solver = self.config.optimization.as_ref().unwrap().metaheuristic.as_ref().unwrap();
-        solve(&mut problem, solver, self);
+        let driver: Box<dyn Driver> = if representation.config.encoder.max_length <= 4 {
+            Box::new(SimpleOccupation::new(representation.get_space()))
+        } else {
+            Box::new(Occupation::new(representation.get_space()))
+        };
+        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets, driver)?;
+        let objective = Objective::new(&representation, encoder, self.assets.clone())?;
+        let mut problem = Problem::new(representation, constraints, objective)?;
+        match solver {
+            SolverConfig::SimulatedAnnealing(config) => {
+                config.solve(&mut problem, self);
+            }
+        }
         Ok(())
     }
 

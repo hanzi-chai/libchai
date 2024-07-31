@@ -4,7 +4,7 @@
 //!
 
 use crate::data::{Glyph, PrimitiveRepertoire, Reading};
-use crate::metaheuristics::simulated_annealing::Parameters;
+use crate::metaheuristics::simulated_annealing::SimulatedAnnealing;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::HashMap;
@@ -24,6 +24,7 @@ pub struct Info {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Data {
+    pub character_set: Option<String>,
     pub repertoire: Option<PrimitiveRepertoire>,
     pub glyph_customization: Option<HashMap<String, Glyph>>,
     pub reading_customization: Option<HashMap<String, Vec<Reading>>>,
@@ -41,6 +42,7 @@ pub struct Analysis {
     pub customize: Option<HashMap<String, Vec<String>>>,
     pub strong: Option<Vec<String>>,
     pub weak: Option<Vec<String>>,
+    pub serializer: Option<String>,
 }
 
 #[skip_serializing_none]
@@ -233,20 +235,10 @@ pub struct ConstraintsConfig {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchConfig {
-    pub random_move: f64,
-    pub random_swap: f64,
-    pub random_full_key_swap: f64,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SolverConfig {
-    pub algorithm: String,
-    pub runtime: Option<u64>,
-    pub parameters: Option<Parameters>,
-    pub report_after: Option<f64>,
-    pub search_method: Option<SearchConfig>,
+#[serde(tag = "algorithm")]
+pub enum SolverConfig {
+    SimulatedAnnealing(SimulatedAnnealing),
+    // TODO: Add more algorithms
 }
 
 #[skip_serializing_none]
