@@ -1,11 +1,9 @@
 use chai::config::Config;
-use chai::encoder::occupation::Occupation;
-use chai::encoder::simple_occupation::SimpleOccupation;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use chai::cli::{Cli, Command};
 use chai::constraints::Constraints;
-use chai::encoder::{Driver, Encoder};
+use chai::encoder::Encoder;
 use chai::objectives::Objective;
 use chai::problem::Problem;
 use chai::representation::{AssembleList, Assets};
@@ -26,26 +24,6 @@ fn simulate_cli_input(name: &str) -> (Config, AssembleList, Assets) {
     cli.prepare_file()
 }
 
-fn do_benchmark(
-    representation: Representation,
-    elements: AssembleList,
-    assets: Assets,
-    driver: Box<dyn Driver>,
-    b: &mut Criterion,
-) -> Result<(), Error> {
-    let constraints = Constraints::new(&representation)?;
-    let encoder = Encoder::new(&representation, elements, &assets, driver)?;
-    let objective = Objective::new(&representation, encoder, assets)?;
-    let mut problem = Problem::new(representation, constraints, objective)?;
-    let candidate = problem.generate_candidate();
-    b.bench_function("Evaluation", |b| {
-        b.iter(|| {
-            problem.rank_candidate(&candidate);
-        })
-    });
-    Ok(())
-}
-
 fn process_cli_input(
     config: Config,
     elements: AssembleList,
@@ -53,12 +31,17 @@ fn process_cli_input(
     b: &mut Criterion,
 ) -> Result<(), Error> {
     let representation = Representation::new(config)?;
-    let driver: Box<dyn Driver> = if representation.config.encoder.max_length <= 4 {
-        Box::new(SimpleOccupation::new(representation.get_space()))
-    } else {
-        Box::new(Occupation::new(representation.get_space()))
-    };
-    do_benchmark(representation, elements, assets, driver, b)
+    let constraints = Constraints::new(&representation)?;
+    let encoder = Encoder::new(&representation, elements, &assets)?;
+    let objective = Objective::new(&representation, encoder, assets)?;
+    let mut problem = Problem::new(representation, constraints, objective)?;
+    let candidate = problem.generate_candidate();
+    b.bench_function("Evaluation", |b| {
+        b.iter(|| {
+            problem.rank_candidate(&candidate, &None);
+        })
+    });
+    Ok(())
 }
 
 fn length_3(b: &mut Criterion) {

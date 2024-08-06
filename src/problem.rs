@@ -8,7 +8,7 @@ use crate::error::Error;
 use crate::interface::Interface;
 use crate::objectives::metric::Metric;
 use crate::objectives::Objective;
-use crate::representation::{KeyMap, Representation};
+use crate::representation::{Element, KeyMap, Representation};
 
 // 未来可能会有更加通用的解定义
 pub type Solution = KeyMap;
@@ -52,8 +52,8 @@ impl Problem {
 
     /// 对一个解来打分
     /// M 可以是任意复杂的一个结构体，存放了各种指标；而后面的 f64 是对这个结构体的各项指标的加权平均得到的一个标量值。
-    pub fn rank_candidate(&mut self, candidate: &Solution) -> (Metric, f64) {
-        let (metric, loss) = self.objective.evaluate(candidate).unwrap();
+    pub fn rank_candidate(&mut self, candidate: &Solution, moved_elements: &Option<Vec<Element>>) -> (Metric, f64) {
+        let (metric, loss) = self.objective.evaluate(candidate, moved_elements);
         (metric, loss)
     }
 

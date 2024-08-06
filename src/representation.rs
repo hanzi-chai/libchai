@@ -58,27 +58,55 @@ pub type Sequence = Vec<Element>;
 pub type Code = u64;
 
 /// 编码信息
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Default)]
 pub struct CodeSubInfo {
-    pub code: Code,
-    pub actual: Code,
-    pub rank: u8,
-    pub duplicate: bool,
+    pub code: Code, // 原始编码
+    pub rank: u8, // 原始编码上的选重位置
+    pub actual: Code, // 实际编码
+    pub duplicate: bool, // 实际编码是否算作重码
+    pub p_actual: Code, // 前一个实际编码
+    pub p_duplicate: bool, // 前一个实际编码是否算作重码
+    pub has_changed: bool, // 编码是否发生了变化
 }
 
-impl Default for CodeSubInfo {
-    fn default() -> Self {
-        Self {
-            code: 0,
-            actual: 0,
-            rank: 0,
-            duplicate: false,
+impl CodeSubInfo {
+    #[inline(always)]
+    pub fn check(&mut self, actual: Code, duplicate: bool) {
+        if self.actual == actual && self.duplicate == duplicate {
+            return;
         }
+        self.has_changed = true;
+        self.p_actual = self.actual;
+        self.p_duplicate = self.duplicate;
+        self.actual = actual;
+        self.duplicate = duplicate;
+    }
+
+    #[inline(always)]
+    pub fn check_actual(&mut self, actual: Code) {
+        if self.actual == actual {
+            return;
+        }
+        self.has_changed = true;
+        self.p_actual = self.actual;
+        self.p_duplicate = self.duplicate;
+        self.actual = actual;
+    }
+
+    #[inline(always)]
+    pub fn check_duplicate(&mut self, duplicate: bool) {
+        if self.duplicate == duplicate {
+            return;
+        }
+        self.has_changed = true;
+        self.p_actual = self.actual;
+        self.p_duplicate = self.duplicate;
+        self.duplicate = duplicate;
     }
 }
 
 /// 编码信息
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug)]
 pub struct CodeInfo {
     pub length: usize,
     pub frequency: u64,

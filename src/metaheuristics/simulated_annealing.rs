@@ -5,6 +5,7 @@ use crate::{
     constraints::Constraints,
     interface::Interface,
     problem::{Problem, Solution},
+    representation::Element,
 };
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -29,7 +30,7 @@ pub struct Schedule {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulatedAnnealing {
-    schedule: Option<Schedule>,
+    parameters: Option<Schedule>,
     runtime: Option<u64>,
     report_after: Option<f64>,
     search_method: Option<SearchConfig>,
@@ -38,7 +39,7 @@ pub struct SimulatedAnnealing {
 impl Metaheuristic for SimulatedAnnealing {
     fn solve(&self, problem: &mut Problem, interface: &dyn Interface) -> Solution {
         interface.prepare_output();
-        if let Some(schedule) = self.schedule {
+        if let Some(schedule) = self.parameters {
             self.solve(problem, schedule, interface)
         } else {
             let runtime = self.runtime.unwrap_or(10);
@@ -54,20 +55,23 @@ impl SimulatedAnnealing {
     ///```ignore
     /// let new_candidate = problem.tweak_candidate(&old_candidate);
     ///```
-    pub fn tweak_candidate(&self, candidate: &Solution, constraints: &Constraints) -> Solution {
+    pub fn tweak_candidate(
+        &self,
+        candidate: &mut Solution,
+        constraints: &Constraints,
+    ) -> Vec<Element> {
         let method = self.search_method.as_ref().unwrap_or(&SearchConfig {
             random_move: 0.9,
             random_swap: 0.09,
             random_full_key_swap: 0.01,
         });
-        let ratio1 = method.random_move
-            / (method.random_move + method.random_swap + method.random_full_key_swap);
-        let ratio2 = (method.random_move + method.random_swap)
-            / (method.random_move + method.random_swap + method.random_full_key_swap);
-        let randomnumber = random::<f64>();
-        if randomnumber < ratio1 {
+        let sum = method.random_move + method.random_swap + method.random_full_key_swap;
+        let ratio1 = method.random_move / sum;
+        let ratio2 = (method.random_move + method.random_swap) / sum;
+        let number: f64 = random();
+        if number < ratio1 {
             constraints.constrained_random_move(candidate)
-        } else if randomnumber < ratio2 {
+        } else if number < ratio2 {
             constraints.constrained_random_swap(candidate)
         } else {
             constraints.constrained_full_key_swap(candidate)
@@ -82,9 +86,10 @@ impl SimulatedAnnealing {
         interface: &dyn Interface,
     ) -> Solution {
         let mut best_candidate = problem.generate_candidate();
-        let mut best_rank = problem.rank_candidate(&best_candidate);
+        let mut best_rank = problem.rank_candidate(&best_candidate, &None);
         let mut annealing_candidate = problem.clone_candidate(&best_candidate);
         let mut annealing_rank = best_rank.clone();
+        let mut last_moved_elements = vec![];
         let Schedule {
             t_max,
             t_min,
@@ -99,26 +104,33 @@ impl SimulatedAnnealing {
             if step % 1000 == 0 {
                 interface.report_schedule(step, temperature, format!("{}", annealing_rank.0));
             }
-            let next_candidate = self.tweak_candidate(&annealing_candidate, &problem.constraints);
-            let next_rank = problem.rank_candidate(&next_candidate);
+            let mut next_candidate = annealing_candidate.clone();
+            let current_moved_elements =
+                self.tweak_candidate(&mut next_candidate, &problem.constraints);
+            let mut moved_elements = current_moved_elements.clone();
+            moved_elements.extend(&last_moved_elements);
+            let next_rank = problem.rank_candidate(&next_candidate, &Some(moved_elements));
             if step == 1000 {
                 let elapsed = start.elapsed().as_micros() / 1000;
                 interface.report_elapsed(elapsed);
             }
             let improvement = next_rank.1 - annealing_rank.1;
             if improvement < 0.0 || (random::<f64>() < (-improvement / temperature).exp()) {
-                annealing_candidate = next_candidate;
+                annealing_candidate.clone_from(&next_candidate);
                 annealing_rank = next_rank;
+                last_moved_elements.clear();
+            } else {
+                last_moved_elements = current_moved_elements;
             }
             if annealing_rank.1 < best_rank.1 {
                 best_rank = annealing_rank.clone();
                 best_candidate = problem.clone_candidate(&annealing_candidate);
-                problem.save_candidate(
-                    &best_candidate,
-                    &best_rank,
-                    progress > self.report_after.unwrap_or(0.9),
-                    interface,
-                );
+                // problem.save_candidate(
+                //     &best_candidate,
+                //     &best_rank,
+                //     progress > self.report_after.unwrap_or(0.9),
+                //     interface,
+                // );
             }
         }
         interface.report_schedule(steps, t_min, format!("{}", annealing_rank.0));
@@ -134,12 +146,13 @@ impl SimulatedAnnealing {
         steps: usize,
     ) -> (Solution, f64, f64) {
         let mut candidate = problem.clone_candidate(&from);
-        let (_, mut energy) = problem.rank_candidate(&candidate);
+        let (_, mut energy) = problem.rank_candidate(&candidate, &None);
         let mut accepts = 0;
         let mut improves = 0;
         for _ in 0..steps {
-            let next_candidate = self.tweak_candidate(&candidate, &problem.constraints);
-            let (_, next_energy) = problem.rank_candidate(&next_candidate);
+            let mut next_candidate = candidate.clone();
+            let moved_elements = self.tweak_candidate(&mut next_candidate, &problem.constraints);
+            let (_, next_energy) = problem.rank_candidate(&next_candidate, &Some(moved_elements));
             let energy_delta = next_energy - energy;
             if energy_delta < 0.0 || (-energy_delta / temperature).exp() > random::<f64>() {
                 accepts += 1;
@@ -165,11 +178,12 @@ impl SimulatedAnnealing {
         let batch = 1000;
         interface.init_autosolve();
         let mut candidate = problem.generate_candidate();
-        let (_, energy) = problem.rank_candidate(&candidate);
+        let (_, energy) = problem.rank_candidate(&candidate, &None);
         let mut sum_delta = 0.0;
         for _ in 0..batch {
-            let next_candidate = self.tweak_candidate(&candidate, &problem.constraints);
-            let (_, next_energy) = problem.rank_candidate(&next_candidate);
+            let mut next_candidate = candidate.clone();
+            let moved_elements = self.tweak_candidate(&mut next_candidate, &problem.constraints);
+            let (_, next_energy) = problem.rank_candidate(&next_candidate, &Some(moved_elements));
             sum_delta += (next_energy - energy).abs();
         }
         let initial_guess = sum_delta / batch as f64;

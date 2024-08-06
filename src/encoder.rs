@@ -2,10 +2,13 @@
 
 use crate::error::Error;
 use crate::representation::{
-    Assemble, AssembleList, Assets, AutoSelect, Code, CodeInfo, CodeSubInfo, Codes, Entry,
+    Assemble, AssembleList, Assets, AutoSelect, Code, CodeInfo, CodeSubInfo, Codes, Element, Entry,
     Frequency, Key, KeyMap, Representation, Sequence, MAX_WORD_LENGTH,
 };
+use c3::C3;
+use occupation::Occupation;
 use rustc_hash::{FxHashMap, FxHashSet};
+use simple_occupation::SimpleOccupation;
 use std::cmp::Reverse;
 
 pub mod c3;
@@ -72,7 +75,15 @@ pub fn adapt(
 }
 
 pub trait Driver {
-    fn run(&mut self, keymap: &KeyMap, config: &EncoderConfig, buffer: &mut Codes);
+    fn init(&mut self, _config: &EncoderConfig, _representation: &Representation) {}
+
+    fn run(
+        &mut self,
+        keymap: &KeyMap,
+        config: &EncoderConfig,
+        buffer: &mut Codes,
+        moved_elements: &[Element],
+    );
 }
 
 pub struct EncoderConfig {
@@ -83,6 +94,7 @@ pub struct EncoderConfig {
     pub first_key: Key,
     pub short_code: Option<[Vec<CompiledScheme>; MAX_WORD_LENGTH]>,
     pub encodables: Vec<Encodable>,
+    pub elements_length: usize,
 }
 
 impl EncoderConfig {
@@ -108,6 +120,7 @@ pub struct Encoder {
     pub transition_matrix: Vec<Vec<(usize, u64)>>,
     pub config: EncoderConfig,
     driver: Box<dyn Driver>,
+    default_driver: Occupation,
 }
 
 impl Encoder {
@@ -118,7 +131,6 @@ impl Encoder {
         representation: &Representation,
         resource: AssembleList,
         assets: &Assets,
-        driver: Box<dyn Driver>,
     ) -> Result<Self, Error> {
         let encoder = &representation.config.encoder;
         let max_length = encoder.max_length;
@@ -195,23 +207,39 @@ impl Encoder {
             radix: representation.radix,
             select_keys: representation.select_keys.clone(),
             first_key: representation.select_keys[0],
+            elements_length: representation.element_repr.len(),
             short_code,
         };
+        let mut driver: Box<dyn Driver> = if representation.config.info.name == "c3" {
+            Box::new(C3::new(representation.get_space()))
+        } else if representation.config.encoder.max_length <= 4 {
+            Box::new(SimpleOccupation::new(representation.get_space()))
+        } else {
+            Box::new(Occupation::new(representation.get_space()))
+        };
+        driver.init(&config, representation);
         let encoder = Self {
             transition_matrix,
             buffer,
             config,
             driver,
+            default_driver: Occupation::new(representation.get_space()),
         };
         Ok(encoder)
     }
 
-    pub fn prepare(&mut self, keymap: &KeyMap) {
-        self.driver.run(keymap, &self.config, &mut self.buffer);
+    pub fn init(&mut self, keymap: &KeyMap) {
+        self.default_driver
+            .run(keymap, &self.config, &mut self.buffer, &[]);
+    }
+
+    pub fn prepare(&mut self, keymap: &KeyMap, moved_elements: &[Element]) {
+        self.driver
+            .run(keymap, &self.config, &mut self.buffer, moved_elements);
     }
 
     pub fn encode(&mut self, keymap: &KeyMap, representation: &Representation) -> Vec<Entry> {
-        self.prepare(keymap);
+        self.init(keymap);
         let mut entries: Vec<(usize, Entry)> = Vec::new();
         let recover = |code: Code| representation.repr_code(code).iter().collect();
         let buffer = &self.buffer;

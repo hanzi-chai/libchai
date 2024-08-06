@@ -2,27 +2,34 @@
 //!
 //!
 
-pub mod cache;
+pub mod c3;
 pub mod fingering;
+pub mod general;
 pub mod metric;
 
-use crate::config::ObjectiveConfig;
+use crate::config::PartialWeights;
 use crate::encoder::Encoder;
 use crate::error::Error;
 use crate::representation::Assets;
+use crate::representation::CodeSubInfo;
 use crate::representation::DistributionLoss;
+use crate::representation::Element;
 use crate::representation::KeyMap;
 use crate::representation::Label;
 use crate::representation::Representation;
-use cache::Cache;
 use metric::Metric;
+use metric::PartialMetric;
 
-pub struct Objective {
-    config: ObjectiveConfig,
-    encoder: Encoder,
+pub struct Parameters {
     ideal_distribution: Vec<DistributionLoss>,
     pair_equivalence: Vec<f64>,
     fingering_types: Vec<Label>,
+}
+
+pub struct Objective {
+    encoder: Encoder,
+    parameters: Parameters,
+    buckets: Vec<[Option<general::Cache>; 2]>,
 }
 
 pub type Frequencies = Vec<f64>;
@@ -38,6 +45,17 @@ impl PartialType {
     pub fn is_characters(&self) -> bool {
         matches!(self, Self::CharactersFull | Self::CharactersShort)
     }
+}
+
+pub trait Cache {
+    fn process(
+        &mut self,
+        index: usize,
+        frequency: u64,
+        c: &mut CodeSubInfo,
+        parameters: &Parameters,
+    );
+    fn finalize(&self, parameters: &Parameters) -> (PartialMetric, f64);
 }
 
 /// 目标函数
@@ -56,19 +74,60 @@ impl Objective {
             .config
             .optimization
             .as_ref()
-            .ok_or("优化配置不存在")?;
-        let objective = Self {
-            encoder,
-            config: config.objective.clone(),
+            .ok_or("优化配置不存在")?
+            .objective
+            .clone();
+        let total_count = encoder.buffer.len();
+        let radix = encoder.config.radix;
+        let max_index = pair_equivalence.len() as u64;
+        let make_cache = |x: &PartialWeights| general::Cache::new(x, radix, total_count, max_index);
+        let cf = config.characters_full.as_ref().map(make_cache);
+        let cs = config.characters_short.as_ref().map(make_cache);
+        let wf = config.words_full.as_ref().map(make_cache);
+        let ws = config.words_short.as_ref().map(make_cache);
+        let buckets = vec![[cf, cs], [wf, ws]];
+        let parameters = Parameters {
             ideal_distribution,
             pair_equivalence,
             fingering_types,
+        };
+        let objective = Self {
+            encoder,
+            parameters,
+            buckets,
         };
         Ok(objective)
     }
 
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
-    pub fn evaluate(&mut self, candidate: &KeyMap) -> Result<(Metric, f64), Error> {
+    pub fn evaluate(
+        &mut self,
+        candidate: &KeyMap,
+        moved_elements: &Option<Vec<Element>>,
+    ) -> (Metric, f64) {
+        if let Some(moved_elements) = moved_elements {
+            self.encoder.prepare(candidate, moved_elements);
+        } else {
+            self.encoder.init(candidate);
+        }
+        let parameters = &self.parameters;
+
+        // 开始计算指标
+        for (index, code_info) in self.encoder.buffer.iter_mut().enumerate() {
+            let frequency = code_info.frequency;
+            let bucket = if code_info.length == 1 {
+                &mut self.buckets[0]
+            } else {
+                &mut self.buckets[1]
+            };
+            if let Some(cache) = &mut bucket[0] {
+                cache.process(index, frequency, &mut code_info.full, parameters);
+            }
+            if let Some(cache) = &mut bucket[1] {
+                cache.process(index, frequency, &mut code_info.short, parameters);
+            }
+        }
+
         let mut loss = 0.0;
         let mut metric = Metric {
             characters_full: None,
@@ -76,106 +135,27 @@ impl Objective {
             characters_short: None,
             words_short: None,
         };
-        self.encoder.prepare(candidate);
-        let total_count = self.encoder.buffer.len();
-        let radix = self.encoder.config.radix;
-        let max_index = self.pair_equivalence.len() as u64;
-        let mut cf_cache = self
-            .config
-            .characters_full
-            .as_ref()
-            .map(|x| Cache::new(&x, radix, total_count, max_index));
-        let mut cs_cache = self
-            .config
-            .characters_short
-            .as_ref()
-            .map(|x| Cache::new(&x, radix, total_count, max_index));
-        let mut wf_cache = self
-            .config
-            .words_full
-            .as_ref()
-            .map(|x| Cache::new(&x, radix, total_count, max_index));
-        let mut ws_cache = self
-            .config
-            .words_short
-            .as_ref()
-            .map(|x| Cache::new(&x, radix, total_count, max_index));
-
-        // 开始计算指标
-        for (index, code_info) in self.encoder.buffer.iter().enumerate() {
-            if code_info.length == 1 {
-                cf_cache.as_mut().map(|x| {
-                    x.accumulate(
-                        index,
-                        code_info.frequency,
-                        code_info.full,
-                        &self,
-                        &self.config.characters_full.as_ref().unwrap(),
-                    )
-                });
-                cs_cache.as_mut().map(|x| {
-                    x.accumulate(
-                        index,
-                        code_info.frequency,
-                        code_info.short,
-                        &self,
-                        &self.config.characters_short.as_ref().unwrap(),
-                    )
-                });
-            } else {
-                wf_cache.as_mut().map(|x| {
-                    x.accumulate(
-                        index,
-                        code_info.frequency,
-                        code_info.full,
-                        &self,
-                        &self.config.words_full.as_ref().unwrap(),
-                    )
-                });
-                ws_cache.as_mut().map(|x| {
-                    x.accumulate(
-                        index,
-                        code_info.frequency,
-                        code_info.short,
-                        &self,
-                        &self.config.words_short.as_ref().unwrap(),
-                    )
-                });
-            }
+        for (index, bucket) in self.buckets.iter().enumerate() {
+            let _ = &bucket[0].as_ref().map(|x| {
+                let (partial, accum) = x.finalize(parameters);
+                loss += accum;
+                if index == 0 {
+                    metric.characters_full = Some(partial);
+                } else {
+                    metric.words_full = Some(partial);
+                }
+            });
+            let _ = &bucket[1].as_ref().map(|x| {
+                let (partial, accum) = x.finalize(parameters);
+                loss += accum;
+                if index == 0 {
+                    metric.characters_short = Some(partial);
+                } else {
+                    metric.words_short = Some(partial);
+                }
+            });
         }
 
-        // 一字全码
-        if let Some(characters_weight) = &self.config.characters_full {
-            let (partial, accum) = cf_cache
-                .unwrap()
-                .finalize(characters_weight, &self.ideal_distribution);
-            loss += accum;
-            metric.characters_full = Some(partial);
-        }
-        // 一字简码
-        if let Some(characters_short) = &self.config.characters_short {
-            let (partial, accum) = cs_cache
-                .unwrap()
-                .finalize(characters_short, &self.ideal_distribution);
-            loss += accum;
-            metric.characters_short = Some(partial);
-        }
-        // 多字全码
-        if let Some(words_weight) = &self.config.words_full {
-            let (partial, accum) = wf_cache
-                .unwrap()
-                .finalize(words_weight, &self.ideal_distribution);
-            loss += accum;
-            metric.words_full = Some(partial);
-        }
-        // 多字简码
-        if let Some(words_short) = &self.config.words_short {
-            let (partial, accum) = ws_cache
-                .unwrap()
-                .finalize(words_short, &self.ideal_distribution);
-            loss += accum;
-            metric.words_short = Some(partial);
-        }
-        Ok((metric, loss))
+        (metric, loss)
     }
 }
