@@ -11,7 +11,6 @@ pub mod problem;
 pub mod representation;
 
 use crate::constraints::Constraints;
-use crate::encoder::occupation::Occupation;
 use crate::encoder::Encoder;
 use crate::problem::Problem;
 use crate::{
@@ -21,8 +20,6 @@ use crate::{
 };
 use config::{ObjectiveConfig, OptimizationConfig, SolverConfig};
 use console_error_panic_hook::set_once;
-use encoder::simple_occupation::SimpleOccupation;
-use encoder::Driver;
 use interface::Interface;
 use js_sys::Function;
 use metaheuristics::Metaheuristic;
@@ -113,16 +110,10 @@ impl WebInterface {
             metaheuristic: None,
         });
         let representation = Representation::new(config)?;
-        let driver = Occupation::new(representation.get_space());
-        let mut encoder = Encoder::new(
-            &representation,
-            self.info.clone(),
-            &self.assets,
-            Box::new(driver),
-        )?;
+        let mut encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
         let codes = encoder.encode(&representation.initial, &representation);
         let mut objective = Objective::new(&representation, encoder, self.assets.clone())?;
-        let (metric, _) = objective.evaluate(&representation.initial)?;
+        let (metric, _) = objective.evaluate(&representation.initial, &None);
         Ok(to_value(&(codes, metric))?)
     }
 
@@ -137,12 +128,7 @@ impl WebInterface {
             .unwrap();
         let representation = Representation::new(self.config.clone())?;
         let constraints = Constraints::new(&representation)?;
-        let driver: Box<dyn Driver> = if representation.config.encoder.max_length <= 4 {
-            Box::new(SimpleOccupation::new(representation.get_space()))
-        } else {
-            Box::new(Occupation::new(representation.get_space()))
-        };
-        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets, driver)?;
+        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
         let objective = Objective::new(&representation, encoder, self.assets.clone())?;
         let mut problem = Problem::new(representation, constraints, objective)?;
         match solver {

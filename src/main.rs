@@ -6,9 +6,7 @@
 
 use chai::cli::{Cli, Command};
 use chai::constraints::Constraints;
-use chai::encoder::occupation::Occupation;
-use chai::encoder::simple_occupation::SimpleOccupation;
-use chai::encoder::{Driver, Encoder};
+use chai::encoder::Encoder;
 use chai::objectives::Objective;
 use chai::problem::Problem;
 use chai::{error::Error, representation::Representation};
@@ -18,30 +16,23 @@ fn main() -> Result<(), Error> {
     let cli = Cli::parse();
     let (config, resource, assets) = cli.prepare_file();
     let representation = Representation::new(config)?;
-    let space = representation.get_space();
-    let driver = Box::new(Occupation::new(space));
     let constraints = Constraints::new(&representation)?;
     match cli.command {
         Command::Encode => {
-            let mut encoder = Encoder::new(&representation, resource, &assets, driver)?;
+            let mut encoder = Encoder::new(&representation, resource, &assets)?;
             let codes = encoder.encode(&representation.initial, &representation);
             Cli::write_encode_results(codes);
         }
         Command::Evaluate => {
-            let encoder = Encoder::new(&representation, resource, &assets, driver)?;
+            let encoder = Encoder::new(&representation, resource, &assets)?;
             let mut objective = Objective::new(&representation, encoder, assets)?;
-            let (metric, _) = objective.evaluate(&representation.initial)?;
+            let (metric, _) = objective.evaluate(&representation.initial, &None);
             Cli::report_metric(metric);
         }
         Command::Optimize => {
             let config = representation.config.clone();
             let solver = config.optimization.unwrap().metaheuristic.unwrap();
-            let driver: Box<dyn Driver> = if representation.config.encoder.max_length <= 4 {
-                Box::new(SimpleOccupation::new(representation.get_space()))
-            } else {
-                Box::new(Occupation::new(representation.get_space()))
-            };
-            let encoder = Encoder::new(&representation, resource, &assets, driver)?;
+            let encoder = Encoder::new(&representation, resource, &assets)?;
             let objective = Objective::new(&representation, encoder, assets)?;
             let mut problem = Problem::new(representation, constraints, objective)?;
             solver.solve(&mut problem, &cli);

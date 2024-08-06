@@ -1,5 +1,5 @@
 use super::{CompiledScheme, Driver, EncoderConfig};
-use crate::representation::{Code, CodeSubInfo, Codes, KeyMap};
+use crate::representation::{Code, Codes, Element, KeyMap};
 use rustc_hash::FxHashMap;
 use std::iter::zip;
 
@@ -75,52 +75,47 @@ impl Occupation {
         });
         self.short_space.hashmap.clear();
     }
-}
 
-impl Driver for Occupation {
-    fn run(&mut self, keymap: &KeyMap, config: &EncoderConfig, buffer: &mut Codes) {
-        self.reset();
+    fn encode_full(&mut self, keymap: &KeyMap, config: &EncoderConfig, buffer: &mut Codes) {
         let weights: Vec<_> = (0..=config.max_length)
             .map(|x| config.radix.pow(x as u32))
             .collect();
         for (encodable, pointer) in zip(&config.encodables, buffer.iter_mut()) {
             let sequence = &encodable.sequence;
+            let full = &mut pointer.full;
             let mut code = 0_u64;
             for (element, weight) in zip(sequence, &weights) {
                 code += keymap[*element] as u64 * weight;
             }
             let rank = self.full_space.rank_hash(code, encodable.hash);
             // 对于全码，计算实际编码时不考虑第二及以后的选重键
-            pointer.full = CodeSubInfo {
-                code,
-                rank,
-                actual: config.wrap_actual(code, 0, weights[sequence.len()]),
-                duplicate: rank > 0,
-            };
+            full.code = code;
+            full.rank = rank;
+            full.actual = config.wrap_actual(code, 0, weights[sequence.len()]);
+            full.duplicate = rank > 0;
             self.full_space.insert(code, encodable.hash);
         }
-        if config.short_code.is_none() || config.short_code.as_ref().unwrap().is_empty() {
-            return;
-        }
+    }
+
+    fn encode_short(&mut self, config: &EncoderConfig, buffer: &mut Codes) {
         let weights: Vec<_> = (0..=config.max_length)
             .map(|x| config.radix.pow(x as u32))
             .collect();
         let short_code = config.short_code.as_ref().unwrap();
         // 优先简码
-        for (pointer, encodable) in zip(buffer.iter_mut(), &config.encodables) {
+        for (encodable, pointer) in zip(&config.encodables, buffer.iter_mut()) {
             if encodable.level == u64::MAX {
                 continue;
             }
+            let short = &mut pointer.short;
             let modulo = config.radix.pow(encodable.level as u32);
-            let short = pointer.full.code % modulo;
-            let rank = self.short_space.rank_hash(short, encodable.hash);
-            pointer.short = CodeSubInfo {
-                code: short,
-                rank,
-                actual: config.wrap_actual(short, rank, modulo),
-                duplicate: false,
-            };
-            self.short_space.insert(short, encodable.hash);
+            let code = pointer.full.code % modulo;
+            let rank = self.short_space.rank_hash(code, encodable.hash);
+            short.code = code;
+            short.rank = rank;
+            short.actual = config.wrap_actual(code, rank, modulo);
+            short.duplicate = false;
+            self.short_space.insert(code, encodable.hash);
         }
         // 常规简码
         for (pointer, encodable) in zip(buffer.iter_mut(), &config.encodables) {
@@ -129,7 +124,8 @@ impl Driver for Occupation {
             }
             let schemes = &short_code[encodable.length - 1];
             let mut has_short = false;
-            let full = pointer.full;
+            let full = &pointer.full;
+            let short = &mut pointer.short;
             let hash = encodable.hash;
             for scheme in schemes {
                 let CompiledScheme {
@@ -142,32 +138,54 @@ impl Driver for Occupation {
                     continue;
                 }
                 // 首先将全码截取一部分出来
-                let short = full.code % weight;
-                let rank = self.full_space.rank_hash(short, hash)
-                    + self.short_space.rank_hash(short, hash);
+                let code = full.code % weight;
+                let rank =
+                    self.full_space.rank_hash(code, hash) + self.short_space.rank_hash(code, hash);
                 if rank >= select_keys.len() as u8 {
                     continue;
                 }
-                pointer.short = CodeSubInfo {
-                    code: short,
-                    rank,
-                    actual: config.wrap_actual(short, rank, weight),
-                    duplicate: false,
-                };
-                self.short_space.insert(short, hash);
+                short.code = code;
+                short.rank = rank;
+                short.actual = config.wrap_actual(code, rank, weight);
+                short.duplicate = false;
+                self.short_space.insert(code, hash);
                 has_short = true;
                 break;
             }
             if !has_short {
-                let rank = self.short_space.rank_hash(pointer.full.code, hash);
-                pointer.short = CodeSubInfo {
-                    code: pointer.full.code,
-                    rank,
-                    actual: pointer.full.actual,
-                    duplicate: rank != 0,
-                };
+                let rank = self.short_space.rank_hash(full.code, hash);
+                short.code = full.code;
+                short.rank = rank;
+                short.actual = full.actual;
+                short.duplicate = rank != 0;
                 self.short_space.insert(pointer.full.code, hash);
             }
         }
+    }
+}
+
+impl Driver for Occupation {
+    fn run(
+        &mut self,
+        keymap: &KeyMap,
+        config: &EncoderConfig,
+        buffer: &mut Codes,
+        _: &[Element],
+    ) {
+        self.reset();
+
+        // 不考虑差分，统一标注所有编码为已变更
+        for pointer in buffer.iter_mut() {
+            pointer.full.has_changed = true;
+            pointer.short.has_changed = true;
+        }
+
+        self.encode_full(keymap, config, buffer);
+
+        if config.short_code.is_none() || config.short_code.as_ref().unwrap().is_empty() {
+            return;
+        }
+
+        self.encode_short(config, buffer);
     }
 }

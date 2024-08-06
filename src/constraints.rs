@@ -133,62 +133,68 @@ impl Constraints {
         }
     }
 
-    fn swap_narrowed_elements(&self, map: &KeyMap, element1: Element, element2: Element) -> KeyMap {
-        let mut next = map.clone();
+    pub fn constrained_random_swap(&self, keymap: &mut KeyMap) -> Vec<Element> {
+        let element1 = self.get_swappable_element();
+        let key1 = keymap[element1];
+        let mut element2 = self.get_swappable_element();
+        while keymap[element2] == key1 {
+            element2 = self.get_swappable_element();
+        }
+        let key2 = keymap[element2];
         let destinations1 = self.narrowed.get(&element1).unwrap_or(&self.alphabet);
         let destinations2 = self.narrowed.get(&element2).unwrap_or(&self.alphabet);
         //分开判断可行性。这样如果无法交换，至少移动一下。
-        if destinations1.contains(&map[element2]) {
-            next[element1] = map[element2];
+        if destinations1.contains(&key2) {
+            keymap[element1] = key2;
         }
-        if destinations2.contains(&map[element1]) {
-            next[element2] = map[element1];
+        if destinations2.contains(&key1) {
+            keymap[element2] = key1;
         }
-        next
+        vec![element1, element2]
     }
 
-    pub fn constrained_random_swap(&self, map: &KeyMap) -> KeyMap {
-        let element1 = self.get_swappable_element();
-        let element2 = self.get_swappable_element();
-        self.swap_narrowed_elements(map, element1, element2)
-    }
-
-    pub fn constrained_full_key_swap(&self, map: &KeyMap) -> KeyMap {
+    pub fn constrained_full_key_swap(&self, keymap: &mut KeyMap) -> Vec<Element> {
         let mut rng = thread_rng();
-        let mut next = map.clone();
         // 寻找一个可移动元素和一个它的可行移动位置，然后把这两个键上的所有元素交换
         // 这样交换不成也至少能移动一次
         let movable_element = self.get_movable_element();
-        let key1 = map[movable_element];
-        let destinations = self
+        let key1 = keymap[movable_element];
+        let mut destinations = self
             .narrowed
             .get(&movable_element)
-            .unwrap_or(&self.alphabet);
+            .unwrap_or(&self.alphabet)
+            .clone();
+        destinations.retain(|x| *x != key1);
         let key2 = destinations.choose(&mut rng).unwrap(); // 在编译约束时已经确保了这里一定有可行的移动位置
-        for (element, key) in map.iter().enumerate() {
-            if (*key == key1 || *key == *key2) && !self.fixed.contains(&element) {
-                let destination = if *key == *key2 { key1 } else { *key2 };
-                //将元素移动到目标
-                //考虑到组合中的元素必然在同样的键上，有同样的约束条件，也必然跟随移动，这里不再判断组合
-                let destinations2 = self.narrowed.get(&element).unwrap_or(&self.alphabet);
-                if destinations2.contains(&destination) {
-                    next[element] = destination;
-                }
+        let mut moved_elements = vec![];
+        for (element, key) in keymap.iter_mut().enumerate() {
+            if *key != key1 && *key != *key2 || self.fixed.contains(&element) {
+                continue;
             }
+            let destination = if *key == *key2 { key1 } else { *key2 };
+            // 将元素移动到目标
+            let destinations2 = self.narrowed.get(&element).unwrap_or(&self.alphabet);
+            if destinations2.contains(&destination) {
+                *key = destination;
+            }
+            moved_elements.push(element);
         }
-        next
+        moved_elements
     }
 
-    pub fn constrained_random_move(&self, map: &KeyMap) -> KeyMap {
+    pub fn constrained_random_move(&self, keymap: &mut KeyMap) -> Vec<Element> {
         let mut rng = thread_rng();
-        let mut next = map.clone();
         let movable_element = self.get_movable_element();
+        let current = keymap[movable_element];
         let destinations = self
             .narrowed
             .get(&movable_element)
             .unwrap_or(&self.alphabet);
-        let key = destinations.choose(&mut rng).unwrap(); // 在编译约束时已经确保了这里一定有可行的移动位置
-        next[movable_element] = *key;
-        next
+        let mut key = destinations.choose(&mut rng).unwrap(); // 在编译约束时已经确保了这里一定有可行的移动位置
+        while *key == current {
+            key = destinations.choose(&mut rng).unwrap();
+        }
+        keymap[movable_element] = *key;
+        vec![movable_element]
     }
 }
