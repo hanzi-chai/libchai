@@ -35,7 +35,7 @@ fn process_cli_input(
     let encoder = Encoder::new(&representation, elements, &assets)?;
     let objective = Objective::new(&representation, encoder, assets)?;
     let mut problem = Problem::new(representation, constraints, objective)?;
-    let candidate = problem.generate_candidate();
+    let candidate = problem.initial_candidate();
     b.bench_function("Evaluation", |b| {
         b.iter(|| {
             problem.rank_candidate(&candidate, &None);

@@ -173,11 +173,8 @@ impl Interface for Cli {
         );
     }
 
-    fn report_parameters(&self, t_max: f64, t_min: f64, steps: usize) {
-        println!(
-            "参数寻找完成，将在 {} 步内从最高温 {} 降到最低温 {}……",
-            steps, t_max, t_min
-        );
+    fn report_parameters(&self, t_max: f64, t_min: f64) {
+        println!("参数寻找完成，从最高温 {} 降到最低温 {}……", t_max, t_min);
     }
 
     fn report_elapsed(&self, time: u128) {

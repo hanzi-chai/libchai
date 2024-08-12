@@ -36,7 +36,6 @@ enum Message {
     Parameters {
         t_max: Option<f64>,
         t_min: Option<f64>,
-        steps: Option<usize>,
     },
     Progress {
         steps: usize,
@@ -157,7 +156,6 @@ impl Interface for WebInterface {
         let _ = self.post(Message::Parameters {
             t_max: Some(t_max),
             t_min: None,
-            steps: None,
         });
     }
 
@@ -165,7 +163,6 @@ impl Interface for WebInterface {
         let _ = self.post(Message::Parameters {
             t_max: Some(t_max),
             t_min: None,
-            steps: None,
         });
     }
 
@@ -173,7 +170,6 @@ impl Interface for WebInterface {
         let _ = self.post(Message::Parameters {
             t_max: None,
             t_min: Some(t_min),
-            steps: None,
         });
     }
 
@@ -181,17 +177,14 @@ impl Interface for WebInterface {
         let _ = self.post(Message::Parameters {
             t_max: None,
             t_min: Some(t_min),
-            steps: None,
         });
     }
 
-    fn report_parameters(&self, t_max: f64, t_min: f64, steps: usize) {
-        let message = Message::Parameters {
+    fn report_parameters(&self, t_max: f64, t_min: f64) {
+        let _ = self.post(Message::Parameters {
             t_max: Some(t_max),
             t_min: Some(t_min),
-            steps: Some(steps),
-        };
-        let _ = self.post(message);
+        });
     }
 
     fn report_schedule(&self, steps: usize, temperature: f64, metric: String) {

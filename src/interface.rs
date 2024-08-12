@@ -17,7 +17,7 @@ pub trait Interface {
 
     fn report_t_min(&self, temperature: f64);
 
-    fn report_parameters(&self, t_max: f64, t_min: f64, steps: usize);
+    fn report_parameters(&self, t_max: f64, t_min: f64);
 
     fn report_elapsed(&self, time: u128);
 

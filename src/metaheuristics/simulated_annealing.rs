@@ -10,7 +10,7 @@ use crate::{
 use rand::random;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use web_time::{Duration, Instant};
+use web_time::Instant;
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,13 +25,12 @@ pub struct SearchConfig {
 pub struct Schedule {
     pub t_max: f64,
     pub t_min: f64,
-    pub steps: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulatedAnnealing {
     parameters: Option<Schedule>,
-    runtime: Option<u64>,
+    steps: Option<usize>,
     report_after: Option<f64>,
     search_method: Option<SearchConfig>,
 }
@@ -42,8 +41,7 @@ impl Metaheuristic for SimulatedAnnealing {
         if let Some(schedule) = self.parameters {
             self.solve(problem, schedule, interface)
         } else {
-            let runtime = self.runtime.unwrap_or(10);
-            let schedule = self.autosolve(problem, runtime, interface);
+            let schedule = self.autosolve(problem, interface);
             self.solve(problem, schedule, interface)
         }
     }
@@ -51,10 +49,6 @@ impl Metaheuristic for SimulatedAnnealing {
 
 impl SimulatedAnnealing {
     /// 基于现有的一个解通过随机扰动创建一个新的解
-    ///
-    ///```ignore
-    /// let new_candidate = problem.tweak_candidate(&old_candidate);
-    ///```
     pub fn tweak_candidate(
         &self,
         candidate: &mut Solution,
@@ -85,46 +79,47 @@ impl SimulatedAnnealing {
         parameters: Schedule,
         interface: &dyn Interface,
     ) -> Solution {
-        let mut best_candidate = problem.generate_candidate();
+        let mut best_candidate = problem.initial_candidate();
         let mut best_rank = problem.rank_candidate(&best_candidate, &None);
-        let mut annealing_candidate = problem.clone_candidate(&best_candidate);
+        let mut annealing_candidate = best_candidate.clone();
         let mut annealing_rank = best_rank.clone();
-        let mut last_moved_elements = vec![];
-        let Schedule {
-            t_max,
-            t_min,
-            steps,
-        } = parameters;
-        let log_space = t_max.ln() - t_min.ln();
+        let mut last_diff = vec![];
+        let Schedule { t_max, t_min } = parameters;
+        let steps = self.steps.unwrap_or(1000);
         let start = Instant::now();
+        const REPORT_INTERVAL: usize = 1000;
 
         for step in 0..steps {
+            // 等比级数降温：每一步的温度都是上一步的温度乘以一个固定倍数
             let progress = step as f64 / steps as f64;
-            let temperature = t_max / (log_space * progress).exp();
-            if step % 1000 == 0 {
+            let temperature = t_max * (t_min / t_max).powf(progress);
+            // 每过一定的步数，报告当前状态和计算速度
+            if step % REPORT_INTERVAL == 0 {
                 interface.report_schedule(step, temperature, format!("{}", annealing_rank.0));
+                if step == REPORT_INTERVAL {
+                    let elapsed = start.elapsed().as_micros() / REPORT_INTERVAL as u128;
+                    interface.report_elapsed(elapsed);
+                }
             }
+            // 生成一个新解
             let mut next_candidate = annealing_candidate.clone();
-            let current_moved_elements =
-                self.tweak_candidate(&mut next_candidate, &problem.constraints);
-            let mut moved_elements = current_moved_elements.clone();
-            moved_elements.extend(&last_moved_elements);
-            let next_rank = problem.rank_candidate(&next_candidate, &Some(moved_elements));
-            if step == 1000 {
-                let elapsed = start.elapsed().as_micros() / 1000;
-                interface.report_elapsed(elapsed);
-            }
+            let diff = self.tweak_candidate(&mut next_candidate, &problem.constraints);
+            let mut total_diff = diff.clone();
+            total_diff.extend(&last_diff);
+            let next_rank = problem.rank_candidate(&next_candidate, &Some(total_diff));
+            // 如果满足退火条件，接受新解
             let improvement = next_rank.1 - annealing_rank.1;
             if improvement < 0.0 || (random::<f64>() < (-improvement / temperature).exp()) {
                 annealing_candidate.clone_from(&next_candidate);
                 annealing_rank = next_rank;
-                last_moved_elements.clear();
+                last_diff.clear();
             } else {
-                last_moved_elements = current_moved_elements;
+                last_diff = diff;
             }
+            // 如果当前解优于目前的最优解，更新最优解
             if annealing_rank.1 < best_rank.1 {
                 best_rank = annealing_rank.clone();
-                best_candidate = problem.clone_candidate(&annealing_candidate);
+                best_candidate.clone_from(&annealing_candidate);
                 problem.save_candidate(
                     &best_candidate,
                     &best_rank,
@@ -145,7 +140,7 @@ impl SimulatedAnnealing {
         temperature: f64,
         steps: usize,
     ) -> (Solution, f64, f64) {
-        let mut candidate = problem.clone_candidate(&from);
+        let mut candidate = from.clone();
         let (_, mut energy) = problem.rank_candidate(&candidate, &None);
         let mut accepts = 0;
         let mut improves = 0;
@@ -168,16 +163,18 @@ impl SimulatedAnnealing {
         (candidate, accept_rate, improve_rate)
     }
 
-    // 不提供参数，而是提供预期运行时间，通过试验来获得一组参数的办法
-    pub fn autosolve(
-        &self,
-        problem: &mut Problem,
-        runtime: u64,
-        interface: &dyn Interface,
-    ) -> Schedule {
+    // 不提供参数，通过试验来获得一组参数的办法
+    pub fn autosolve(&self, problem: &mut Problem, interface: &dyn Interface) -> Schedule {
+        // 最高温时，接受概率应该至少有这么多
+        const HIGH_ACCEPTANCE: f64 = 0.98;
+        // 最低温时，改进概率应该至多有这么多
+        const LOW_IMPROVEMENT: f64 = 0.02;
+        // 搜索温度时用的步进大小
+        const MULTIPLIER: f64 = 2.0;
+
         let batch = 1000;
         interface.init_autosolve();
-        let mut candidate = problem.generate_candidate();
+        let mut candidate = problem.initial_candidate();
         let (_, energy) = problem.rank_candidate(&candidate, &None);
         let mut sum_delta = 0.0;
         for _ in 0..batch {
@@ -188,47 +185,34 @@ impl SimulatedAnnealing {
         }
         let initial_guess = sum_delta / batch as f64;
         let mut temperature = initial_guess;
-        let mut total_steps = 0_usize;
-        let start = Instant::now();
         let mut accept_rate;
         let mut improve_rate;
         (candidate, accept_rate, improve_rate) =
             self.trial_run(problem, candidate, temperature, batch);
-        total_steps += batch;
-        while accept_rate > 0.98 {
-            temperature /= 2.0;
+        while accept_rate > HIGH_ACCEPTANCE {
+            temperature /= MULTIPLIER;
             (candidate, accept_rate, improve_rate) =
                 self.trial_run(problem, candidate, temperature, batch);
-            total_steps += batch;
             interface.report_trial_t_max(temperature, accept_rate);
         }
-        while accept_rate < 0.98 {
-            temperature *= 2.0;
+        while accept_rate < HIGH_ACCEPTANCE {
+            temperature *= MULTIPLIER;
             (candidate, accept_rate, improve_rate) =
                 self.trial_run(problem, candidate, temperature, batch);
-            total_steps += batch;
             interface.report_trial_t_max(temperature, accept_rate);
         }
         interface.report_t_max(temperature);
         let t_max = temperature;
-        candidate = problem.generate_candidate();
+        candidate = problem.initial_candidate();
         temperature = initial_guess;
-        while improve_rate > 0.01 {
-            temperature /= 4.0;
+        while improve_rate > LOW_IMPROVEMENT {
+            temperature /= MULTIPLIER;
             (candidate, _, improve_rate) = self.trial_run(problem, candidate, temperature, batch);
-            total_steps += batch;
             interface.report_trial_t_min(temperature, improve_rate);
         }
         interface.report_t_min(temperature);
         let t_min = temperature;
-        let elapsed = start.elapsed();
-        let duration = Duration::new(runtime * 60, 0);
-        let steps = total_steps * duration.as_millis() as usize / elapsed.as_millis() as usize;
-        interface.report_parameters(t_max, t_min, steps);
-        Schedule {
-            t_max,
-            t_min,
-            steps,
-        }
+        interface.report_parameters(t_max, t_min);
+        Schedule { t_max, t_min }
     }
 }

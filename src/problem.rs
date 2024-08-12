@@ -32,26 +32,13 @@ impl Problem {
         })
     }
 
-    /// 生成一个初始解
-    ///
-    ///```ignore
-    /// let candidate = problem.generate_candidate();
-    ///```
-    pub fn clone_candidate(&mut self, candidate: &Solution) -> Solution {
-        candidate.clone()
-    }
-
-    /// 拷贝一份当前的解
-    ///
-    ///```ignore
-    /// let new_candidate = problem.clone_candidate(&old_candidate);
-    ///```
-    pub fn generate_candidate(&mut self) -> Solution {
+    /// 拷贝一份初始解
+    pub fn initial_candidate(&mut self) -> Solution {
         self.representation.initial.clone()
     }
 
     /// 对一个解来打分
-    /// M 可以是任意复杂的一个结构体，存放了各种指标；而后面的 f64 是对这个结构体的各项指标的加权平均得到的一个标量值。
+    /// Metric 存放了各种指标；后面的 f64 是对各项指标加权求和得到的标量值
     pub fn rank_candidate(&mut self, candidate: &Solution, moved_elements: &Option<Vec<Element>>) -> (Metric, f64) {
         let (metric, loss) = self.objective.evaluate(candidate, moved_elements);
         (metric, loss)
