@@ -99,8 +99,8 @@ pub struct EncoderConfig {
     pub auto_select_length: Option<usize>,
     pub auto_select_pattern: Option<String>,
     // 一字词全码
-    pub sources: HashMap<String, NodeConfig>,
-    pub conditions: HashMap<String, EdgeConfig>,
+    pub sources: Option<HashMap<String, NodeConfig>>,
+    pub conditions: Option<HashMap<String, EdgeConfig>>,
     // 多字词全码
     pub rules: Option<Vec<WordRule>>,
     // 简码

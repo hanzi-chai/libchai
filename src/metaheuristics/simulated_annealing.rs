@@ -33,6 +33,7 @@ pub struct SimulatedAnnealing {
     steps: Option<usize>,
     report_after: Option<f64>,
     search_method: Option<SearchConfig>,
+    update_interval: Option<usize>,
 }
 
 impl Metaheuristic for SimulatedAnnealing {
@@ -87,17 +88,17 @@ impl SimulatedAnnealing {
         let Schedule { t_max, t_min } = parameters;
         let steps = self.steps.unwrap_or(1000);
         let start = Instant::now();
-        const REPORT_INTERVAL: usize = 1000;
+        let update_interval = self.update_interval.unwrap_or(1000);
 
         for step in 0..steps {
             // 等比级数降温：每一步的温度都是上一步的温度乘以一个固定倍数
             let progress = step as f64 / steps as f64;
             let temperature = t_max * (t_min / t_max).powf(progress);
             // 每过一定的步数，报告当前状态和计算速度
-            if step % REPORT_INTERVAL == 0 {
+            if step % update_interval == 0 {
                 interface.report_schedule(step, temperature, format!("{}", annealing_rank.0));
-                if step == REPORT_INTERVAL {
-                    let elapsed = start.elapsed().as_micros() / REPORT_INTERVAL as u128;
+                if step == update_interval {
+                    let elapsed = start.elapsed().as_micros() / update_interval as u128;
                     interface.report_elapsed(elapsed);
                 }
             }

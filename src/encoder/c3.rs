@@ -51,9 +51,13 @@ impl Driver for C3 {
                 let encodable = &config.encodables[*index];
                 let sequence = &encodable.sequence;
                 let full = &mut pointer.full;
-                let code = keymap[sequence[0]] as u64 * config.radix * config.radix
-                    + keymap[sequence[1]] as u64 * config.radix
-                    + keymap[sequence[2]] as u64;
+                let code = if sequence.len() == 3 {
+                    keymap[sequence[0]] as u64 * config.radix * config.radix
+                        + keymap[sequence[1]] as u64 * config.radix
+                        + keymap[sequence[2]] as u64
+                } else {
+                    keymap[sequence[0]] as u64 * config.radix + keymap[sequence[1]] as u64
+                };
                 full.check_actual(code);
             }
         }
