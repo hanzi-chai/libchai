@@ -2,10 +2,10 @@
 //!
 
 use crate::{
-    config::SolverConfig,
-    interface::Interface,
     problem::{Problem, Solution},
+    Interface,
 };
+pub mod genetic;
 pub mod simulated_annealing;
 
 #[derive(Debug)]
@@ -31,14 +31,4 @@ pub static mut TIMER: Timer = Timer {
 
 pub trait Metaheuristic {
     fn solve(&self, problem: &mut Problem, interface: &dyn Interface) -> Solution;
-}
-
-impl SolverConfig {
-    pub fn solve<I: Interface>(&self, problem: &mut Problem, interface: &I) {
-        match self {
-            SolverConfig::SimulatedAnnealing(sa) => {
-                sa.solve(problem, interface);
-            }
-        }
-    }
 }

@@ -1,6 +1,6 @@
 //! 编码引擎
 
-use crate::error::Error;
+use crate::Error;
 use crate::representation::{
     Assemble, AssembleList, Assets, AutoSelect, Code, CodeInfo, CodeSubInfo, Codes, Element, Entry,
     Frequency, Key, KeyMap, Representation, Sequence, MAX_WORD_LENGTH,
