@@ -3,9 +3,9 @@
 use super::Metaheuristic;
 use crate::{
     constraints::Constraints,
-    interface::Interface,
     problem::{Problem, Solution},
     representation::Element,
+    Interface, Message,
 };
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -38,13 +38,11 @@ pub struct SimulatedAnnealing {
 
 impl Metaheuristic for SimulatedAnnealing {
     fn solve(&self, problem: &mut Problem, interface: &dyn Interface) -> Solution {
-        interface.prepare_output();
-        if let Some(schedule) = self.parameters {
-            self.solve(problem, schedule, interface)
-        } else {
-            let schedule = self.autosolve(problem, interface);
-            self.solve(problem, schedule, interface)
-        }
+        interface.post(Message::PrepareOutput);
+        let schedule = self
+            .parameters
+            .unwrap_or_else(|| self.autosolve(problem, interface));
+        self.solve_with(problem, schedule, interface)
     }
 }
 
@@ -74,7 +72,7 @@ impl SimulatedAnnealing {
     }
 
     /// 退火算法求解的主函数
-    fn solve(
+    fn solve_with(
         &self,
         problem: &mut Problem,
         parameters: Schedule,
@@ -96,10 +94,15 @@ impl SimulatedAnnealing {
             let temperature = t_max * (t_min / t_max).powf(progress);
             // 每过一定的步数，报告当前状态和计算速度
             if step % update_interval == 0 {
-                interface.report_schedule(step, temperature, format!("{}", annealing_rank.0));
+                let metric = format!("{}", annealing_rank.0);
+                interface.post(Message::Progress {
+                    steps: step,
+                    temperature,
+                    metric,
+                });
                 if step == update_interval {
                     let elapsed = start.elapsed().as_micros() / update_interval as u128;
-                    interface.report_elapsed(elapsed);
+                    interface.post(Message::Elapsed(elapsed));
                 }
             }
             // 生成一个新解
@@ -129,7 +132,11 @@ impl SimulatedAnnealing {
                 );
             }
         }
-        interface.report_schedule(steps, t_min, format!("{}", annealing_rank.0));
+        interface.post(Message::Progress {
+            steps,
+            temperature: t_min,
+            metric: format!("{}", best_rank.0),
+        });
         problem.save_candidate(&best_candidate, &best_rank, true, interface);
         best_candidate
     }
@@ -174,7 +181,6 @@ impl SimulatedAnnealing {
         const MULTIPLIER: f64 = 2.0;
 
         let batch = 1000;
-        interface.init_autosolve();
         let mut candidate = problem.initial_candidate();
         let (_, energy) = problem.rank_candidate(&candidate, &None);
         let mut sum_delta = 0.0;
@@ -194,26 +200,33 @@ impl SimulatedAnnealing {
             temperature /= MULTIPLIER;
             (candidate, accept_rate, improve_rate) =
                 self.trial_run(problem, candidate, temperature, batch);
-            interface.report_trial_t_max(temperature, accept_rate);
+            interface.post(Message::TrialMax {
+                temperature,
+                accept_rate,
+            });
         }
         while accept_rate < HIGH_ACCEPTANCE {
             temperature *= MULTIPLIER;
             (candidate, accept_rate, improve_rate) =
                 self.trial_run(problem, candidate, temperature, batch);
-            interface.report_trial_t_max(temperature, accept_rate);
+            interface.post(Message::TrialMax {
+                temperature,
+                accept_rate,
+            });
         }
-        interface.report_t_max(temperature);
         let t_max = temperature;
         candidate = problem.initial_candidate();
         temperature = initial_guess;
         while improve_rate > LOW_IMPROVEMENT {
             temperature /= MULTIPLIER;
             (candidate, _, improve_rate) = self.trial_run(problem, candidate, temperature, batch);
-            interface.report_trial_t_min(temperature, improve_rate);
+            interface.post(Message::TrialMin {
+                temperature,
+                improve_rate,
+            });
         }
-        interface.report_t_min(temperature);
         let t_min = temperature;
-        interface.report_parameters(t_max, t_min);
+        interface.post(Message::Parameters { t_max, t_min });
         Schedule { t_max, t_min }
     }
 }

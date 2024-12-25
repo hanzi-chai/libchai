@@ -1,19 +1,19 @@
 use chai::config::Config;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use chai::cli::{Cli, Command};
+use chai::{CommandLine, Command};
 use chai::constraints::Constraints;
 use chai::encoder::Encoder;
 use chai::objectives::Objective;
 use chai::problem::Problem;
 use chai::representation::{AssembleList, Assets};
-use chai::{error::Error, representation::Representation};
+use chai::{Error, representation::Representation};
 use std::path::PathBuf;
 
 fn simulate_cli_input(name: &str) -> (Config, AssembleList, Assets) {
     let config = format!("examples/{}.yaml", name);
     let elements = format!("examples/{}.txt", name);
-    let cli = Cli {
+    let cli = CommandLine {
         command: Command::Optimize,
         config: Some(PathBuf::from(config)),
         elements: Some(PathBuf::from(elements)),

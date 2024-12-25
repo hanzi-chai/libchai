@@ -2,8 +2,8 @@
 
 use crate::{
     config::{AtomicConstraint, MappedKey},
-    error::Error,
     representation::{assemble, Element, Key, KeyMap, Representation},
+    Error,
 };
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::{HashMap, HashSet};

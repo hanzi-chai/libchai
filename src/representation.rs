@@ -3,7 +3,7 @@
 use crate::{
     config::{Config, Mapped, MappedKey, Scheme, ShortCodeConfig},
     encoder::CompiledScheme,
-    error::Error,
+    Error,
     objectives::fingering::get_fingering_types,
 };
 use regex::Regex;

@@ -9,16 +9,11 @@ pub mod metric;
 
 use crate::config::PartialWeights;
 use crate::encoder::Encoder;
-use crate::error::Error;
-use crate::representation::Assets;
-use crate::representation::CodeSubInfo;
-use crate::representation::DistributionLoss;
-use crate::representation::Element;
-use crate::representation::KeyMap;
-use crate::representation::Label;
-use crate::representation::Representation;
-use metric::Metric;
-use metric::PartialMetric;
+use crate::representation::{
+    Assets, CodeSubInfo, DistributionLoss, Element, KeyMap, Label, Representation,
+};
+use crate::Error;
+use metric::{Metric, PartialMetric};
 
 pub struct Parameters {
     ideal_distribution: Vec<DistributionLoss>,

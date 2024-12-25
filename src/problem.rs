@@ -4,11 +4,10 @@
 //!
 
 use crate::constraints::Constraints;
-use crate::error::Error;
-use crate::interface::Interface;
 use crate::objectives::metric::Metric;
 use crate::objectives::Objective;
 use crate::representation::{Element, KeyMap, Representation};
+use crate::{Error, Interface, Message};
 
 // 未来可能会有更加通用的解定义
 pub type Solution = KeyMap;
@@ -39,7 +38,11 @@ impl Problem {
 
     /// 对一个解来打分
     /// Metric 存放了各种指标；后面的 f64 是对各项指标加权求和得到的标量值
-    pub fn rank_candidate(&mut self, candidate: &Solution, moved_elements: &Option<Vec<Element>>) -> (Metric, f64) {
+    pub fn rank_candidate(
+        &mut self,
+        candidate: &Solution,
+        moved_elements: &Option<Vec<Element>>,
+    ) -> (Metric, f64) {
         let (metric, loss) = self.objective.evaluate(candidate, moved_elements);
         (metric, loss)
     }
@@ -52,8 +55,13 @@ impl Problem {
         write_to_file: bool,
         interface: &dyn Interface,
     ) {
-        let new_config = self.representation.update_config(candidate);
+        let config = self.representation.update_config(candidate);
         let metric = format!("{}", rank.0);
-        interface.report_solution(new_config, metric, write_to_file);
+        let config = serde_yaml::to_string(&config).unwrap();
+        interface.post(Message::BetterSolution {
+            metric,
+            config,
+            save: write_to_file,
+        })
     }
 }
