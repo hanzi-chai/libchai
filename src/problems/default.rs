@@ -1,32 +1,94 @@
-//! 优化问题的约束。
+//! 默认优化问题。
 
-use crate::{
-    config::{AtomicConstraint, MappedKey},
-    representation::{assemble, Element, Key, KeyMap, Representation},
-    Error,
-};
+use crate::config::{AtomicConstraint, MappedKey};
+use crate::objectives::metric::Metric;
+use crate::objectives::Objective;
+use crate::representation::{assemble, Element, Key, KeyMap, Representation};
+use crate::{Error, Interface, Message};
+use rand::random;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::{HashMap, HashSet};
 
-pub struct Constraints {
-    pub alphabet: Vec<Key>,
-    pub radix: usize,
-    pub elements: usize,
-    pub fixed: HashSet<Element>,
-    pub narrowed: HashMap<Element, Vec<Key>>,
+use super::{MutateConfig, Problem, Solution};
+
+pub struct DefaultProblem {
+    representation: Representation,
+    objective: Objective,
+    fixed: HashSet<Element>,
+    narrowed: HashMap<Element, Vec<Key>>,
+    alphabet: Vec<Key>,
 }
 
-impl Constraints {
-    /// 传入配置表示来构造约束，把用户在配置文件中编写的约束「编译」成便于快速计算的数据结构
-    pub fn new(representation: &Representation) -> Result<Constraints, Error> {
-        let elements = representation.initial.len();
-        let alphabet = representation
+impl Problem for DefaultProblem {
+    fn initialize(&mut self) -> Solution {
+        self.representation.initial.clone()
+    }
+
+    fn rank(
+        &mut self,
+        candidate: &Solution,
+        moved_elements: &Option<Vec<Element>>,
+    ) -> (Metric, f64) {
+        let (metric, loss) = self.objective.evaluate(candidate, moved_elements);
+        (metric, loss)
+    }
+
+    fn update(
+        &self,
+        candidate: &Solution,
+        rank: &(Metric, f64),
+        save: bool,
+        interface: &dyn Interface,
+    ) {
+        let config = self.representation.update_config(candidate);
+        let metric = format!("{}", rank.0);
+        let config = serde_yaml::to_string(&config).unwrap();
+        interface.post(Message::BetterSolution {
+            metric,
+            config,
+            save,
+        })
+    }
+
+    fn mutate(&self, candidate: &mut Solution, config: &MutateConfig) -> Vec<Element> {
+        let sum = config.random_move + config.random_swap + config.random_full_key_swap;
+        let ratio1 = config.random_move / sum;
+        let ratio2 = (config.random_move + config.random_swap) / sum;
+        let number: f64 = random();
+        if number < ratio1 {
+            self.constrained_random_move(candidate)
+        } else if number < ratio2 {
+            self.constrained_random_swap(candidate)
+        } else {
+            self.constrained_full_key_swap(candidate)
+        }
+    }
+}
+
+// 默认的问题实现，使用配置文件中的约束来定义各种算子
+impl DefaultProblem {
+    pub fn new(representation: Representation, objective: Objective) -> Result<Self, Error> {
+        let (fixed, narrowed) = Self::make_constraints(&representation)?;
+        let alphabet: Vec<_> = representation
             .config
             .form
             .alphabet
             .chars()
             .map(|x| *representation.key_repr.get(&x).unwrap()) // 在生成表示的时候已经确保了这里一定有对应的键
             .collect();
+        Ok(Self {
+            representation,
+            objective,
+            fixed,
+            narrowed,
+            alphabet,
+        })
+    }
+
+    /// 传入配置表示来构造约束，把用户在配置文件中编写的约束「编译」成便于快速计算的数据结构
+    pub fn make_constraints(
+        representation: &Representation,
+    ) -> Result<(HashSet<Element>, HashMap<Element, Vec<Key>>), Error> {
         let mut fixed: HashSet<Element> = HashSet::new();
         let mut narrowed: HashMap<Element, Vec<Key>> = HashMap::new();
         let mut values: Vec<AtomicConstraint> = Vec::new();
@@ -104,19 +166,15 @@ impl Constraints {
                 }
             }
         }
-        Ok(Constraints {
-            alphabet,
-            radix: representation.radix as usize,
-            elements,
-            fixed,
-            narrowed,
-        })
+        Ok((fixed, narrowed))
     }
 
     fn get_movable_element(&self) -> usize {
+        let radix = self.representation.radix as usize;
+        let elements = self.representation.initial.len();
         let mut rng = thread_rng();
         loop {
-            let key = rng.gen_range(self.radix..self.elements);
+            let key = rng.gen_range(radix..elements);
             if !self.fixed.contains(&key) {
                 return key;
             }
@@ -124,9 +182,11 @@ impl Constraints {
     }
 
     fn get_swappable_element(&self) -> usize {
+        let radix = self.representation.radix as usize;
+        let elements = self.representation.initial.len();
         let mut rng = thread_rng();
         loop {
-            let key = rng.gen_range(self.radix..self.elements);
+            let key = rng.gen_range(radix..elements);
             if !self.fixed.contains(&key) {
                 return key;
             }

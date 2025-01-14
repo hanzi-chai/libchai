@@ -5,20 +5,19 @@
 //! 具体用法详见 README.md 和 config.md。
 
 use chai::config::SolverConfig;
-use chai::metaheuristics::Metaheuristic;
-use chai::{CommandLine, Command, Error};
-use chai::constraints::Constraints;
 use chai::encoder::Encoder;
+use chai::metaheuristics::Metaheuristic;
 use chai::objectives::Objective;
-use chai::problem::Problem;
+use chai::problems::default::DefaultProblem;
+use chai::problems::snow2::Snow2;
 use chai::representation::Representation;
+use chai::{Command, CommandLine, Error};
 use clap::Parser;
 
 fn main() -> Result<(), Error> {
     let cli = CommandLine::parse();
     let (config, resource, assets) = cli.prepare_file();
     let representation = Representation::new(config)?;
-    let constraints = Constraints::new(&representation)?;
     match cli.command {
         Command::Encode => {
             let mut encoder = Encoder::new(&representation, resource, &assets)?;
@@ -36,10 +35,15 @@ fn main() -> Result<(), Error> {
             let solver = config.optimization.unwrap().metaheuristic.unwrap();
             let encoder = Encoder::new(&representation, resource, &assets)?;
             let objective = Objective::new(&representation, encoder, assets)?;
-            let mut problem = Problem::new(representation, constraints, objective)?;
             match solver {
                 SolverConfig::SimulatedAnnealing(sa) => {
-                    sa.solve(&mut problem, &cli);
+                    if config.info.name == "冰雪双拼" {
+                        let mut problem = Snow2::new(representation, objective);
+                        sa.solve(&mut problem, &cli);
+                    } else {
+                        let mut problem = DefaultProblem::new(representation, objective)?;
+                        sa.solve(&mut problem, &cli);
+                    }
                 }
             }
         }
