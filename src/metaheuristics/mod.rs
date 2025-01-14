@@ -2,7 +2,7 @@
 //!
 
 use crate::{
-    problem::{Problem, Solution},
+    problems::{Problem, Solution},
     Interface,
 };
 pub mod genetic;
@@ -30,5 +30,5 @@ pub static mut TIMER: Timer = Timer {
 };
 
 pub trait Metaheuristic {
-    fn solve(&self, problem: &mut Problem, interface: &dyn Interface) -> Solution;
+    fn solve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> Solution;
 }

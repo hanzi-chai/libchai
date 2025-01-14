@@ -1,17 +1,15 @@
 pub mod config;
-pub mod constraints;
 pub mod encoder;
 pub mod metaheuristics;
 pub mod objectives;
-pub mod problem;
+pub mod problems;
 pub mod representation;
 
 use config::{Config, ObjectiveConfig, OptimizationConfig, SolverConfig};
-use constraints::Constraints;
 use encoder::Encoder;
 use metaheuristics::Metaheuristic;
 use objectives::{metric::Metric, Objective};
-use problem::Problem;
+use problems::default::DefaultProblem;
 use representation::{AssembleList, Assets, Representation};
 use representation::{Entry, Frequency, KeyDistribution, PairEquivalence};
 
@@ -167,10 +165,9 @@ impl Web {
             .as_ref()
             .unwrap();
         let representation = Representation::new(self.config.clone())?;
-        let constraints = Constraints::new(&representation)?;
         let encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
         let objective = Objective::new(&representation, encoder, self.assets.clone())?;
-        let mut problem = Problem::new(representation, constraints, objective)?;
+        let mut problem = DefaultProblem::new(representation, objective)?;
         match solver {
             SolverConfig::SimulatedAnnealing(config) => {
                 config.solve(&mut problem, self);
@@ -349,7 +346,7 @@ impl Interface for CommandLine {
                 print!("{}", metric);
                 if save {
                     write(metric_path, metric).unwrap();
-                    write(config_path, serde_yaml::to_string(&config).unwrap()).unwrap();
+                    write(config_path, config).unwrap();
                     println!(
                         "方案文件保存于 {}.yaml 中，评测指标保存于 {}.txt 中",
                         prefix, prefix

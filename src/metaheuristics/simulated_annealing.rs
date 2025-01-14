@@ -1,43 +1,34 @@
 //! 退火算法
 
+use std::time::Instant;
+
 use super::Metaheuristic;
 use crate::{
-    constraints::Constraints,
-    problem::{Problem, Solution},
-    representation::Element,
+    problems::MutateConfig,
+    problems::{Problem, Solution},
     Interface, Message,
 };
 use rand::random;
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
-use web_time::Instant;
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchConfig {
-    pub random_move: f64,
-    pub random_swap: f64,
-    pub random_full_key_swap: f64,
-}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 /// 退火算法的参数，包括最高温、最低温、步数
 pub struct Schedule {
     pub t_max: f64,
     pub t_min: f64,
+    pub steps: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulatedAnnealing {
     parameters: Option<Schedule>,
-    steps: Option<usize>,
     report_after: Option<f64>,
-    search_method: Option<SearchConfig>,
+    search_method: Option<MutateConfig>,
     update_interval: Option<usize>,
 }
 
 impl Metaheuristic for SimulatedAnnealing {
-    fn solve(&self, problem: &mut Problem, interface: &dyn Interface) -> Solution {
+    fn solve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> Solution {
         interface.post(Message::PrepareOutput);
         let schedule = self
             .parameters
@@ -46,47 +37,29 @@ impl Metaheuristic for SimulatedAnnealing {
     }
 }
 
-impl SimulatedAnnealing {
-    /// 基于现有的一个解通过随机扰动创建一个新的解
-    pub fn tweak_candidate(
-        &self,
-        candidate: &mut Solution,
-        constraints: &Constraints,
-    ) -> Vec<Element> {
-        let method = self.search_method.as_ref().unwrap_or(&SearchConfig {
-            random_move: 0.9,
-            random_swap: 0.09,
-            random_full_key_swap: 0.01,
-        });
-        let sum = method.random_move + method.random_swap + method.random_full_key_swap;
-        let ratio1 = method.random_move / sum;
-        let ratio2 = (method.random_move + method.random_swap) / sum;
-        let number: f64 = random();
-        if number < ratio1 {
-            constraints.constrained_random_move(candidate)
-        } else if number < ratio2 {
-            constraints.constrained_random_swap(candidate)
-        } else {
-            constraints.constrained_full_key_swap(candidate)
-        }
-    }
+const DEFAULT_MUTATE: MutateConfig = MutateConfig {
+    random_move: 0.9,
+    random_swap: 0.09,
+    random_full_key_swap: 0.01,
+};
 
+impl SimulatedAnnealing {
     /// 退火算法求解的主函数
     fn solve_with(
         &self,
-        problem: &mut Problem,
+        problem: &mut dyn Problem,
         parameters: Schedule,
         interface: &dyn Interface,
     ) -> Solution {
-        let mut best_candidate = problem.initial_candidate();
-        let mut best_rank = problem.rank_candidate(&best_candidate, &None);
+        let mut best_candidate = problem.initialize();
+        let mut best_rank = problem.rank(&best_candidate, &None);
         let mut annealing_candidate = best_candidate.clone();
         let mut annealing_rank = best_rank.clone();
         let mut last_diff = vec![];
-        let Schedule { t_max, t_min } = parameters;
-        let steps = self.steps.unwrap_or(1000);
+        let Schedule { t_max, t_min, steps } = parameters;
         let start = Instant::now();
         let update_interval = self.update_interval.unwrap_or(1000);
+        let method = self.search_method.as_ref().unwrap_or(&DEFAULT_MUTATE);
 
         for step in 0..steps {
             // 等比级数降温：每一步的温度都是上一步的温度乘以一个固定倍数
@@ -107,10 +80,10 @@ impl SimulatedAnnealing {
             }
             // 生成一个新解
             let mut next_candidate = annealing_candidate.clone();
-            let diff = self.tweak_candidate(&mut next_candidate, &problem.constraints);
+            let diff = problem.mutate(&mut next_candidate, &method);
             let mut total_diff = diff.clone();
             total_diff.extend(&last_diff);
-            let next_rank = problem.rank_candidate(&next_candidate, &Some(total_diff));
+            let next_rank = problem.rank(&next_candidate, &Some(total_diff));
             // 如果满足退火条件，接受新解
             let improvement = next_rank.1 - annealing_rank.1;
             if improvement < 0.0 || (random::<f64>() < (-improvement / temperature).exp()) {
@@ -124,7 +97,7 @@ impl SimulatedAnnealing {
             if annealing_rank.1 < best_rank.1 {
                 best_rank = annealing_rank.clone();
                 best_candidate.clone_from(&annealing_candidate);
-                problem.save_candidate(
+                problem.update(
                     &best_candidate,
                     &best_rank,
                     progress > self.report_after.unwrap_or(0.9),
@@ -137,25 +110,31 @@ impl SimulatedAnnealing {
             temperature: t_min,
             metric: format!("{}", best_rank.0),
         });
-        problem.save_candidate(&best_candidate, &best_rank, true, interface);
+        problem.update(&best_candidate, &best_rank, true, interface);
         best_candidate
     }
 
     fn trial_run(
         &self,
-        problem: &mut Problem,
+        problem: &mut dyn Problem,
         from: Solution,
         temperature: f64,
         steps: usize,
     ) -> (Solution, f64, f64) {
         let mut candidate = from.clone();
-        let (_, mut energy) = problem.rank_candidate(&candidate, &None);
+        let (_, mut energy) = problem.rank(&candidate, &None);
         let mut accepts = 0;
         let mut improves = 0;
+        let method = self.search_method.as_ref().unwrap_or(&MutateConfig {
+            random_move: 0.9,
+            random_swap: 0.09,
+            random_full_key_swap: 0.01,
+        });
+
         for _ in 0..steps {
             let mut next_candidate = candidate.clone();
-            let moved_elements = self.tweak_candidate(&mut next_candidate, &problem.constraints);
-            let (_, next_energy) = problem.rank_candidate(&next_candidate, &Some(moved_elements));
+            let moved_elements = problem.mutate(&mut next_candidate, &method);
+            let (_, next_energy) = problem.rank(&next_candidate, &Some(moved_elements));
             let energy_delta = next_energy - energy;
             if energy_delta < 0.0 || (-energy_delta / temperature).exp() > random::<f64>() {
                 accepts += 1;
@@ -172,7 +151,8 @@ impl SimulatedAnnealing {
     }
 
     // 不提供参数，通过试验来获得一组参数的办法
-    pub fn autosolve(&self, problem: &mut Problem, interface: &dyn Interface) -> Schedule {
+    pub fn autosolve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> Schedule {
+        let method = self.search_method.as_ref().unwrap_or(&DEFAULT_MUTATE);
         // 最高温时，接受概率应该至少有这么多
         const HIGH_ACCEPTANCE: f64 = 0.98;
         // 最低温时，改进概率应该至多有这么多
@@ -181,13 +161,13 @@ impl SimulatedAnnealing {
         const MULTIPLIER: f64 = 2.0;
 
         let batch = 1000;
-        let mut candidate = problem.initial_candidate();
-        let (_, energy) = problem.rank_candidate(&candidate, &None);
+        let mut candidate = problem.initialize();
+        let (_, energy) = problem.rank(&candidate, &None);
         let mut sum_delta = 0.0;
         for _ in 0..batch {
             let mut next_candidate = candidate.clone();
-            let moved_elements = self.tweak_candidate(&mut next_candidate, &problem.constraints);
-            let (_, next_energy) = problem.rank_candidate(&next_candidate, &Some(moved_elements));
+            let moved_elements = problem.mutate(&mut next_candidate, method);
+            let (_, next_energy) = problem.rank(&next_candidate, &Some(moved_elements));
             sum_delta += (next_energy - energy).abs();
         }
         let initial_guess = sum_delta / batch as f64;
@@ -215,7 +195,7 @@ impl SimulatedAnnealing {
             });
         }
         let t_max = temperature;
-        candidate = problem.initial_candidate();
+        candidate = problem.initialize();
         temperature = initial_guess;
         while improve_rate > LOW_IMPROVEMENT {
             temperature /= MULTIPLIER;
@@ -227,6 +207,6 @@ impl SimulatedAnnealing {
         }
         let t_min = temperature;
         interface.post(Message::Parameters { t_max, t_min });
-        Schedule { t_max, t_min }
+        Schedule { t_max, t_min, steps: 1000 }
     }
 }

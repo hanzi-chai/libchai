@@ -1,6 +1,6 @@
 //! 遗传算法
 
-use crate::{problem::{Problem, Solution}, Interface};
+use crate::{problems::{Problem, Solution}, Interface};
 
 use super::Metaheuristic;
 
@@ -12,7 +12,7 @@ pub struct Genetic {
 }
 
 impl Metaheuristic for Genetic {
-    fn solve(&self, problem: &mut Problem, interface: &dyn Interface) -> Solution {
+    fn solve(&self, _problem: &mut dyn Problem, _interface: &dyn Interface) -> Solution {
         todo!()
     }
 }

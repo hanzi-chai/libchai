@@ -1,11 +1,11 @@
 use chai::config::Config;
+use chai::problems::default::DefaultProblem;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use chai::{CommandLine, Command};
-use chai::constraints::Constraints;
 use chai::encoder::Encoder;
 use chai::objectives::Objective;
-use chai::problem::Problem;
+use chai::problems::Problem;
 use chai::representation::{AssembleList, Assets};
 use chai::{Error, representation::Representation};
 use std::path::PathBuf;
@@ -31,14 +31,13 @@ fn process_cli_input(
     b: &mut Criterion,
 ) -> Result<(), Error> {
     let representation = Representation::new(config)?;
-    let constraints = Constraints::new(&representation)?;
     let encoder = Encoder::new(&representation, elements, &assets)?;
     let objective = Objective::new(&representation, encoder, assets)?;
-    let mut problem = Problem::new(representation, constraints, objective)?;
-    let candidate = problem.initial_candidate();
+    let mut problem = DefaultProblem::new(representation, objective)?;
+    let candidate = problem.initialize();
     b.bench_function("Evaluation", |b| {
         b.iter(|| {
-            problem.rank_candidate(&candidate, &None);
+            problem.rank(&candidate, &None);
         })
     });
     Ok(())
