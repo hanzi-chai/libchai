@@ -4,6 +4,7 @@
 //!
 pub mod default;
 pub mod snow2;
+pub mod snow4layout;
 
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -35,5 +36,5 @@ pub trait Problem {
     fn update(&self, candidate: &Solution, rank: &(Metric, f64), save: bool, interface: &dyn Interface);
 
     /// 基于现有的一个解通过随机扰动创建一个新的解
-    fn mutate(&self, candidate: &mut Solution, config: &MutateConfig) -> Vec<Element>;
+    fn mutate(&mut self, candidate: &mut Solution, config: &MutateConfig) -> Vec<Element>;
 }

@@ -38,10 +38,8 @@ impl SimpleOccupation {
         let weights: Vec<_> = (0..=config.max_length)
             .map(|x| config.radix.pow(x as u32))
             .collect();
-        for element in moved_elements {
-            for index in &self.involved_message[*element] {
-                let pointer = &mut buffer[*index];
-                let encodable = &config.encodables[*index];
+        if moved_elements.is_empty() {
+            for (pointer, encodable) in zip(buffer.iter_mut(), &config.encodables) {
                 let sequence = &encodable.sequence;
                 let full = &mut pointer.full;
                 let mut code = 0_u64;
@@ -51,6 +49,22 @@ impl SimpleOccupation {
                 full.code = code;
                 let actual = config.wrap_actual(code, 0, weights[sequence.len()]);
                 full.check_actual(actual);
+            }
+        } else {
+            for element in moved_elements {
+                for index in &self.involved_message[*element] {
+                    let pointer = &mut buffer[*index];
+                    let encodable = &config.encodables[*index];
+                    let sequence = &encodable.sequence;
+                    let full = &mut pointer.full;
+                    let mut code = 0_u64;
+                    for (element, weight) in zip(sequence, &weights) {
+                        code += keymap[*element] as u64 * weight;
+                    }
+                    full.code = code;
+                    let actual = config.wrap_actual(code, 0, weights[sequence.len()]);
+                    full.check_actual(actual);
+                }
             }
         }
 

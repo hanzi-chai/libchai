@@ -10,6 +10,7 @@ use chai::metaheuristics::Metaheuristic;
 use chai::objectives::Objective;
 use chai::problems::default::DefaultProblem;
 use chai::problems::snow2::Snow2;
+use chai::problems::snow4layout::Snow4Layout;
 use chai::representation::Representation;
 use chai::{Command, CommandLine, Error};
 use clap::Parser;
@@ -37,8 +38,11 @@ fn main() -> Result<(), Error> {
             let objective = Objective::new(&representation, encoder, assets)?;
             match solver {
                 SolverConfig::SimulatedAnnealing(sa) => {
-                    if config.info.name == "冰雪双拼" {
+                    if config.info.name == "冰雪双拼" || config.info.name == "冰雪双拼声介" {
                         let mut problem = Snow2::new(representation, objective);
+                        sa.solve(&mut problem, &cli);
+                    } else if config.info.name == "冰雪四拼手机布局" {
+                        let mut problem = Snow4Layout::new(representation, objective);
                         sa.solve(&mut problem, &cli);
                     } else {
                         let mut problem = DefaultProblem::new(representation, objective)?;
