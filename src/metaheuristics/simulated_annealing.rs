@@ -67,11 +67,10 @@ impl SimulatedAnnealing {
             let temperature = t_max * (t_min / t_max).powf(progress);
             // 每过一定的步数，报告当前状态和计算速度
             if step % update_interval == 0 {
-                let metric = format!("{}", annealing_rank.0);
                 interface.post(Message::Progress {
                     steps: step,
                     temperature,
-                    metric,
+                    metric: annealing_rank.0.clone(),
                 });
                 if step == update_interval {
                     let elapsed = start.elapsed().as_micros() / update_interval as u128;
@@ -108,7 +107,7 @@ impl SimulatedAnnealing {
         interface.post(Message::Progress {
             steps,
             temperature: t_min,
-            metric: format!("{}", best_rank.0),
+            metric: best_rank.0.clone(),
         });
         problem.update(&best_candidate, &best_rank, true, interface);
         best_candidate

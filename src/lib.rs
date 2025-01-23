@@ -70,11 +70,11 @@ pub enum Message {
     Progress {
         steps: usize,
         temperature: f64,
-        metric: String,
+        metric: Metric,
     },
     BetterSolution {
-        metric: String,
-        config: String,
+        metric: Metric,
+        config: Config,
         save: bool,
     },
     Elapsed(u128),
@@ -338,17 +338,19 @@ impl Interface for CommandLine {
                 let time = Local::now();
                 let prefix = time.format("%m-%d+%H_%M_%S_%3f").to_string();
                 let config_path = format!("output/{}.yaml", prefix);
-                let metric_path = format!("output/{}.txt", prefix);
+                let metric_path = format!("output/{}.metric.yaml", prefix);
                 println!(
                     "{} 系统搜索到了一个更好的方案，评测指标如下：",
                     time.format("%H:%M:%S")
                 );
                 print!("{}", metric);
+                let config = serde_yaml::to_string(&config).unwrap();
+                let metric = serde_yaml::to_string(&metric).unwrap();
                 if save {
                     write(metric_path, metric).unwrap();
                     write(config_path, config).unwrap();
                     println!(
-                        "方案文件保存于 {}.yaml 中，评测指标保存于 {}.txt 中",
+                        "方案文件保存于 {}.yaml 中，评测指标保存于 {}.metric.yaml 中",
                         prefix, prefix
                     );
                 }

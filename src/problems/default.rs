@@ -41,10 +41,8 @@ impl Problem for DefaultProblem {
         interface: &dyn Interface,
     ) {
         let config = self.representation.update_config(candidate);
-        let metric = format!("{}", rank.0);
-        let config = serde_yaml::to_string(&config).unwrap();
         interface.post(Message::BetterSolution {
-            metric,
+            metric: rank.0.clone(),
             config,
             save,
         })

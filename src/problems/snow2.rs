@@ -45,10 +45,8 @@ impl Problem for Snow2 {
         interface: &dyn Interface,
     ) {
         let config = self.representation.update_config(candidate);
-        let metric = format!("{}", rank.0);
-        let config = serde_yaml::to_string(&config).unwrap();
         interface.post(Message::BetterSolution {
-            metric,
+            metric: rank.0.clone(),
             config,
             save,
         })
@@ -69,7 +67,8 @@ impl Problem for Snow2 {
             self.randomly_move_initial(candidate)
         } else {
             // 3. 随机交换两个《中华通韵》中的韵部
-            self.randomly_swap_final(candidate)
+            // self.randomly_swap_final(candidate)
+            self.randomly_move_final(candidate)
         }
     }
 }
@@ -82,9 +81,9 @@ impl Snow2 {
         let mut finals = vec![];
         for element in (representation.radix as usize)..representation.initial.len() {
             let repr = &representation.repr_element[&element];
-            if repr.starts_with("落声") {
+            if repr.starts_with("声介") || repr.starts_with("冰声") {
                 initials.push(element);
-            } else if repr.starts_with("落韵") {
+            } else if repr.starts_with("韵调") || repr.starts_with("冰韵") {
                 finals.push(element);
                 let chars: Vec<char> = repr.chars().collect();
                 let tone = chars[chars.len() - 1].to_digit(10).unwrap() - 1;

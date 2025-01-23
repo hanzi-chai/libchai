@@ -1,19 +1,21 @@
 //! 编码引擎
 
-use crate::Error;
 use crate::representation::{
     Assemble, AssembleList, Assets, AutoSelect, Code, CodeInfo, CodeSubInfo, Codes, Element, Entry,
     Frequency, Key, KeyMap, Representation, Sequence, MAX_WORD_LENGTH,
 };
+use crate::Error;
 use c3::C3;
 use occupation::Occupation;
 use rustc_hash::{FxHashMap, FxHashSet};
 use simple_occupation::SimpleOccupation;
+use snow2::Snow2;
 use std::cmp::Reverse;
 
 pub mod c3;
 pub mod occupation;
 pub mod simple_occupation;
+pub mod snow2;
 
 /// 一个可编码对象
 #[derive(Debug, Clone)]
@@ -212,6 +214,10 @@ impl Encoder {
         };
         let mut driver: Box<dyn Driver> = if representation.config.info.name == "c3" {
             Box::new(C3::new(representation.get_space()))
+        } else if representation.config.info.name == "冰雪双拼"
+            || representation.config.info.name == "冰雪双拼声介"
+        {
+            Box::new(Snow2::new(representation.get_space()))
         } else if representation.config.encoder.max_length <= 4 {
             Box::new(SimpleOccupation::new(representation.get_space()))
         } else {
@@ -229,7 +235,7 @@ impl Encoder {
     }
 
     pub fn init(&mut self, keymap: &KeyMap) {
-        self.default_driver
+        self.driver
             .run(keymap, &self.config, &mut self.buffer, &[]);
     }
 
