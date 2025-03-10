@@ -16,12 +16,13 @@ use representation::{Entry, Frequency, KeyDistribution, PairEquivalence};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use console_error_panic_hook::set_once;
-use csv::ReaderBuilder;
+use csv::{ReaderBuilder, WriterBuilder};
 use js_sys::Function;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
-use std::fs::{read_to_string, write, create_dir_all};
+use std::fs::{read_to_string, write, OpenOptions};
+use std::io::Write;
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use wasm_bindgen::{prelude::*, JsError};
@@ -78,7 +79,6 @@ pub enum Message {
         save: bool,
     },
     Elapsed(u128),
-    PrepareOutput,
 }
 
 // 输出接口的抽象层
@@ -191,7 +191,7 @@ impl Interface for Web {
 #[command(name = "汉字自动拆分系统")]
 #[command(author, version, about, long_about)]
 #[command(propagate_version = true)]
-pub struct CommandLine {
+pub struct CommandLineArgs {
     #[command(subcommand)]
     pub command: Command,
     /// 方案文件，默认为 config.yaml
@@ -208,6 +208,9 @@ pub struct CommandLine {
     /// 双键速度当量表，默认为 assets 目录下的 pair_equivalence.txt
     #[arg(short, long, value_name = "FILE")]
     pub pair_equivalence: Option<PathBuf>,
+    /// 线程数，默认为 1
+    #[arg(short, long)]
+    pub threads: Option<usize>,
 }
 
 /// 命令行中所有可用的子命令
@@ -221,7 +224,7 @@ pub enum Command {
     Optimize,
 }
 
-impl CommandLine {
+impl CommandLineArgs {
     fn read<I, T>(path: PathBuf) -> T
     where
         I: for<'de> Deserialize<'de>,
@@ -266,10 +269,21 @@ impl CommandLine {
         };
         (config, elements, assets)
     }
+}
+
+pub struct CommandLine {
+    args: CommandLineArgs,
+    output_dir: PathBuf,
+}
+
+impl CommandLine {
+    pub fn new(args: CommandLineArgs, output_dir: PathBuf) -> Self {
+        Self { args, output_dir }
+    }
 
     pub fn write_encode_results(entries: Vec<Entry>) {
         let path = PathBuf::from("code.txt");
-        let mut writer = csv::WriterBuilder::new()
+        let mut writer = WriterBuilder::new()
             .delimiter(b'\t')
             .has_headers(false)
             .from_path(&path)
@@ -291,21 +305,29 @@ impl CommandLine {
     }
 
     pub fn report_metric(metric: Metric) {
-        println!("当前方案评测：");
         print!("{}", metric);
     }
 }
 
 impl Interface for CommandLine {
-    fn post(&self, message: crate::Message) {
-        match message {
-            Message::PrepareOutput => {
-                create_dir_all("output").expect("should be able to create an output directory")
-            }
+    fn post(&self, message: Message) {
+        let mut writer: Box<dyn Write> = if let Some(_) = &self.args.threads {
+            let log_path = self.output_dir.join("log.txt");
+            let file = OpenOptions::new()
+                .create(true) // 如果文件不存在，则创建
+                .append(true) // 追加写入，不覆盖原有内容
+                .open(log_path)
+                .expect("Failed to open file");
+            Box::new(file)
+        } else {
+            Box::new(std::io::stdout())
+        };
+        let result = match message {
             Message::TrialMax {
                 temperature,
                 accept_rate,
-            } => println!(
+            } => writeln!(
+                &mut writer,
                 "若温度为 {:.2e}，接受率为 {:.2}%",
                 temperature,
                 accept_rate * 100.0
@@ -313,20 +335,24 @@ impl Interface for CommandLine {
             Message::TrialMin {
                 temperature,
                 improve_rate,
-            } => println!(
+            } => writeln!(
+                &mut writer,
                 "若温度为 {:.2e}，改进率为 {:.2}%",
                 temperature,
                 improve_rate * 100.0
             ),
-            Message::Parameters { t_max, t_min } => {
-                println!("参数寻找完成，从最高温 {} 降到最低温 {}……", t_max, t_min)
-            }
-            Message::Elapsed(time) => println!("计算一次评测用时：{} μs", time),
+            Message::Parameters { t_max, t_min } => writeln!(
+                &mut writer,
+                "参数寻找完成，从最高温 {} 降到最低温 {}……",
+                t_max, t_min
+            ),
+            Message::Elapsed(time) => writeln!(&mut writer, "计算一次评测用时：{} μs", time),
             Message::Progress {
                 steps,
                 temperature,
                 metric,
-            } => println!(
+            } => writeln!(
+                &mut writer,
                 "已执行 {} 步，当前温度为 {:.2e}，当前评测指标如下：\n{}",
                 steps, temperature, metric
             ),
@@ -337,24 +363,29 @@ impl Interface for CommandLine {
             } => {
                 let time = Local::now();
                 let prefix = time.format("%m-%d+%H_%M_%S_%3f").to_string();
-                let config_path = format!("output/{}.yaml", prefix);
-                let metric_path = format!("output/{}.metric.yaml", prefix);
-                println!(
-                    "{} 系统搜索到了一个更好的方案，评测指标如下：",
-                    time.format("%H:%M:%S")
+                let config_path = self.output_dir.join(format!("{}.yaml", prefix));
+                let metric_path = self.output_dir.join(format!("{}.metric.yaml", prefix));
+                let mut res1 = writeln!(
+                    &mut writer,
+                    "{} 系统搜索到了一个更好的方案，评测指标如下：\n{}",
+                    time.format("%H:%M:%S"),
+                    metric
                 );
-                print!("{}", metric);
                 let config = serde_yaml::to_string(&config).unwrap();
                 let metric = serde_yaml::to_string(&metric).unwrap();
                 if save {
                     write(metric_path, metric).unwrap();
                     write(config_path, config).unwrap();
-                    println!(
+                    let res2 = writeln!(
+                        &mut writer,
                         "方案文件保存于 {}.yaml 中，评测指标保存于 {}.metric.yaml 中",
                         prefix, prefix
                     );
+                    res1 = res1.and(res2);
                 }
+                res1
             }
-        }
+        };
+        result.unwrap();
     }
 }

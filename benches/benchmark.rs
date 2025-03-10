@@ -2,7 +2,7 @@ use chai::config::Config;
 use chai::problems::default::DefaultProblem;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use chai::{CommandLine, Command};
+use chai::{Command, CommandLineArgs};
 use chai::encoder::Encoder;
 use chai::objectives::Objective;
 use chai::problems::Problem;
@@ -13,15 +13,16 @@ use std::path::PathBuf;
 fn simulate_cli_input(name: &str) -> (Config, AssembleList, Assets) {
     let config = format!("examples/{}.yaml", name);
     let elements = format!("examples/{}.txt", name);
-    let cli = CommandLine {
+    let args = CommandLineArgs {
         command: Command::Optimize,
         config: Some(PathBuf::from(config)),
         elements: Some(PathBuf::from(elements)),
         frequency: None,
         key_distribution: None,
         pair_equivalence: None,
+        threads: None,
     };
-    cli.prepare_file()
+    args.prepare_file()
 }
 
 fn process_cli_input(

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use rand::{random, seq::SliceRandom};
+use rand::{random, seq::IndexedRandom};
 
 use crate::{
     objectives::{metric::Metric, Objective},
@@ -107,7 +107,7 @@ impl Snow2 {
     }
 
     pub fn randomly_move_radical(&self, candidate: &mut Solution) -> Vec<Element> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let element: Element = *self.radicals.choose(&mut rng).unwrap();
         let destinations: Vec<char> = "zawevmio;/".chars().collect();
         let key = destinations.choose(&mut rng).unwrap();
@@ -116,7 +116,7 @@ impl Snow2 {
     }
 
     pub fn randomly_move_initial(&self, candidate: &mut Solution) -> Vec<Element> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let element: Element = *self.initials.choose(&mut rng).unwrap();
         let destinations: Vec<char> = "qsxdcrftgbyhnujklp".chars().collect();
         let key = destinations.choose(&mut rng).unwrap();
@@ -125,7 +125,7 @@ impl Snow2 {
     }
 
     pub fn randomly_move_final(&self, candidate: &mut Solution) -> Vec<Element> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let element: Element = *self.finals.choose(&mut rng).unwrap();
         let destinations: Vec<char> = "qazwsxedcrfvtgbyhnujmik,ol.p;/".chars().collect();
         let key = destinations.choose(&mut rng).unwrap();
@@ -134,7 +134,7 @@ impl Snow2 {
     }
 
     pub fn randomly_swap_final(&self, candidate: &mut Solution) -> Vec<Element> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let group1 = *self.final_groups.choose(&mut rng).unwrap();
         let group2 = *self.final_groups.choose(&mut rng).unwrap();
         for (element1, element2) in group1.iter().zip(group2.iter()) {

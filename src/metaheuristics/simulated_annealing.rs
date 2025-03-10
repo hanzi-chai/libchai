@@ -4,9 +4,7 @@ use std::time::Instant;
 
 use super::Metaheuristic;
 use crate::{
-    problems::MutateConfig,
-    problems::{Problem, Solution},
-    Interface, Message,
+    objectives::metric::Metric, problems::{MutateConfig, Problem, Solution}, Interface, Message
 };
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -28,8 +26,7 @@ pub struct SimulatedAnnealing {
 }
 
 impl Metaheuristic for SimulatedAnnealing {
-    fn solve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> Solution {
-        interface.post(Message::PrepareOutput);
+    fn solve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> (Solution, Metric, f64) {
         let schedule = self
             .parameters
             .unwrap_or_else(|| self.autosolve(problem, interface));
@@ -50,7 +47,7 @@ impl SimulatedAnnealing {
         problem: &mut dyn Problem,
         parameters: Schedule,
         interface: &dyn Interface,
-    ) -> Solution {
+    ) -> (Solution, Metric, f64) {
         let mut best_candidate = problem.initialize();
         let mut best_rank = problem.rank(&best_candidate, &None);
         let mut annealing_candidate = best_candidate.clone();
@@ -110,7 +107,7 @@ impl SimulatedAnnealing {
             metric: best_rank.0.clone(),
         });
         problem.update(&best_candidate, &best_rank, true, interface);
-        best_candidate
+        (best_candidate, best_rank.0.clone(), best_rank.1)
     }
 
     fn trial_run(

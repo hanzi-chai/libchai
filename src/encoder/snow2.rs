@@ -98,7 +98,7 @@ impl Driver for Snow2 {
         for (index, p) in buffer.iter_mut().enumerate() {
             let full = &mut p.full;
             let short = &mut p.short;
-            let has_short = index <= 1000;
+            let has_short = index <= 10000;
             let first = full.actual % weights[1];
             let second = full.actual % weights[2];
             if has_short && !self.short_space[first as usize] {
@@ -112,8 +112,6 @@ impl Driver for Snow2 {
                 short.check(full.actual, duplicate);
                 self.short_space[full.actual as usize] = true;
             }
-            // println!("{:?}", short);
         }
-        // exit(0);
     }
 }

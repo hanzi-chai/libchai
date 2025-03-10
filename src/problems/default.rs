@@ -5,8 +5,9 @@ use crate::objectives::metric::Metric;
 use crate::objectives::Objective;
 use crate::representation::{assemble, Element, Key, KeyMap, Representation};
 use crate::{Error, Interface, Message};
-use rand::random;
-use rand::{seq::SliceRandom, thread_rng, Rng};
+use rand::{random, rng};
+use rand::seq::IndexedRandom;
+use rand::Rng;
 use std::collections::{HashMap, HashSet};
 
 use super::{MutateConfig, Problem, Solution};
@@ -170,9 +171,9 @@ impl DefaultProblem {
     fn get_movable_element(&self) -> usize {
         let radix = self.representation.radix as usize;
         let elements = self.representation.initial.len();
-        let mut rng = thread_rng();
+        let mut rng = rng();
         loop {
-            let key = rng.gen_range(radix..elements);
+            let key = rng.random_range(radix..elements);
             if !self.fixed.contains(&key) {
                 return key;
             }
@@ -182,9 +183,9 @@ impl DefaultProblem {
     fn get_swappable_element(&self) -> usize {
         let radix = self.representation.radix as usize;
         let elements = self.representation.initial.len();
-        let mut rng = thread_rng();
+        let mut rng = rng();
         loop {
-            let key = rng.gen_range(radix..elements);
+            let key = rng.random_range(radix..elements);
             if !self.fixed.contains(&key) {
                 return key;
             }
@@ -212,7 +213,7 @@ impl DefaultProblem {
     }
 
     pub fn constrained_full_key_swap(&self, keymap: &mut KeyMap) -> Vec<Element> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         // 寻找一个可移动元素和一个它的可行移动位置，然后把这两个键上的所有元素交换
         // 这样交换不成也至少能移动一次
         let movable_element = self.get_movable_element();
@@ -241,7 +242,7 @@ impl DefaultProblem {
     }
 
     pub fn constrained_random_move(&self, keymap: &mut KeyMap) -> Vec<Element> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let movable_element = self.get_movable_element();
         let current = keymap[movable_element];
         let destinations = self

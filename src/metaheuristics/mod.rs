@@ -2,8 +2,7 @@
 //!
 
 use crate::{
-    problems::{Problem, Solution},
-    Interface,
+    objectives::metric::Metric, problems::{Problem, Solution}, Interface
 };
 pub mod genetic;
 pub mod simulated_annealing;
@@ -30,5 +29,5 @@ pub static mut TIMER: Timer = Timer {
 };
 
 pub trait Metaheuristic {
-    fn solve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> Solution;
+    fn solve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> (Solution, Metric, f64);
 }

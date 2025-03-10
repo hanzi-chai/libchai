@@ -6,7 +6,7 @@ pkg/
 wasm-pack.log
 assets
 examples
-output
+output-*
 package
 *.yaml
 *.txt
