@@ -1,17 +1,18 @@
 pub mod config;
-pub mod encoder;
+pub mod encoders;
 pub mod metaheuristics;
 pub mod objectives;
 pub mod problems;
 pub mod representation;
 
 use config::{Config, ObjectiveConfig, OptimizationConfig, SolverConfig};
-use encoder::Encoder;
+use encoders::default::DefaultEncoder;
 use metaheuristics::Metaheuristic;
+use objectives::default::DefaultObjective;
 use objectives::{metric::Metric, Objective};
 use problems::default::DefaultProblem;
 use representation::{AssembleList, Assets, Representation};
-use representation::{Entry, Frequency, KeyDistribution, PairEquivalence};
+use representation::{Entry, KeyDistribution, PairEquivalence};
 
 use chrono::Local;
 use clap::{Parser, Subcommand};
@@ -21,12 +22,13 @@ use js_sys::Function;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
-use std::fs::{read_to_string, write, OpenOptions};
+use std::fs::{create_dir_all, read_to_string, write, OpenOptions};
 use std::io::Write;
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use wasm_bindgen::{prelude::*, JsError};
 
+/// 错误类型
 #[derive(Debug, Clone)]
 pub struct Error {
     pub message: String,
@@ -52,6 +54,7 @@ impl From<Error> for JsError {
     }
 }
 
+/// 向用户反馈的消息类型
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[skip_serializing_none]
@@ -83,7 +86,7 @@ pub enum Message {
 
 // 输出接口的抽象层
 //
-// 定义了一个特征，指定了所有在退火计算的过程中需要向用户反馈的数据。命令行界面、Web 界面只需要各自实现这些方法，就可向用户报告各种用户数据，实现方式可以很不一样。
+// 命令行界面、Web 界面只需要各自实现 post 方法，就可向用户报告各种用户数据
 pub trait Interface {
     fn post(&self, message: Message);
 }
@@ -148,10 +151,11 @@ impl Web {
             metaheuristic: None,
         });
         let representation = Representation::new(config)?;
-        let mut encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
-        let codes = encoder.encode(&representation.initial, &representation);
-        let mut objective = Objective::new(&representation, encoder, self.assets.clone())?;
-        let (metric, _) = objective.evaluate(&representation.initial, &None);
+        let mut encoder = DefaultEncoder::new(&representation, self.info.clone())?;
+        let codes = encoder.encode(&representation);
+        let mut objective =
+            DefaultObjective::new(&representation, self.assets.clone(), codes.len())?;
+        let (metric, _) = objective.evaluate(&mut encoder, &representation.initial, &None);
         Ok(to_value(&(codes, metric))?)
     }
 
@@ -165,9 +169,10 @@ impl Web {
             .as_ref()
             .unwrap();
         let representation = Representation::new(self.config.clone())?;
-        let encoder = Encoder::new(&representation, self.info.clone(), &self.assets)?;
-        let objective = Objective::new(&representation, encoder, self.assets.clone())?;
-        let mut problem = DefaultProblem::new(representation, objective)?;
+        let encoder = DefaultEncoder::new(&representation, self.info.clone())?;
+        let objective =
+            DefaultObjective::new(&representation, self.assets.clone(), self.info.len())?;
+        let mut problem = DefaultProblem::new(representation, objective, encoder)?;
         match solver {
             SolverConfig::SimulatedAnnealing(config) => {
                 config.solve(&mut problem, self);
@@ -186,22 +191,19 @@ impl Interface for Web {
     }
 }
 
-/// 封装了全部命令行参数，并采用 `derive(Parser)` 来生成解析代码。
+/// chai 是一个使用 Rust 编写的命令行程序。用户提供拆分表以及方案配置文件，本程序能够生成编码并评测一系列指标，以及基于退火算法优化元素的布局。
 #[derive(Parser, Clone)]
 #[command(name = "汉字自动拆分系统")]
 #[command(author, version, about, long_about)]
 #[command(propagate_version = true)]
-pub struct CommandLineArgs {
+pub struct Args {
     #[command(subcommand)]
     pub command: Command,
     /// 方案文件，默认为 config.yaml
     pub config: Option<PathBuf>,
-    /// 拆分表，默认为 elements.txt
+    /// 频率序列表，默认为 elements.txt
     #[arg(short, long, value_name = "FILE")]
     pub elements: Option<PathBuf>,
-    /// 词频表，默认为 assets 目录下的 frequency.txt
-    #[arg(short, long, value_name = "FILE")]
-    pub frequency: Option<PathBuf>,
     /// 单键用指分布表，默认为 assets 目录下的 key_distribution.txt
     #[arg(short, long, value_name = "FILE")]
     pub key_distribution: Option<PathBuf>,
@@ -218,13 +220,25 @@ pub struct CommandLineArgs {
 pub enum Command {
     /// 使用方案文件和拆分表计算出字词编码并统计各类评测指标
     Encode,
-    /// 评测当前方案的各项指标
-    Evaluate,
     /// 基于拆分表和方案文件中的配置优化元素布局
     Optimize,
 }
 
-impl CommandLineArgs {
+pub struct CommandLine {
+    pub args: Args,
+    pub output_dir: PathBuf,
+}
+
+impl CommandLine {
+    pub fn new(args: Args, maybe_output_dir: Option<PathBuf>) -> Self {
+        let output_dir = maybe_output_dir.unwrap_or_else(|| {
+            let time = Local::now().format("%m-%d+%H_%M_%S").to_string();
+            PathBuf::from(format!("output-{}", time))
+        });
+        create_dir_all(output_dir.clone()).unwrap();
+        Self { args, output_dir }
+    }
+
     fn read<I, T>(path: PathBuf) -> T
     where
         I: for<'de> Deserialize<'de>,
@@ -240,14 +254,13 @@ impl CommandLineArgs {
     }
 
     pub fn prepare_file(&self) -> (Config, AssembleList, Assets) {
-        let Self {
+        let Args {
             config,
             elements,
-            frequency,
             key_distribution,
             pair_equivalence,
             ..
-        } = self.clone();
+        } = self.args.clone();
         let config_path = config.unwrap_or(PathBuf::from("config.yaml"));
         let config_content = read_to_string(&config_path)
             .unwrap_or_else(|_| panic!("文件 {} 不存在", config_path.display()));
@@ -256,33 +269,19 @@ impl CommandLineArgs {
         let elements: AssembleList = Self::read(elements_path);
 
         let assets_dir = Path::new("assets");
-        let f_path = frequency.unwrap_or(assets_dir.join("frequency.txt"));
-        let frequency: Frequency = Self::read(f_path);
         let keq_path = key_distribution.unwrap_or(assets_dir.join("key_distribution.txt"));
         let key_distribution: KeyDistribution = Self::read(keq_path);
         let peq_path = pair_equivalence.unwrap_or(assets_dir.join("pair_equivalence.txt"));
         let pair_equivalence: PairEquivalence = Self::read(peq_path);
         let assets = Assets {
-            frequency,
             key_distribution,
             pair_equivalence,
         };
         (config, elements, assets)
     }
-}
 
-pub struct CommandLine {
-    args: CommandLineArgs,
-    output_dir: PathBuf,
-}
-
-impl CommandLine {
-    pub fn new(args: CommandLineArgs, output_dir: PathBuf) -> Self {
-        Self { args, output_dir }
-    }
-
-    pub fn write_encode_results(entries: Vec<Entry>) {
-        let path = PathBuf::from("code.txt");
+    pub fn write_encode_results(&self, entries: Vec<Entry>) {
+        let path = self.output_dir.join("编码.txt");
         let mut writer = WriterBuilder::new()
             .delimiter(b'\t')
             .has_headers(false)
@@ -304,8 +303,16 @@ impl CommandLine {
         println!("已完成编码，结果保存在 {} 中", path.clone().display());
     }
 
-    pub fn report_metric(metric: Metric) {
+    pub fn report_metric(&self, metric: Metric) {
+        let path = self.output_dir.join("评测指标.yaml");
         print!("{}", metric);
+        let metric_str = serde_yaml::to_string(&metric).unwrap();
+        write(&path, metric_str).unwrap();
+    }
+
+    pub fn make_child(&self, index: usize) -> CommandLine {
+        let child_dir = self.output_dir.join(format!("{}", index));
+        CommandLine::new(self.args.clone(), Some(child_dir))
     }
 }
 

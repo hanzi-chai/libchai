@@ -1,42 +1,41 @@
-//! 默认优化问题。
-
+use super::{MutateConfig, Problem};
 use crate::config::{AtomicConstraint, MappedKey};
+use crate::encoders::Encoder;
 use crate::objectives::metric::Metric;
 use crate::objectives::Objective;
-use crate::representation::{assemble, Element, Key, KeyMap, Representation};
-use crate::{Error, Interface, Message};
-use rand::{random, rng};
+use crate::representation::{assemble, Key, Representation};
+use crate::representation::{Element, KeyMap};
+use crate::Interface;
+use crate::{Error, Message};
 use rand::seq::IndexedRandom;
 use rand::Rng;
+use rand::{random, rng};
 use std::collections::{HashMap, HashSet};
 
-use super::{MutateConfig, Problem, Solution};
-
-pub struct DefaultProblem {
+pub struct DefaultProblem<E: Encoder, O: Objective> {
     representation: Representation,
-    objective: Objective,
+    objective: O,
+    encoder: E,
     fixed: HashSet<Element>,
     narrowed: HashMap<Element, Vec<Key>>,
     alphabet: Vec<Key>,
 }
 
-impl Problem for DefaultProblem {
-    fn initialize(&mut self) -> Solution {
+impl<E: Encoder, O: Objective> Problem for DefaultProblem<E, O> {
+    fn initialize(&mut self) -> KeyMap {
         self.representation.initial.clone()
     }
 
-    fn rank(
-        &mut self,
-        candidate: &Solution,
-        moved_elements: &Option<Vec<Element>>,
-    ) -> (Metric, f64) {
-        let (metric, loss) = self.objective.evaluate(candidate, moved_elements);
+    fn rank(&mut self, candidate: &KeyMap, moved_elements: &Option<Vec<Element>>) -> (Metric, f64) {
+        let (metric, loss) = self
+            .objective
+            .evaluate(&mut self.encoder, candidate, moved_elements);
         (metric, loss)
     }
 
     fn update(
         &self,
-        candidate: &Solution,
+        candidate: &KeyMap,
         rank: &(Metric, f64),
         save: bool,
         interface: &dyn Interface,
@@ -49,7 +48,7 @@ impl Problem for DefaultProblem {
         })
     }
 
-    fn mutate(&mut self, candidate: &mut Solution, config: &MutateConfig) -> Vec<Element> {
+    fn mutate(&mut self, candidate: &mut KeyMap, config: &MutateConfig) -> Vec<Element> {
         let sum = config.random_move + config.random_swap + config.random_full_key_swap;
         let ratio1 = config.random_move / sum;
         let ratio2 = (config.random_move + config.random_swap) / sum;
@@ -65,8 +64,8 @@ impl Problem for DefaultProblem {
 }
 
 // 默认的问题实现，使用配置文件中的约束来定义各种算子
-impl DefaultProblem {
-    pub fn new(representation: Representation, objective: Objective) -> Result<Self, Error> {
+impl<E: Encoder, O: Objective> DefaultProblem<E, O> {
+    pub fn new(representation: Representation, objective: O, encoder: E) -> Result<Self, Error> {
         let (fixed, narrowed) = Self::make_constraints(&representation)?;
         let alphabet: Vec<_> = representation
             .config
@@ -78,6 +77,7 @@ impl DefaultProblem {
         Ok(Self {
             representation,
             objective,
+            encoder,
             fixed,
             narrowed,
             alphabet,

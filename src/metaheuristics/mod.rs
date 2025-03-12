@@ -1,9 +1,7 @@
 //! 优化问题的求解方法。
 //!
 
-use crate::{
-    objectives::metric::Metric, problems::{Problem, Solution}, Interface
-};
+use crate::{objectives::metric::Metric, problems::Problem, representation::KeyMap, Interface};
 pub mod genetic;
 pub mod simulated_annealing;
 
@@ -28,6 +26,12 @@ pub static mut TIMER: Timer = Timer {
     objective_accept: 0,
 };
 
+pub struct Solution {
+    pub keymap: KeyMap,
+    pub metric: Metric,
+    pub score: f64,
+}
+
 pub trait Metaheuristic {
-    fn solve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> (Solution, Metric, f64);
+    fn solve<P: Problem, I: Interface>(&self, problem: &mut P, interface: &I) -> Solution;
 }

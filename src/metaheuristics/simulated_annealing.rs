@@ -2,9 +2,11 @@
 
 use std::time::Instant;
 
-use super::Metaheuristic;
+use super::{Metaheuristic, Solution};
 use crate::{
-    objectives::metric::Metric, problems::{MutateConfig, Problem, Solution}, Interface, Message
+    problems::{MutateConfig, Problem},
+    representation::KeyMap,
+    Interface, Message,
 };
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -26,7 +28,7 @@ pub struct SimulatedAnnealing {
 }
 
 impl Metaheuristic for SimulatedAnnealing {
-    fn solve(&self, problem: &mut dyn Problem, interface: &dyn Interface) -> (Solution, Metric, f64) {
+    fn solve<P: Problem, I: Interface>(&self, problem: &mut P, interface: &I) -> Solution {
         let schedule = self
             .parameters
             .unwrap_or_else(|| self.autosolve(problem, interface));
@@ -47,13 +49,17 @@ impl SimulatedAnnealing {
         problem: &mut dyn Problem,
         parameters: Schedule,
         interface: &dyn Interface,
-    ) -> (Solution, Metric, f64) {
+    ) -> Solution {
         let mut best_candidate = problem.initialize();
         let mut best_rank = problem.rank(&best_candidate, &None);
         let mut annealing_candidate = best_candidate.clone();
         let mut annealing_rank = best_rank.clone();
         let mut last_diff = vec![];
-        let Schedule { t_max, t_min, steps } = parameters;
+        let Schedule {
+            t_max,
+            t_min,
+            steps,
+        } = parameters;
         let start = Instant::now();
         let update_interval = self.update_interval.unwrap_or(1000);
         let method = self.search_method.as_ref().unwrap_or(&DEFAULT_MUTATE);
@@ -107,16 +113,20 @@ impl SimulatedAnnealing {
             metric: best_rank.0.clone(),
         });
         problem.update(&best_candidate, &best_rank, true, interface);
-        (best_candidate, best_rank.0.clone(), best_rank.1)
+        Solution {
+            keymap: best_candidate,
+            metric: best_rank.0.clone(),
+            score: start.elapsed().as_secs_f64(),
+        }
     }
 
     fn trial_run(
         &self,
         problem: &mut dyn Problem,
-        from: Solution,
+        from: KeyMap,
         temperature: f64,
         steps: usize,
-    ) -> (Solution, f64, f64) {
+    ) -> (KeyMap, f64, f64) {
         let mut candidate = from.clone();
         let (_, mut energy) = problem.rank(&candidate, &None);
         let mut accepts = 0;
@@ -203,6 +213,10 @@ impl SimulatedAnnealing {
         }
         let t_min = temperature;
         interface.post(Message::Parameters { t_max, t_min });
-        Schedule { t_max, t_min, steps: 1000 }
+        Schedule {
+            t_max,
+            t_min,
+            steps: 1000,
+        }
     }
 }

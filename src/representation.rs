@@ -2,9 +2,9 @@
 
 use crate::{
     config::{Config, Mapped, MappedKey, Scheme, ShortCodeConfig},
-    encoder::CompiledScheme,
+    encoders::CompiledScheme,
     Error,
-    objectives::fingering::get_fingering_types,
+    objectives::metric::get_fingering_types,
 };
 use regex::Regex;
 use rustc_hash::FxHashMap;
@@ -17,7 +17,7 @@ pub const MAX_WORD_LENGTH: usize = 10;
 pub struct Assemble {
     pub name: String,
     pub sequence: String,
-    pub importance: u64,
+    pub frequency: u64,
     #[serde(default = "Assemble::suggested_level_default")]
     pub level: u64,
 }
@@ -32,7 +32,6 @@ pub type AssembleList = Vec<Assemble>;
 pub type WordList = Vec<String>;
 pub type KeyDistribution = HashMap<char, DistributionLoss>;
 pub type PairEquivalence = HashMap<String, f64>;
-pub type Frequency = HashMap<String, u64>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DistributionLoss {
@@ -43,7 +42,6 @@ pub struct DistributionLoss {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Assets {
-    pub frequency: Frequency,
     pub key_distribution: KeyDistribution,
     pub pair_equivalence: PairEquivalence,
 }

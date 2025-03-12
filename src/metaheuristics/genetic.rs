@@ -1,8 +1,7 @@
 //! 遗传算法
 
-use crate::{objectives::metric::Metric, problems::{Problem, Solution}, Interface};
-
-use super::Metaheuristic;
+use super::{Metaheuristic, Solution};
+use crate::{problems::Problem, Interface};
 
 pub struct Genetic {
     pub population_size: usize,
@@ -12,7 +11,7 @@ pub struct Genetic {
 }
 
 impl Metaheuristic for Genetic {
-    fn solve(&self, _problem: &mut dyn Problem, _interface: &dyn Interface) -> (Solution, Metric, f64) {
+    fn solve<P: Problem, I: Interface>(&self, _problem: &mut P, _interface: &I) -> Solution {
         todo!()
     }
 }

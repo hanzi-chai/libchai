@@ -12,7 +12,7 @@ use crate::representation::DistributionLoss;
 use crate::representation::MAX_COMBINATION_LENGTH;
 use std::iter::zip;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Cache {
     partial_weights: PartialWeights,
     total_count: usize,
@@ -34,9 +34,9 @@ pub struct Cache {
     radix: u64,
 }
 
-impl super::Cache for Cache {
+impl Cache {
     #[inline(always)]
-    fn process(
+    pub fn process(
         &mut self,
         index: usize,
         frequency: u64,
@@ -54,7 +54,7 @@ impl super::Cache for Cache {
         self.accumulate(index, frequency, c.p_actual, c.p_duplicate, parameters, -1);
     }
 
-    fn finalize(&self, parameters: &Parameters) -> (PartialMetric, f64) {
+    pub fn finalize(&self, parameters: &Parameters) -> (PartialMetric, f64) {
         let partial_weights = &self.partial_weights;
         let ideal_distribution = &parameters.ideal_distribution;
         // 初始化返回值和标量化的损失函数
