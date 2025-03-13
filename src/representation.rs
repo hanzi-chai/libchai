@@ -2,34 +2,32 @@
 
 use crate::{
     config::{Config, Mapped, MappedKey, Scheme, ShortCodeConfig},
-    encoders::CompiledScheme,
-    Error,
+    encoders::{CompiledScheme, Encodable},
     objectives::metric::get_fingering_types,
+    Error,
 };
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{cmp::Reverse, collections::HashMap};
 
 pub const MAX_WORD_LENGTH: usize = 10;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Assemble {
+pub struct RawEncodable {
     pub name: String,
     pub sequence: String,
     pub frequency: u64,
-    #[serde(default = "Assemble::suggested_level_default")]
+    #[serde(default = "RawEncodable::suggested_level_default")]
     pub level: u64,
 }
 
-impl Assemble {
+impl RawEncodable {
     const fn suggested_level_default() -> u64 {
         u64::MAX
     }
 }
 
-pub type AssembleList = Vec<Assemble>;
-pub type WordList = Vec<String>;
 pub type KeyDistribution = HashMap<char, DistributionLoss>;
 pub type PairEquivalence = HashMap<String, f64>;
 
@@ -42,6 +40,7 @@ pub struct DistributionLoss {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Assets {
+    pub encodables: Vec<RawEncodable>,
     pub key_distribution: KeyDistribution,
     pub pair_equivalence: PairEquivalence,
 }
@@ -58,46 +57,46 @@ pub type Code = u64;
 /// 编码信息
 #[derive(Clone, Debug, Copy, Default)]
 pub struct CodeSubInfo {
-    pub code: Code, // 原始编码
-    pub rank: u8, // 原始编码上的选重位置
-    pub actual: Code, // 实际编码
-    pub duplicate: bool, // 实际编码是否算作重码
-    pub p_actual: Code, // 前一个实际编码
+    pub primitive: Code,   // 原始编码
+    pub rank: u8,          // 原始编码上的选重位置
+    pub code: Code,        // 实际编码
+    pub duplicate: bool,   // 实际编码是否算作重码
+    pub p_code: Code,      // 前一个实际编码
     pub p_duplicate: bool, // 前一个实际编码是否算作重码
     pub has_changed: bool, // 编码是否发生了变化
 }
 
 impl CodeSubInfo {
     #[inline(always)]
-    pub fn check(&mut self, actual: Code, duplicate: bool) {
-        if self.actual == actual && self.duplicate == duplicate {
+    pub fn set(&mut self, code: Code, duplicate: bool) {
+        if self.code == code && self.duplicate == duplicate {
             return;
         }
         self.has_changed = true;
-        self.p_actual = self.actual;
+        self.p_code = self.code;
         self.p_duplicate = self.duplicate;
-        self.actual = actual;
+        self.code = code;
         self.duplicate = duplicate;
     }
 
     #[inline(always)]
-    pub fn check_actual(&mut self, actual: Code) {
-        if self.actual == actual {
+    pub fn set_code(&mut self, code: Code) {
+        if self.code == code {
             return;
         }
         self.has_changed = true;
-        self.p_actual = self.actual;
+        self.p_code = self.code;
         self.p_duplicate = self.duplicate;
-        self.actual = actual;
+        self.code = code;
     }
 
     #[inline(always)]
-    pub fn check_duplicate(&mut self, duplicate: bool) {
+    pub fn set_duplicate(&mut self, duplicate: bool) {
         if self.duplicate == duplicate {
             return;
         }
         self.has_changed = true;
-        self.p_actual = self.actual;
+        self.p_code = self.code;
         self.p_duplicate = self.duplicate;
         self.duplicate = duplicate;
     }
@@ -112,11 +111,22 @@ pub struct CodeInfo {
     pub short: CodeSubInfo,
 }
 
+impl CodeInfo {
+    pub fn new(encodable: &Encodable) -> Self {
+        Self {
+            length: encodable.length,
+            frequency: encodable.frequency,
+            full: CodeSubInfo::default(),
+            short: CodeSubInfo::default(),
+        }
+    }
+}
+
 /// 一组编码
 pub type Codes = Vec<CodeInfo>;
 
 /// 按键用无符号整数表示
-pub type Key = usize;
+pub type Key = u64;
 
 /// 元素映射用一个数组表示，下标是元素
 pub type KeyMap = Vec<Key>;
@@ -205,7 +215,7 @@ impl Representation {
     pub fn transform_alphabet(config: &Config) -> Result<AlphabetInfo, Error> {
         let mut key_repr: FxHashMap<char, Key> = FxHashMap::default();
         let mut repr_key: FxHashMap<Key, char> = FxHashMap::default();
-        let mut index = 1_usize;
+        let mut index = 1;
         for key in config.form.alphabet.chars() {
             if key_repr.contains_key(&key) {
                 return Err("编码键有重复！".into());
@@ -244,14 +254,14 @@ impl Representation {
         radix: u64,
     ) -> Result<KeymapInfo, Error> {
         let mut keymap: KeyMap = Vec::new();
-        let mut element_repr: FxHashMap<String, usize> = FxHashMap::default();
-        let mut repr_element: FxHashMap<usize, String> = FxHashMap::default();
+        let mut element_repr: FxHashMap<String, Element> = FxHashMap::default();
+        let mut repr_element: FxHashMap<Element, String> = FxHashMap::default();
         for x in 0..radix {
-            keymap.push(x as usize);
+            keymap.push(x);
         }
         for (key, value) in key_repr {
-            element_repr.insert(key.to_string(), *value);
-            repr_element.insert(*value, key.to_string());
+            element_repr.insert(key.to_string(), *value as usize);
+            repr_element.insert(*value as usize, key.to_string());
         }
         for (element, mapped) in &config.form.mapping {
             let normalized = mapped.normalize();
@@ -274,31 +284,68 @@ impl Representation {
     }
 
     /// 读取拆分表，将拆分序列中的每一个元素按照先前确定的元素 -> 整数映射来转换为整数向量
-    pub fn transform_elements(&self, assemble: Assemble) -> Result<Sequence, Error> {
-        let max_length = self.config.encoder.max_length;
-        let name = assemble.name;
-        let raw_sequence: Vec<_> = assemble.sequence.split(' ').collect();
-        let mut sequence = Sequence::new();
-        let length = raw_sequence.len();
-        if length > max_length {
-            return Err(format!(
-                "编码对象「{name}」包含的元素数量为 {length}，超过了最大码长 {max_length}"
-            )
-            .into());
-        }
-        for element in raw_sequence {
-            if let Some(number) = self.element_repr.get(element) {
-                sequence.push(*number);
-            } else {
+    pub fn transform_encodables(
+        &self,
+        raw_encodables: Vec<RawEncodable>,
+    ) -> Result<Vec<Encodable>, Error> {
+        let mut encodables = Vec::new();
+        for (index, assemble) in raw_encodables.into_iter().enumerate() {
+            let RawEncodable {
+                name,
+                frequency,
+                level,
+                sequence,
+            } = assemble;
+            let max_length = self.config.encoder.max_length;
+            let raw_sequence: Vec<_> = sequence.split(' ').collect();
+            let mut sequence = Sequence::new();
+            let length = raw_sequence.len();
+            if length > max_length {
                 return Err(format!(
-                    "编码对象「{name}」包含的元素「{element}」无法在键盘映射中找到"
+                    "编码对象「{name}」包含的元素数量为 {length}，超过了最大码长 {max_length}"
                 )
                 .into());
             }
+            for element in raw_sequence {
+                if let Some(number) = self.element_repr.get(element) {
+                    sequence.push(*number);
+                } else {
+                    return Err(format!(
+                        "编码对象「{name}」包含的元素「{element}」无法在键盘映射中找到"
+                    )
+                    .into());
+                }
+            }
+            encodables.push(Encodable {
+                name: name.clone(),
+                length: name.chars().count(),
+                sequence,
+                frequency,
+                level,
+                index,
+            });
         }
-        Ok(sequence)
+
+        encodables.sort_by_key(|x| Reverse(x.frequency));
+        Ok(encodables)
     }
 
+    pub fn export_code(&self, buffer: &Codes, encodables: &Vec<Encodable>) -> Vec<Entry> {
+        let mut entries: Vec<(usize, Entry)> = Vec::new();
+        let recover = |code: Code| self.repr_code(code).iter().collect();
+        for (index, encodable) in encodables.iter().enumerate() {
+            let entry = Entry {
+                name: encodable.name.clone(),
+                full: recover(buffer[index].full.primitive),
+                full_rank: buffer[index].full.rank,
+                short: recover(buffer[index].short.primitive),
+                short_rank: buffer[index].short.rank,
+            };
+            entries.push((encodable.index, entry));
+        }
+        entries.sort_by_key(|x| x.0);
+        entries.into_iter().map(|x| x.1).collect()
+    }
     /// 根据一个计算中得到的元素布局来生成一份新的配置文件，其余内容不变直接复制过来
     pub fn update_config(&self, candidate: &KeyMap) -> Config {
         let mut new_config = self.config.clone();
@@ -347,7 +394,7 @@ impl Representation {
             if k == 0 {
                 continue;
             }
-            let char = self.repr_key.get(&(k as usize)).unwrap(); // 从内部表示转换为字符，不需要检查
+            let char = self.repr_key.get(&k).unwrap(); // 从内部表示转换为字符，不需要检查
             chars.push(*char);
         }
         chars
@@ -369,7 +416,7 @@ impl Representation {
                 if x == 0 {
                     return default_loss.clone();
                 }
-                let key = self.repr_key.get(&(x as usize)).unwrap();
+                let key = self.repr_key.get(&x).unwrap();
                 key_distribution.get(key).unwrap_or(&default_loss).clone()
             })
             .collect();

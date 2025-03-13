@@ -1,40 +1,29 @@
 use chai::config::Config;
-use chai::problems::default::DefaultProblem;
-use criterion::{criterion_group, criterion_main, Criterion};
-
-use chai::{Command, CommandLine, Args};
 use chai::encoders::default::DefaultEncoder;
 use chai::objectives::default::DefaultObjective;
+use chai::problems::default::DefaultProblem;
 use chai::problems::Problem;
-use chai::representation::{AssembleList, Assets};
-use chai::{Error, representation::Representation};
-use std::path::PathBuf;
+use chai::representation::Assets;
+use chai::{representation::Representation, Error};
+use chai::{Args, CommandLine};
+use criterion::{criterion_group, criterion_main, Criterion};
 
-fn simulate_cli_input(name: &str) -> (Config, AssembleList, Assets) {
-    let config = format!("examples/{}.yaml", name);
-    let elements = format!("examples/{}.txt", name);
-    let args = Args {
-        command: Command::Optimize,
-        config: Some(PathBuf::from(config)),
-        elements: Some(PathBuf::from(elements)),
-        key_distribution: None,
-        pair_equivalence: None,
-        threads: None,
-    };
-    let cli = CommandLine::new(args, None);
-    cli.prepare_file()
+fn simulate_cli_input(name: &str) -> (Config, Assets) {
+    let args = Args::生成(name);
+    CommandLine::new(args, None).prepare_file()
 }
 
-fn process_cli_input(
-    config: Config,
-    elements: AssembleList,
-    assets: Assets,
-    b: &mut Criterion,
-) -> Result<(), Error> {
+fn process_cli_input(config: Config, assets: Assets, b: &mut Criterion) -> Result<(), Error> {
     let representation = Representation::new(config)?;
-    let length = elements.len();
-    let encoder = DefaultEncoder::new(&representation, elements)?;
-    let objective = DefaultObjective::new(&representation, assets, length)?;
+    let Assets {
+        encodables,
+        key_distribution,
+        pair_equivalence,
+    } = assets;
+    let length = encodables.len();
+    let encoder = DefaultEncoder::new(&representation, encodables)?;
+    let objective =
+        DefaultObjective::new(&representation, key_distribution, pair_equivalence, length)?;
     let mut problem = DefaultProblem::new(representation, objective, encoder)?;
     let candidate = problem.initialize();
     b.bench_function("Evaluation", |b| {
@@ -46,28 +35,29 @@ fn process_cli_input(
 }
 
 fn length_3(b: &mut Criterion) {
-    let (config, resource, assets) = simulate_cli_input("easy");
-    process_cli_input(config, resource, assets, b).unwrap();
+    let (config, assets) = simulate_cli_input("easy");
+    process_cli_input(config, assets, b).unwrap();
 }
 
 fn length_4(b: &mut Criterion) {
-    let (config, resource, assets) = simulate_cli_input("mswb");
-    process_cli_input(config, resource, assets, b).unwrap();
+    let (config, assets) = simulate_cli_input("mswb");
+    process_cli_input(config, assets, b).unwrap();
 }
 
 fn length_4_char_only(b: &mut Criterion) {
-    let (mut config, resource, assets) = simulate_cli_input("mswb");
-    let resource = resource
+    let (mut config, mut assets) = simulate_cli_input("mswb");
+    assets.encodables = assets
+        .encodables
         .into_iter()
         .filter(|x| x.name.chars().count() == 1)
         .collect();
     config.optimization.as_mut().unwrap().objective.words_short = None;
-    process_cli_input(config, resource, assets, b).unwrap();
+    process_cli_input(config, assets, b).unwrap();
 }
 
 fn length_6(b: &mut Criterion) {
-    let (config, resource, assets) = simulate_cli_input("snow");
-    process_cli_input(config, resource, assets, b).unwrap();
+    let (config, assets) = simulate_cli_input("snow");
+    process_cli_input(config, assets, b).unwrap();
 }
 
 criterion_group!(benches, length_4, length_4_char_only, length_6);

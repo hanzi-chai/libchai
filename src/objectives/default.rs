@@ -1,7 +1,7 @@
 
 use crate::config::PartialWeights;
 use crate::encoders::Encoder;
-use crate::representation::{Assets, Element, KeyMap, Representation};
+use crate::representation::{Element, KeyDistribution, KeyMap, PairEquivalence, Representation};
 use crate::Error;
 use super::cache::Cache;
 use super::metric::Metric;
@@ -33,12 +33,13 @@ impl DefaultObjective {
     /// 通过传入配置表示、编码器和共用资源来构造一个目标函数
     pub fn new(
         representation: &Representation,
-        assets: Assets,
+        key_distribution: KeyDistribution,
+        pair_equivalence: PairEquivalence,
         total_count: usize,
     ) -> Result<Self, Error> {
         let ideal_distribution =
-            representation.generate_ideal_distribution(&assets.key_distribution);
-        let pair_equivalence = representation.transform_pair_equivalence(&assets.pair_equivalence);
+            representation.generate_ideal_distribution(&key_distribution);
+        let pair_equivalence = representation.transform_pair_equivalence(&pair_equivalence);
         let fingering_types = representation.transform_fingering_types();
         let config = representation
             .config
@@ -76,11 +77,11 @@ impl Objective for DefaultObjective {
         candidate: &KeyMap,
         moved_elements: &Option<Vec<Element>>,
     ) -> (Metric, f64) {
-        encoder.run(candidate, moved_elements);
+        let buffer = encoder.encode(candidate, moved_elements);
         let parameters = &self.parameters;
 
         // 开始计算指标
-        for (index, code_info) in encoder.get_buffer().iter_mut().enumerate() {
+        for (index, code_info) in buffer.iter_mut().enumerate() {
             let frequency = code_info.frequency;
             let bucket = if code_info.length == 1 {
                 &mut self.buckets[0]

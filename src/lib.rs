@@ -7,11 +7,12 @@ pub mod representation;
 
 use config::{Config, ObjectiveConfig, OptimizationConfig, SolverConfig};
 use encoders::default::DefaultEncoder;
+use encoders::Encoder;
 use metaheuristics::Metaheuristic;
 use objectives::default::DefaultObjective;
 use objectives::{metric::Metric, Objective};
 use problems::default::DefaultProblem;
-use representation::{AssembleList, Assets, Representation};
+use representation::{Assets, RawEncodable, Representation};
 use representation::{Entry, KeyDistribution, PairEquivalence};
 
 use chrono::Local;
@@ -95,7 +96,6 @@ pub trait Interface {
 pub struct Web {
     post_message: Function,
     config: Config,
-    info: AssembleList,
     assets: Assets,
 }
 
@@ -112,28 +112,20 @@ impl Web {
     pub fn new(
         post_message: Function,
         js_config: JsValue,
-        js_info: JsValue,
         js_assets: JsValue,
     ) -> Result<Web, JsError> {
         set_once();
         let config: Config = from_value(js_config)?;
-        let info: AssembleList = from_value(js_info)?;
         let assets: Assets = from_value(js_assets)?;
         Ok(Self {
             post_message,
             config,
-            info,
             assets,
         })
     }
 
     pub fn update_config(&mut self, js_config: JsValue) -> Result<(), JsError> {
         self.config = from_value(js_config)?;
-        Ok(())
-    }
-
-    pub fn update_info(&mut self, js_info: JsValue) -> Result<(), JsError> {
-        self.info = from_value(js_info)?;
         Ok(())
     }
 
@@ -151,10 +143,20 @@ impl Web {
             metaheuristic: None,
         });
         let representation = Representation::new(config)?;
-        let mut encoder = DefaultEncoder::new(&representation, self.info.clone())?;
-        let codes = encoder.encode(&representation);
-        let mut objective =
-            DefaultObjective::new(&representation, self.assets.clone(), codes.len())?;
+        let Assets {
+            key_distribution,
+            pair_equivalence,
+            encodables,
+        } = self.assets.clone();
+        let mut encoder = DefaultEncoder::new(&representation, encodables)?;
+        let buffer = encoder.encode(&representation.initial, &None).clone();
+        let codes = representation.export_code(&buffer, &encoder.encodables);
+        let mut objective = DefaultObjective::new(
+            &representation,
+            key_distribution,
+            pair_equivalence,
+            codes.len(),
+        )?;
         let (metric, _) = objective.evaluate(&mut encoder, &representation.initial, &None);
         Ok(to_value(&(codes, metric))?)
     }
@@ -169,9 +171,18 @@ impl Web {
             .as_ref()
             .unwrap();
         let representation = Representation::new(self.config.clone())?;
-        let encoder = DefaultEncoder::new(&representation, self.info.clone())?;
-        let objective =
-            DefaultObjective::new(&representation, self.assets.clone(), self.info.len())?;
+        let Assets {
+            key_distribution,
+            pair_equivalence,
+            encodables,
+        } = self.assets.clone();
+        let encoder = DefaultEncoder::new(&representation, encodables)?;
+        let objective = DefaultObjective::new(
+            &representation,
+            key_distribution,
+            pair_equivalence,
+            self.assets.encodables.len(),
+        )?;
         let mut problem = DefaultProblem::new(representation, objective, encoder)?;
         match solver {
             SolverConfig::SimulatedAnnealing(config) => {
@@ -203,7 +214,7 @@ pub struct Args {
     pub config: Option<PathBuf>,
     /// 频率序列表，默认为 elements.txt
     #[arg(short, long, value_name = "FILE")]
-    pub elements: Option<PathBuf>,
+    pub encodables: Option<PathBuf>,
     /// 单键用指分布表，默认为 assets 目录下的 key_distribution.txt
     #[arg(short, long, value_name = "FILE")]
     pub key_distribution: Option<PathBuf>,
@@ -213,6 +224,21 @@ pub struct Args {
     /// 线程数，默认为 1
     #[arg(short, long)]
     pub threads: Option<usize>,
+}
+
+impl Args {
+    pub fn 生成(name: &str) -> Self {
+        let config = format!("examples/{}.yaml", name);
+        let elements = format!("examples/{}.txt", name);
+        Args {
+            command: Command::Optimize,
+            config: Some(PathBuf::from(config)),
+            encodables: Some(PathBuf::from(elements)),
+            key_distribution: None,
+            pair_equivalence: None,
+            threads: None,
+        }
+    }
 }
 
 /// 命令行中所有可用的子命令
@@ -253,10 +279,10 @@ impl CommandLine {
         reader.deserialize().map(|x| x.unwrap()).collect()
     }
 
-    pub fn prepare_file(&self) -> (Config, AssembleList, Assets) {
+    pub fn prepare_file(&self) -> (Config, Assets) {
         let Args {
             config,
-            elements,
+            encodables: elements,
             key_distribution,
             pair_equivalence,
             ..
@@ -266,7 +292,7 @@ impl CommandLine {
             .unwrap_or_else(|_| panic!("文件 {} 不存在", config_path.display()));
         let config: Config = serde_yaml::from_str(&config_content).unwrap();
         let elements_path = elements.unwrap_or(PathBuf::from("elements.txt"));
-        let elements: AssembleList = Self::read(elements_path);
+        let elements: Vec<RawEncodable> = Self::read(elements_path);
 
         let assets_dir = Path::new("assets");
         let keq_path = key_distribution.unwrap_or(assets_dir.join("key_distribution.txt"));
@@ -274,10 +300,11 @@ impl CommandLine {
         let peq_path = pair_equivalence.unwrap_or(assets_dir.join("pair_equivalence.txt"));
         let pair_equivalence: PairEquivalence = Self::read(peq_path);
         let assets = Assets {
+            encodables: elements,
             key_distribution,
             pair_equivalence,
         };
-        (config, elements, assets)
+        (config, assets)
     }
 
     pub fn write_encode_results(&self, entries: Vec<Entry>) {

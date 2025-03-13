@@ -47,11 +47,11 @@ impl Cache {
             return;
         }
         c.has_changed = false;
-        self.accumulate(index, frequency, c.actual, c.duplicate, parameters, 1);
-        if c.p_actual == 0 {
+        self.accumulate(index, frequency, c.code, c.duplicate, parameters, 1);
+        if c.p_code == 0 {
             return;
         }
-        self.accumulate(index, frequency, c.p_actual, c.p_duplicate, parameters, -1);
+        self.accumulate(index, frequency, c.p_code, c.p_duplicate, parameters, -1);
     }
 
     pub fn finalize(&self, parameters: &Parameters) -> (PartialMetric, f64) {
