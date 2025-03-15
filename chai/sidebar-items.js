@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["命令","消息"],"fn":["validate"],"mod":["config","data","encoders","objectives","operators","optimizers"],"struct":["Web","命令行","命令行参数","图形界面参数","错误"],"trait":["界面"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["cache","default","metric"],"trait":["目标函数"]};

@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["chai",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.85.0/core/convert/trait.From.html\" title=\"trait core::convert::From\">From</a>&lt;&amp;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.85.0/std/primitive.str.html\">str</a>&gt; for <a class=\"struct\" href=\"chai/struct.错误.html\" title=\"struct chai::错误\">错误</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.85.0/core/convert/trait.From.html\" title=\"trait core::convert::From\">From</a>&lt;<a class=\"struct\" href=\"chai/struct.Web.html\" title=\"struct chai::Web\">Web</a>&gt; for <a class=\"struct\" href=\"https://docs.rs/wasm-bindgen/0.2/wasm_bindgen/struct.JsValue.html\" title=\"struct wasm_bindgen::JsValue\">JsValue</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.85.0/core/convert/trait.From.html\" title=\"trait core::convert::From\">From</a>&lt;<a class=\"struct\" href=\"chai/struct.错误.html\" title=\"struct chai::错误\">错误</a>&gt; for <a class=\"struct\" href=\"https://docs.rs/wasm-bindgen/0.2/wasm_bindgen/struct.JsError.html\" title=\"struct wasm_bindgen::JsError\">JsError</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.85.0/core/convert/trait.From.html\" title=\"trait core::convert::From\">From</a>&lt;<a class=\"struct\" href=\"https://doc.rust-lang.org/1.85.0/alloc/string/struct.String.html\" title=\"struct alloc::string::String\">String</a>&gt; for <a class=\"struct\" href=\"chai/struct.错误.html\" title=\"struct chai::错误\">错误</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1534]}
