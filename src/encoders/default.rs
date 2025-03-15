@@ -1,51 +1,48 @@
-use super::{CompiledScheme, Encodable, Encoder, EncoderConfig, Space};
-use crate::representation::{CodeInfo, Codes, Element, KeyMap, RawEncodable, Representation};
-use crate::Error;
+use super::{简码配置, 编码器, 编码配置, 编码空间};
+use crate::data::{编码信息, 元素, 可编码对象, 元素映射, 数据};
+use crate::错误;
 use rustc_hash::FxHashMap;
 use std::iter::zip;
 
-pub struct DefaultEncoder {
-    pub buffer: Codes,
-    pub config: EncoderConfig,
-    pub encodables: Vec<Encodable>,
-    pub full_space: Space,
-    pub short_space: Space,
-    pub involved_message: Vec<Vec<usize>>,
+pub struct 默认编码器 {
+    buffer: Vec<编码信息>,
+    config: 编码配置,
+    encodables: Vec<可编码对象>,
+    full_space: 编码空间,
+    short_space: 编码空间,
+    involved_message: Vec<Vec<usize>>,
 }
 
-impl DefaultEncoder {
+impl 默认编码器 {
     /// 提供配置表示、拆分表、词表和共用资源来创建一个编码引擎
     /// 字需要提供拆分表
     /// 词只需要提供词表，它对应的拆分序列从字推出
-    pub fn new(
-        representation: &Representation,
-        raw_encodables: Vec<RawEncodable>,
-    ) -> Result<Self, Error> {
-        let encoder = &representation.config.encoder;
+    pub fn 新建(representation: &数据) -> Result<Self, 错误> {
+        let encoder = &representation.配置.encoder;
         let max_length = encoder.max_length;
         if max_length >= 8 {
             return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
         }
-        let encodables = representation.transform_encodables(raw_encodables)?;
-        let buffer = encodables.iter().map(CodeInfo::new).collect();
-        let vector_length = representation.radix.pow(max_length as u32) as usize;
+        let encodables = representation.词列表.clone();
+        let buffer = encodables.iter().map(编码信息::new).collect();
+        let vector_length = representation.进制.pow(max_length as u32) as usize;
         let vector = vec![u8::default(); vector_length];
-        let full_space = Space {
+        let full_space = 编码空间 {
             vector,
             vector_length,
             hashmap: FxHashMap::default(),
         };
         let short_space = full_space.clone();
         let mut involved_message = vec![];
-        for _ in 0..=representation.element_repr.len() {
+        for _ in 0..=representation.元素转数字.len() {
             involved_message.push(vec![]);
         }
         for (index, encodable) in encodables.iter().enumerate() {
-            for element in &encodable.sequence {
+            for element in &encodable.元素序列 {
                 involved_message[*element].push(index);
             }
         }
-        let config = EncoderConfig::new(&representation)?;
+        let config = 编码配置::new(&representation)?;
         let encoder = Self {
             buffer,
             config,
@@ -68,7 +65,7 @@ impl DefaultEncoder {
         self.short_space.hashmap.clear();
     }
 
-    fn encode_full(&mut self, keymap: &KeyMap, moved_elements: &Option<Vec<Element>>) {
+    fn encode_full(&mut self, keymap: &元素映射, moved_elements: &Option<Vec<元素>>) {
         let config = &self.config;
         let buffer = &mut self.buffer;
         let weights: Vec<_> = (0..=config.max_length)
@@ -79,37 +76,37 @@ impl DefaultEncoder {
                 for index in &self.involved_message[*element] {
                     let pointer = &mut buffer[*index];
                     let encodable = &self.encodables[*index];
-                    let sequence = &encodable.sequence;
-                    let full = &mut pointer.full;
+                    let sequence = &encodable.元素序列;
+                    let full = &mut pointer.全码;
                     let mut code = 0_u64;
                     for (element, weight) in zip(sequence, &weights) {
                         code += keymap[*element] as u64 * weight;
                     }
-                    full.primitive = code;
+                    full.原始编码 = code;
                     let actual = config.wrap_actual(code, 0, weights[sequence.len()]);
-                    full.set_code(actual);
+                    full.写入编码(actual);
                 }
             }
         } else {
             for (encodable, pointer) in zip(&self.encodables, buffer.iter_mut()) {
-                let sequence = &encodable.sequence;
-                let full = &mut pointer.full;
+                let sequence = &encodable.元素序列;
+                let full = &mut pointer.全码;
                 let mut code = 0_u64;
                 for (element, weight) in zip(sequence, &weights) {
                     code += keymap[*element] as u64 * weight;
                 }
                 // 对于全码，计算实际编码时不考虑第二及以后的选重键
-                full.primitive = code;
+                full.原始编码 = code;
                 let actual = config.wrap_actual(code, 0, weights[sequence.len()]);
-                full.set_code(actual);
+                full.写入编码(actual);
             }
         }
 
         for pointer in buffer.iter_mut() {
-            let full = &mut pointer.full;
-            let duplicate = self.full_space.rank(full.primitive) > 0;
-            full.set_duplicate(duplicate);
-            self.full_space.insert(full.primitive);
+            let full = &mut pointer.全码;
+            let duplicate = self.full_space.rank(full.原始编码) > 0;
+            full.写入选重(duplicate);
+            self.full_space.insert(full.原始编码);
         }
     }
 
@@ -122,58 +119,58 @@ impl DefaultEncoder {
         let short_code = config.short_code.as_ref().unwrap();
         // 优先简码
         for (encodable, pointer) in zip(&self.encodables, buffer.iter_mut()) {
-            if encodable.level == u64::MAX {
+            if encodable.简码等级 == u64::MAX {
                 continue;
             }
-            let code = pointer.full.primitive % weights[encodable.level as usize];
+            let code = pointer.全码.原始编码 % weights[encodable.简码等级 as usize];
             let rank = self.short_space.rank(code);
-            let actual = config.wrap_actual(code, rank, weights[encodable.level as usize]);
-            pointer.short.set(actual, rank > 0);
+            let actual = config.wrap_actual(code, rank, weights[encodable.简码等级 as usize]);
+            pointer.简码.写入(actual, rank > 0);
             self.short_space.insert(code);
         }
         // 常规简码
         for (pointer, encodable) in zip(buffer.iter_mut(), &self.encodables) {
-            if encodable.level != u64::MAX {
+            if encodable.简码等级 != u64::MAX {
                 continue;
             }
-            let schemes = &short_code[encodable.length - 1];
+            let schemes = &short_code[encodable.词长 - 1];
             let mut has_short = false;
-            let full = &pointer.full;
-            let short = &mut pointer.short;
+            let full = &pointer.全码;
+            let short = &mut pointer.简码;
             for scheme in schemes {
-                let CompiledScheme {
+                let 简码配置 {
                     prefix,
                     select_keys,
                 } = scheme;
                 let weight = weights[*prefix];
                 // 如果根本没有这么多码，就放弃
-                if full.primitive < weight {
+                if full.原始编码 < weight {
                     continue;
                 }
                 // 首先将全码截取一部分出来
-                let code = full.primitive % weight;
+                let code = full.原始编码 % weight;
                 let rank = self.full_space.rank(code) + self.short_space.rank(code);
                 if rank >= select_keys.len() as u8 {
                     continue;
                 }
                 let actual = config.wrap_actual(code, rank, weight);
-                short.set(actual, false);
+                short.写入(actual, false);
                 self.short_space.insert(code);
                 has_short = true;
                 break;
             }
             if !has_short {
-                let code = full.primitive;
-                let rank = self.short_space.rank(full.primitive);
-                short.set(full.code, rank > 0);
+                let code = full.原始编码;
+                let rank = self.short_space.rank(full.原始编码);
+                short.写入(full.实际编码, rank > 0);
                 self.short_space.insert(code);
             }
         }
     }
 }
 
-impl Encoder for DefaultEncoder {
-    fn encode(&mut self, keymap: &KeyMap, moved_elements: &Option<Vec<Element>>) -> &mut Codes {
+impl 编码器 for 默认编码器 {
+    fn 编码(&mut self, keymap: &元素映射, moved_elements: &Option<Vec<元素>>) -> &mut Vec<编码信息> {
         self.reset();
         self.encode_full(keymap, moved_elements);
         if self.config.short_code.is_none() || self.config.short_code.as_ref().unwrap().is_empty() {

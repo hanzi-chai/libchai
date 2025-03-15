@@ -1,27 +1,29 @@
-//! 编码引擎
+//! 编码器接口，以及默认编码器的实现
 
 use crate::{
-    representation::{
-        AutoSelect, Code, Codes, Element, Key, KeyMap, Representation, Sequence, MAX_WORD_LENGTH,
-    },
-    Error,
+    data::{自动上屏, 编码, 编码信息, 元素, 键, 元素映射, 数据, 最大词长},
+    错误,
 };
 use rustc_hash::FxHashMap;
 
 pub mod default;
 
-pub trait Encoder {
-    fn encode(&mut self, keymap: &KeyMap, moved_elements: &Option<Vec<Element>>) -> &mut Codes;
+pub trait 编码器 {
+    fn 编码(
+        &mut self,
+        keymap: &元素映射,
+        moved_elements: &Option<Vec<元素>>,
+    ) -> &mut Vec<编码信息>;
 }
 
 #[derive(Clone)]
-pub struct Space {
+pub struct 编码空间 {
     pub vector: Vec<u8>,
     pub vector_length: usize,
-    pub hashmap: FxHashMap<Code, u8>,
+    pub hashmap: FxHashMap<编码, u8>,
 }
 
-impl Space {
+impl 编码空间 {
     #[inline(always)]
     pub fn insert(&mut self, code: u64) {
         if code < self.vector_length as u64 {
@@ -46,50 +48,39 @@ impl Space {
     }
 }
 
-/// 一个可编码对象
-#[derive(Debug, Clone)]
-pub struct Encodable {
-    pub name: String,
-    pub length: usize,
-    pub sequence: Sequence,
-    pub frequency: u64,
-    pub level: u64,
-    pub index: usize,
-}
-
 #[derive(Debug)]
-pub struct CompiledScheme {
+pub struct 简码配置 {
     pub prefix: usize,
-    pub select_keys: Vec<Key>,
+    pub select_keys: Vec<键>,
 }
 
-pub struct EncoderConfig {
+pub struct 编码配置 {
     pub radix: u64,
     pub max_length: usize,
-    pub auto_select: AutoSelect,
-    pub select_keys: Vec<Key>,
-    pub first_key: Key,
-    pub short_code: Option<[Vec<CompiledScheme>; MAX_WORD_LENGTH]>,
+    pub auto_select: 自动上屏,
+    pub select_keys: Vec<键>,
+    pub first_key: 键,
+    pub short_code: Option<[Vec<简码配置>; 最大词长]>,
 }
 
-impl EncoderConfig {
-    pub fn new(representation: &Representation) -> Result<Self, Error> {
-        let encoder = &representation.config.encoder;
+impl 编码配置 {
+    pub fn new(representation: &数据) -> Result<Self, 错误> {
+        let encoder = &representation.配置.encoder;
         let max_length = encoder.max_length;
         if max_length >= 8 {
             return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
         }
-        let auto_select = representation.transform_auto_select()?;
+        let auto_select = representation.预处理自动上屏()?;
         let mut short_code = None;
         if let Some(configs) = &encoder.short_code {
-            short_code = Some(representation.transform_short_code(configs.clone())?);
+            short_code = Some(representation.预处理简码配置(configs.clone())?);
         }
         let result = Self {
             auto_select,
             max_length,
-            radix: representation.radix,
-            select_keys: representation.select_keys.clone(),
-            first_key: representation.select_keys[0],
+            radix: representation.进制,
+            select_keys: representation.选择键.clone(),
+            first_key: representation.选择键[0],
             short_code,
         };
         Ok(result)

@@ -13,9 +13,9 @@ assets: assetsdir frequency.txt key_distribution.txt pair_equivalence.txt
 assetsdir:
 	mkdir -p assets
 
-examples: # snow.yaml snow.txt mswb.yaml mswb.txt
+examples: # 冰雪四拼.yaml 冰雪四拼.txt 米十五笔.yaml 米十五笔.txt
 	mkdir -p examples; \
-	for file in snow.yaml snow.txt mswb.yaml mswb.txt; do \
+	for file in 冰雪四拼.yaml 冰雪四拼.txt 米十五笔.yaml 米十五笔.txt; do \
 		curl "https://assets.chaifen.app/$$file" -o examples/$$file; \
 	done
 

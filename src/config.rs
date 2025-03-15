@@ -1,9 +1,9 @@
-//! 递归定义 YAML 配置文件中的所有字段，以及它们和一个 Rust 结构体之间的序列化、反序列化操作应该如何执行。
+//! 配置文件的定义
 //!
 //! 这部分内容太多，就不一一注释了。后期会写一个「`config.yaml` 详解」来统一解释各种配置文件的字段。
 //!
 
-use crate::metaheuristics::simulated_annealing::SimulatedAnnealing;
+use crate::optimizers::simulated_annealing::退火方法;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::HashMap;
@@ -313,7 +313,7 @@ pub struct ConstraintsConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "algorithm")]
 pub enum SolverConfig {
-    SimulatedAnnealing(SimulatedAnnealing),
+    SimulatedAnnealing(退火方法),
     // TODO: Add more algorithms
 }
 
@@ -328,7 +328,7 @@ pub struct OptimizationConfig {
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
+pub struct 配置 {
     pub version: Option<String>,
     #[serialize_always] // JavaScript null
     pub source: Option<String>,

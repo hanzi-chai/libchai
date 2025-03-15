@@ -1,15 +1,15 @@
+use super::default::Parameters;
 use super::metric::FingeringMetric;
 use super::metric::FingeringMetricUniform;
 use super::metric::LevelMetric;
 use super::metric::LevelMetricUniform;
 use super::metric::PartialMetric;
 use super::metric::TierMetric;
-use super::Parameters;
 use crate::config::PartialWeights;
-use crate::representation::Code;
-use crate::representation::CodeSubInfo;
-use crate::representation::DistributionLoss;
-use crate::representation::MAX_COMBINATION_LENGTH;
+use crate::data::编码;
+use crate::data::部分编码信息;
+use crate::data::键位分布损失函数;
+use crate::data::最大按键组合长度;
 use std::iter::zip;
 
 #[derive(Debug, Clone)]
@@ -40,18 +40,18 @@ impl Cache {
         &mut self,
         index: usize,
         frequency: u64,
-        c: &mut CodeSubInfo,
+        c: &mut 部分编码信息,
         parameters: &Parameters,
     ) {
-        if !c.has_changed {
+        if !c.有变化 {
             return;
         }
-        c.has_changed = false;
-        self.accumulate(index, frequency, c.code, c.duplicate, parameters, 1);
-        if c.p_code == 0 {
+        c.有变化 = false;
+        self.accumulate(index, frequency, c.实际编码, c.选重标记, parameters, 1);
+        if c.上一个实际编码 == 0 {
             return;
         }
-        self.accumulate(index, frequency, c.p_code, c.p_duplicate, parameters, -1);
+        self.accumulate(index, frequency, c.上一个实际编码, c.上一个选重标记, parameters, -1);
     }
 
     pub fn finalize(&self, parameters: &Parameters) -> (PartialMetric, f64) {
@@ -210,7 +210,7 @@ impl Cache {
             }
         }
         let tiers_fingering = vec![[0; 8]; ntier];
-        let segment = radix.pow((MAX_COMBINATION_LENGTH - 1) as u32);
+        let segment = radix.pow((最大按键组合长度 - 1) as u32);
         let length_breakpoints: Vec<u64> = (0..=8).map(|x| radix.pow(x)).collect();
 
         Self {
@@ -239,7 +239,7 @@ impl Cache {
     /// 计算按键使用率与理想使用率之间的偏差。对于每个按键，偏差是实际频率与理想频率之间的差值乘以一个惩罚系数。用户可以根据自己的喜好自定义理想频率和惩罚系数。
     fn get_distribution_distance(
         distribution: &Vec<f64>,
-        ideal_distribution: &Vec<DistributionLoss>,
+        ideal_distribution: &Vec<键位分布损失函数>,
     ) -> f64 {
         let mut distance = 0.0;
         for (frequency, loss) in zip(distribution, ideal_distribution) {
@@ -258,7 +258,7 @@ impl Cache {
         &mut self,
         index: usize,
         frequency: u64,
-        code: Code,
+        code: 编码,
         duplicate: bool,
         parameters: &Parameters,
         sign: i64,
@@ -295,19 +295,6 @@ impl Cache {
                 code /= self.segment;
             }
         }
-        // 3. 词间当量
-        // if partial_weights.extended_pair_equivalence.is_some() {
-        //     let transitions = &parameters.encoder.transition_matrix[index];
-        //     let last_char = code / self.radix.pow(length as u32 - 1);
-        //     for (i, weight) in transitions {
-        //         let real_weight = *weight as i64 * sign;
-        //         let next_char = parameters.encoder.buffer[*i].full.code % radix;
-        //         let combination = last_char + next_char * radix;
-        //         let equivalence = parameters.pair_equivalence[combination as usize];
-        //         self.total_extended_pair_equivalence += equivalence * real_weight as f64;
-        //         self.total_extended_pairs += real_weight;
-        //     }
-        // }
         // 4. 差指法
         if let Some(fingering) = &partial_weights.fingering {
             let mut code = code;

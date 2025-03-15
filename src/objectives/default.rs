@@ -1,16 +1,22 @@
-
-use crate::config::PartialWeights;
-use crate::encoders::Encoder;
-use crate::representation::{Element, KeyDistribution, KeyMap, PairEquivalence, Representation};
-use crate::Error;
 use super::cache::Cache;
 use super::metric::Metric;
-use super::{Objective, Parameters};
+use super::目标函数;
+use crate::config::PartialWeights;
+use crate::data::{键位分布损失函数, 元素, 元素映射, 用指标记, 数据};
+use crate::encoders::编码器;
+use crate::错误;
 
 #[derive(Clone)]
-pub struct DefaultObjective {
+pub struct 默认目标函数 {
     parameters: Parameters,
     buckets: Vec<[Option<Cache>; 2]>,
+}
+
+#[derive(Clone)]
+pub struct Parameters {
+    pub ideal_distribution: Vec<键位分布损失函数>,
+    pub pair_equivalence: Vec<f64>,
+    pub fingering_types: Vec<用指标记>,
 }
 
 pub type Frequencies = Vec<f64>;
@@ -29,28 +35,23 @@ impl PartialType {
 }
 
 /// 目标函数
-impl DefaultObjective {
+impl 默认目标函数 {
     /// 通过传入配置表示、编码器和共用资源来构造一个目标函数
-    pub fn new(
-        representation: &Representation,
-        key_distribution: KeyDistribution,
-        pair_equivalence: PairEquivalence,
-        total_count: usize,
-    ) -> Result<Self, Error> {
-        let ideal_distribution =
-            representation.generate_ideal_distribution(&key_distribution);
-        let pair_equivalence = representation.transform_pair_equivalence(&pair_equivalence);
-        let fingering_types = representation.transform_fingering_types();
-        let config = representation
-            .config
+    pub fn 新建(数据: &数据) -> Result<Self, 错误> {
+        let ideal_distribution = 数据.键位分布信息.clone();
+        let pair_equivalence = 数据.当量信息.clone();
+        let fingering_types = 数据.预处理指法标记();
+        let config = 数据
+            .配置
             .optimization
             .as_ref()
             .ok_or("优化配置不存在")?
             .objective
             .clone();
-        let radix = representation.radix;
+        let radix = 数据.进制;
         let max_index = pair_equivalence.len() as u64;
-        let make_cache = |x: &PartialWeights| Cache::new(x, radix, total_count, max_index);
+        let make_cache =
+            |x: &PartialWeights| Cache::new(x, radix, 数据.词列表.len(), max_index);
         let cf = config.characters_full.as_ref().map(make_cache);
         let cs = config.characters_short.as_ref().map(make_cache);
         let wf = config.words_full.as_ref().map(make_cache);
@@ -69,30 +70,30 @@ impl DefaultObjective {
     }
 }
 
-impl Objective for DefaultObjective {
+impl 目标函数 for 默认目标函数 {
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
-    fn evaluate<E: Encoder>(
+    fn 计算<E: 编码器>(
         &mut self,
         encoder: &mut E,
-        candidate: &KeyMap,
-        moved_elements: &Option<Vec<Element>>,
+        candidate: &元素映射,
+        moved_elements: &Option<Vec<元素>>,
     ) -> (Metric, f64) {
-        let buffer = encoder.encode(candidate, moved_elements);
+        let buffer = encoder.编码(candidate, moved_elements);
         let parameters = &self.parameters;
 
         // 开始计算指标
         for (index, code_info) in buffer.iter_mut().enumerate() {
-            let frequency = code_info.frequency;
-            let bucket = if code_info.length == 1 {
+            let frequency = code_info.频率;
+            let bucket = if code_info.词长 == 1 {
                 &mut self.buckets[0]
             } else {
                 &mut self.buckets[1]
             };
             if let Some(cache) = &mut bucket[0] {
-                cache.process(index, frequency, &mut code_info.full, parameters);
+                cache.process(index, frequency, &mut code_info.全码, &parameters);
             }
             if let Some(cache) = &mut bucket[1] {
-                cache.process(index, frequency, &mut code_info.short, parameters);
+                cache.process(index, frequency, &mut code_info.简码, &parameters);
             }
         }
 
@@ -105,7 +106,7 @@ impl Objective for DefaultObjective {
         };
         for (index, bucket) in self.buckets.iter().enumerate() {
             let _ = &bucket[0].as_ref().map(|x| {
-                let (partial, accum) = x.finalize(parameters);
+                let (partial, accum) = x.finalize(&parameters);
                 loss += accum;
                 if index == 0 {
                     metric.characters_full = Some(partial);
@@ -114,7 +115,7 @@ impl Objective for DefaultObjective {
                 }
             });
             let _ = &bucket[1].as_ref().map(|x| {
-                let (partial, accum) = x.finalize(parameters);
+                let (partial, accum) = x.finalize(&parameters);
                 loss += accum;
                 if index == 0 {
                     metric.characters_short = Some(partial);

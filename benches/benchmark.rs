@@ -1,64 +1,51 @@
-use chai::config::Config;
-use chai::encoders::default::DefaultEncoder;
-use chai::objectives::default::DefaultObjective;
-use chai::problems::default::DefaultProblem;
-use chai::problems::Problem;
-use chai::representation::Assets;
-use chai::{representation::Representation, Error};
-use chai::{Args, CommandLine};
+use chai::encoders::default::默认编码器;
+use chai::data::数据;
+use chai::objectives::default::默认目标函数;
+use chai::objectives::目标函数;
+use chai::operators::default::默认操作;
+use chai::{命令行, 错误};
 use criterion::{criterion_group, criterion_main, Criterion};
 
-fn simulate_cli_input(name: &str) -> (Config, Assets) {
-    let args = Args::生成(name);
-    CommandLine::new(args, None).prepare_file()
-}
-
-fn process_cli_input(config: Config, assets: Assets, b: &mut Criterion) -> Result<(), Error> {
-    let representation = Representation::new(config)?;
-    let Assets {
-        encodables,
-        key_distribution,
-        pair_equivalence,
-    } = assets;
-    let length = encodables.len();
-    let encoder = DefaultEncoder::new(&representation, encodables)?;
-    let objective =
-        DefaultObjective::new(&representation, key_distribution, pair_equivalence, length)?;
-    let mut problem = DefaultProblem::new(representation, objective, encoder)?;
-    let candidate = problem.initialize();
-    b.bench_function("Evaluation", |b| {
+fn 计时(数据: 数据, 名称: &str, b: &mut Criterion) -> Result<(), 错误> {
+    let mut 编码器 = 默认编码器::新建(&数据)?;
+    let mut 目标函数 = 默认目标函数::新建(&数据)?;
+    let 操作 = 默认操作::新建(&数据)?;
+    b.bench_function(名称, |b| {
         b.iter(|| {
-            problem.rank(&candidate, &None);
+            let mut 映射 = 数据.初始映射.clone();
+            let 模拟移动的元素 = 操作.有约束的随机移动(&mut 映射);
+            目标函数.计算(&mut 编码器, &映射, &Some(模拟移动的元素));
         })
     });
     Ok(())
 }
 
-fn length_3(b: &mut Criterion) {
-    let (config, assets) = simulate_cli_input("easy");
-    process_cli_input(config, assets, b).unwrap();
+fn 四码定长字词(b: &mut Criterion) {
+    let 数据 = 命令行::读取("米十五笔");
+    计时(数据, "四码定长字词", b).unwrap();
 }
 
-fn length_4(b: &mut Criterion) {
-    let (config, assets) = simulate_cli_input("mswb");
-    process_cli_input(config, assets, b).unwrap();
-}
-
-fn length_4_char_only(b: &mut Criterion) {
-    let (mut config, mut assets) = simulate_cli_input("mswb");
-    assets.encodables = assets
-        .encodables
+fn 四码定长单字(b: &mut Criterion) {
+    let mut 数据 = 命令行::读取("米十五笔");
+    数据.词列表 = 数据
+        .词列表
         .into_iter()
-        .filter(|x| x.name.chars().count() == 1)
+        .filter(|x| x.名称.chars().count() == 1)
         .collect();
-    config.optimization.as_mut().unwrap().objective.words_short = None;
-    process_cli_input(config, assets, b).unwrap();
+    数据
+        .配置
+        .optimization
+        .as_mut()
+        .unwrap()
+        .objective
+        .words_short = None;
+    计时(数据, "四码定长单字", b).unwrap();
 }
 
-fn length_6(b: &mut Criterion) {
-    let (config, assets) = simulate_cli_input("snow");
-    process_cli_input(config, assets, b).unwrap();
+fn 六码顶功(b: &mut Criterion) {
+    let 数据 = 命令行::读取("冰雪四拼");
+    计时(数据, "六码顶功", b).unwrap();
 }
 
-criterion_group!(benches, length_4, length_4_char_only, length_6);
+criterion_group!(benches, 四码定长字词, 四码定长单字, 六码顶功);
 criterion_main!(benches);
