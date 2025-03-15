@@ -1,6 +1,6 @@
 [package]
 name = "libchai"
-version = "0.1.15"
+version = "0.2.2"
 authors = ["Songchen Tan <i@tansongchen.com>"]
 edition = "2018"
 license = "GPL-3.0"

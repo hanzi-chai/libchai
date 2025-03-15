@@ -1,5 +1,6 @@
-use chai::encoders::default::默认编码器;
 use chai::data::数据;
+use chai::encoders::default::默认编码器;
+use chai::encoders::编码器;
 use chai::objectives::default::默认目标函数;
 use chai::objectives::目标函数;
 use chai::operators::default::默认操作;
@@ -14,7 +15,8 @@ fn 计时(数据: 数据, 名称: &str, b: &mut Criterion) -> Result<(), 错误>
         b.iter(|| {
             let mut 映射 = 数据.初始映射.clone();
             let 模拟移动的元素 = 操作.有约束的随机移动(&mut 映射);
-            目标函数.计算(&mut 编码器, &映射, &Some(模拟移动的元素));
+            let mut 编码结果 = 编码器.编码(&映射, &Some(模拟移动的元素));
+            目标函数.计算(&mut 编码结果);
         })
     });
     Ok(())

@@ -256,7 +256,7 @@ impl 数据 {
             parsed_select_keys.push(index);
             index += 1;
         }
-        let radix = index as u64;
+        let radix = index;
         Ok((radix, parsed_select_keys, key_repr, repr_key))
     }
 
@@ -351,7 +351,7 @@ impl 数据 {
         Ok(encodables)
     }
 
-    pub fn 生成码表(&self, buffer: &Vec<编码信息>) -> Vec<码表项> {
+    pub fn 生成码表(&self, buffer: &[编码信息]) -> Vec<码表项> {
         let mut entries: Vec<(usize, 码表项)> = Vec::new();
         let encodables = &self.词列表;
         let recover = |code: 编码| {

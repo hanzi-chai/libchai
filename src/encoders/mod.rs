@@ -1,7 +1,7 @@
 //! 编码器接口，以及默认编码器的实现
 
 use crate::{
-    data::{自动上屏, 编码, 编码信息, 元素, 键, 元素映射, 数据, 最大词长},
+    data::{元素, 元素映射, 数据, 最大词长, 编码, 编码信息, 自动上屏, 键},
     错误,
 };
 use rustc_hash::FxHashMap;
@@ -92,13 +92,13 @@ impl 编码配置 {
             if *self.auto_select.get(code as usize).unwrap_or(&true) {
                 return code;
             } else {
-                return code + (self.first_key as u64) * weight;
+                return code + self.first_key * weight;
             }
         }
         let select = *self
             .select_keys
             .get(rank as usize)
-            .unwrap_or(&self.select_keys[0]) as u64;
+            .unwrap_or(&self.select_keys[0]);
         code + select * weight
     }
 }

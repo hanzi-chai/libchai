@@ -26,6 +26,7 @@ use optimizers::{优化方法, 优化问题};
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
+use std::collections::HashMap;
 use std::fs::{create_dir_all, read_to_string, write, OpenOptions};
 use std::io::Write;
 use std::iter::FromIterator;
@@ -65,6 +66,17 @@ pub struct 图形界面参数 {
     pub 词列表: Vec<原始可编码对象>,
     pub 原始键位分布信息: 原始键位分布信息,
     pub 原始当量信息: 原始当量信息,
+}
+
+impl Default for 图形界面参数 {
+    fn default() -> Self {
+        Self {
+            配置: 配置::default(),
+            词列表: vec![],
+            原始键位分布信息: HashMap::new(),
+            原始当量信息: HashMap::new(),
+        }
+    }
 }
 
 /// 向用户反馈的消息类型
@@ -122,10 +134,10 @@ pub fn validate(js_config: JsValue) -> Result<JsValue, JsError> {
 
 #[wasm_bindgen]
 impl Web {
-    pub fn new(回调: Function, 前端参数: JsValue) -> Result<Web, JsError> {
+    pub fn new(回调: Function) -> Web {
         set_once();
-        let 参数: 图形界面参数 = from_value(前端参数)?;
-        Ok(Self { 回调, 参数 })
+        let 参数 = 图形界面参数::default();
+        Self { 回调, 参数 }
     }
 
     pub fn sync(&mut self, 前端参数: JsValue) -> Result<(), JsError> {
@@ -148,10 +160,10 @@ impl Web {
         });
         let 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
         let mut 编码器 = 默认编码器::新建(&数据)?;
-        let 编码结果 = 编码器.编码(&数据.初始映射, &None).clone();
+        let mut 编码结果 = 编码器.编码(&数据.初始映射, &None).clone();
         let 码表 = 数据.生成码表(&编码结果);
         let mut 目标函数 = 默认目标函数::新建(&数据)?;
-        let (指标, _) = 目标函数.计算(&mut 编码器, &数据.初始映射, &None);
+        let (指标, _) = 目标函数.计算(&mut 编码结果);
         Ok(to_value(&(码表, 指标))?)
     }
 
@@ -282,8 +294,7 @@ impl 命令行 {
         let key_distribution: 原始键位分布信息 = Self::read(keq_path);
         let peq_path = pair_equivalence.unwrap_or(assets_dir.join("pair_equivalence.txt"));
         let pair_equivalence: 原始当量信息 = Self::read(peq_path);
-        let res = 数据::新建(config, encodables, key_distribution, pair_equivalence).unwrap();
-        res
+        数据::新建(config, encodables, key_distribution, pair_equivalence).unwrap()
     }
 
     pub fn 输出编码结果(&self, entries: Vec<码表项>) {
@@ -324,7 +335,7 @@ impl 命令行 {
 
 impl 界面 for 命令行 {
     fn 发送(&self, message: 消息) {
-        let mut writer: Box<dyn Write> = if let Some(_) = &self.参数.threads {
+        let mut writer: Box<dyn Write> = if self.参数.threads.is_some() {
             let log_path = self.输出目录.join("log.txt");
             let file = OpenOptions::new()
                 .create(true) // 如果文件不存在，则创建

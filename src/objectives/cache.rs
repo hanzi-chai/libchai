@@ -6,10 +6,10 @@ use super::metric::LevelMetricUniform;
 use super::metric::PartialMetric;
 use super::metric::TierMetric;
 use crate::config::PartialWeights;
+use crate::data::最大按键组合长度;
 use crate::data::编码;
 use crate::data::部分编码信息;
 use crate::data::键位分布损失函数;
-use crate::data::最大按键组合长度;
 use std::iter::zip;
 
 #[derive(Debug, Clone)]
@@ -51,7 +51,14 @@ impl Cache {
         if c.上一个实际编码 == 0 {
             return;
         }
-        self.accumulate(index, frequency, c.上一个实际编码, c.上一个选重标记, parameters, -1);
+        self.accumulate(
+            index,
+            frequency,
+            c.上一个实际编码,
+            c.上一个选重标记,
+            parameters,
+            -1,
+        );
     }
 
     pub fn finalize(&self, parameters: &Parameters) -> (PartialMetric, f64) {
@@ -345,8 +352,7 @@ impl Cache {
                         let label = parameters.fingering_types[(code % self.max_index) as usize];
                         for (i, weight) in fingering.iter().enumerate() {
                             if weight.is_some() {
-                                self.tiers_fingering[itier][i] +=
-                                    sign * label[i] as i64;
+                                self.tiers_fingering[itier][i] += sign * label[i] as i64;
                             }
                         }
                         code /= self.segment;

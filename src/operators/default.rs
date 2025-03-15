@@ -56,7 +56,7 @@ impl 变异 for 默认操作 {
 // 默认的问题实现，使用配置文件中的约束来定义各种算子
 impl 默认操作 {
     pub fn 新建(数据: &数据) -> Result<Self, 错误> {
-        let (fixed, narrowed) = Self::make_constraints(&数据)?;
+        let (fixed, narrowed) = Self::make_constraints(数据)?;
         let config = 数据.配置.optimization.clone();
         let SolverConfig::SimulatedAnnealing(退火方法) = config.unwrap().metaheuristic.unwrap();
         let 变异配置 = 退火方法.search_method.unwrap_or(DEFAULT_MUTATE);

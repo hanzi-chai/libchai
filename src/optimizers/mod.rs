@@ -2,8 +2,8 @@
 //!
 
 use crate::{
+    data::{元素, 元素映射, 数据},
     encoders::编码器,
-    data::{元素映射, 数据},
     objectives::{metric::Metric, 目标函数},
     界面,
 };
@@ -52,6 +52,11 @@ impl<E: 编码器, O: 目标函数, F> 优化问题<E, O, F> {
             编码器,
             操作,
         }
+    }
+
+    pub fn 计算(&mut self, 映射: &元素映射, 变化: &Option<Vec<元素>>) -> (Metric, f64) {
+        let 编码结果 = self.编码器.编码(映射, 变化);
+        self.目标函数.计算(编码结果)
     }
 }
 

@@ -1,5 +1,5 @@
-use super::{简码配置, 编码器, 编码配置, 编码空间};
-use crate::data::{编码信息, 元素, 可编码对象, 元素映射, 数据};
+use super::{简码配置, 编码器, 编码空间, 编码配置};
+use crate::data::{元素, 元素映射, 可编码对象, 数据, 编码信息};
 use crate::错误;
 use rustc_hash::FxHashMap;
 use std::iter::zip;
@@ -42,7 +42,7 @@ impl 默认编码器 {
                 involved_message[*element].push(index);
             }
         }
-        let config = 编码配置::new(&representation)?;
+        let config = 编码配置::new(representation)?;
         let encoder = Self {
             buffer,
             config,
@@ -54,7 +54,7 @@ impl 默认编码器 {
         Ok(encoder)
     }
 
-    pub fn reset(&mut self) {
+    fn 重置(&mut self) {
         self.full_space.vector.iter_mut().for_each(|x| {
             *x = 0;
         });
@@ -65,7 +65,7 @@ impl 默认编码器 {
         self.short_space.hashmap.clear();
     }
 
-    fn encode_full(&mut self, keymap: &元素映射, moved_elements: &Option<Vec<元素>>) {
+    fn 输出全码(&mut self, keymap: &元素映射, moved_elements: &Option<Vec<元素>>) {
         let config = &self.config;
         let buffer = &mut self.buffer;
         let weights: Vec<_> = (0..=config.max_length)
@@ -80,7 +80,7 @@ impl 默认编码器 {
                     let full = &mut pointer.全码;
                     let mut code = 0_u64;
                     for (element, weight) in zip(sequence, &weights) {
-                        code += keymap[*element] as u64 * weight;
+                        code += keymap[*element] * weight;
                     }
                     full.原始编码 = code;
                     let actual = config.wrap_actual(code, 0, weights[sequence.len()]);
@@ -93,7 +93,7 @@ impl 默认编码器 {
                 let full = &mut pointer.全码;
                 let mut code = 0_u64;
                 for (element, weight) in zip(sequence, &weights) {
-                    code += keymap[*element] as u64 * weight;
+                    code += keymap[*element] * weight;
                 }
                 // 对于全码，计算实际编码时不考虑第二及以后的选重键
                 full.原始编码 = code;
@@ -110,7 +110,7 @@ impl 默认编码器 {
         }
     }
 
-    fn encode_short(&mut self) {
+    fn 输出简码(&mut self) {
         let config = &self.config;
         let buffer = &mut self.buffer;
         let weights: Vec<_> = (0..=config.max_length)
@@ -170,13 +170,17 @@ impl 默认编码器 {
 }
 
 impl 编码器 for 默认编码器 {
-    fn 编码(&mut self, keymap: &元素映射, moved_elements: &Option<Vec<元素>>) -> &mut Vec<编码信息> {
-        self.reset();
-        self.encode_full(keymap, moved_elements);
+    fn 编码(
+        &mut self,
+        keymap: &元素映射,
+        moved_elements: &Option<Vec<元素>>,
+    ) -> &mut Vec<编码信息> {
+        self.重置();
+        self.输出全码(keymap, moved_elements);
         if self.config.short_code.is_none() || self.config.short_code.as_ref().unwrap().is_empty() {
             return &mut self.buffer;
         }
-        self.encode_short();
+        self.输出简码();
         &mut self.buffer
     }
 }

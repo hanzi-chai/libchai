@@ -340,3 +340,39 @@ pub struct 配置 {
     pub encoder: EncoderConfig,
     pub optimization: Option<OptimizationConfig>,
 }
+
+impl Default for 配置 {
+    fn default() -> Self {
+        配置 {
+            version: None,
+            source: None,
+            info: Info {
+                name: "default".to_string(),
+                version: None,
+                author: None,
+                description: None,
+            },
+            data: None,
+            analysis: None,
+            algebra: None,
+            form: FormConfig {
+                alphabet: "abcdefghijklmnopqrstuvwxyz".to_string(),
+                mapping_type: None,
+                mapping: HashMap::new(),
+                grouping: None,
+            },
+            encoder: EncoderConfig {
+                max_length: 1,
+                select_keys: None,
+                auto_select_length: None,
+                auto_select_pattern: None,
+                sources: None,
+                conditions: None,
+                rules: None,
+                short_code: None,
+                priority_short_codes: None,
+            },
+            optimization: None,
+        }
+    }
+}

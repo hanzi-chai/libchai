@@ -2,8 +2,7 @@ use super::cache::Cache;
 use super::metric::Metric;
 use super::目标函数;
 use crate::config::PartialWeights;
-use crate::data::{键位分布损失函数, 元素, 元素映射, 用指标记, 数据};
-use crate::encoders::编码器;
+use crate::data::{数据, 用指标记, 编码信息, 键位分布损失函数};
 use crate::错误;
 
 #[derive(Clone)]
@@ -50,8 +49,7 @@ impl 默认目标函数 {
             .clone();
         let radix = 数据.进制;
         let max_index = pair_equivalence.len() as u64;
-        let make_cache =
-            |x: &PartialWeights| Cache::new(x, radix, 数据.词列表.len(), max_index);
+        let make_cache = |x: &PartialWeights| Cache::new(x, radix, 数据.词列表.len(), max_index);
         let cf = config.characters_full.as_ref().map(make_cache);
         let cs = config.characters_short.as_ref().map(make_cache);
         let wf = config.words_full.as_ref().map(make_cache);
@@ -72,17 +70,11 @@ impl 默认目标函数 {
 
 impl 目标函数 for 默认目标函数 {
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
-    fn 计算<E: 编码器>(
-        &mut self,
-        encoder: &mut E,
-        candidate: &元素映射,
-        moved_elements: &Option<Vec<元素>>,
-    ) -> (Metric, f64) {
-        let buffer = encoder.编码(candidate, moved_elements);
+    fn 计算(&mut self, 编码结果: &mut [编码信息]) -> (Metric, f64) {
         let parameters = &self.parameters;
 
         // 开始计算指标
-        for (index, code_info) in buffer.iter_mut().enumerate() {
+        for (index, code_info) in 编码结果.iter_mut().enumerate() {
             let frequency = code_info.频率;
             let bucket = if code_info.词长 == 1 {
                 &mut self.buckets[0]
@@ -90,10 +82,10 @@ impl 目标函数 for 默认目标函数 {
                 &mut self.buckets[1]
             };
             if let Some(cache) = &mut bucket[0] {
-                cache.process(index, frequency, &mut code_info.全码, &parameters);
+                cache.process(index, frequency, &mut code_info.全码, parameters);
             }
             if let Some(cache) = &mut bucket[1] {
-                cache.process(index, frequency, &mut code_info.简码, &parameters);
+                cache.process(index, frequency, &mut code_info.简码, parameters);
             }
         }
 
@@ -106,7 +98,7 @@ impl 目标函数 for 默认目标函数 {
         };
         for (index, bucket) in self.buckets.iter().enumerate() {
             let _ = &bucket[0].as_ref().map(|x| {
-                let (partial, accum) = x.finalize(&parameters);
+                let (partial, accum) = x.finalize(parameters);
                 loss += accum;
                 if index == 0 {
                     metric.characters_full = Some(partial);
@@ -115,7 +107,7 @@ impl 目标函数 for 默认目标函数 {
                 }
             });
             let _ = &bucket[1].as_ref().map(|x| {
-                let (partial, accum) = x.finalize(&parameters);
+                let (partial, accum) = x.finalize(parameters);
                 loss += accum;
                 if index == 0 {
                     metric.characters_short = Some(partial);

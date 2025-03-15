@@ -9,34 +9,24 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      # 拉取代码
-      - name: Checkout
+      - name: 拉取代码
         uses: actions/checkout@v3
-
-      - name: Get Assets
-        run: |
-          make assets
-          mkdir -p dist/assets
-          cp assets/* dist/assets
-          cp *.md LICENSE dist/
-
-      - name: Install Rust Toolchains
+      - name: 获取静态资源
+        run: make fetch
+      - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: "x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl"
-
-      - name: Build
+      - name: 构建 chai
         run: |
           cargo build --target x86_64-unknown-linux-gnu --bin chai --release
           cargo build --target x86_64-unknown-linux-musl --bin chai --release
-
       - name: Archive
         run: |
-          cp target/x86_64-unknown-linux-gnu/release/chai dist/chai
-          tar -czf chai_linux-gnu.tar.gz dist/*
-          cp target/x86_64-unknown-linux-musl/release/chai dist/chai
-          tar -czf chai_linux-musl.tar.gz dist/*
-
+          cp target/x86_64-unknown-linux-gnu/release/chai ./
+          tar -czf chai-linux-gnu.tar.gz chai assets/* examples/* README.md LICENSE
+          cp target/x86_64-unknown-linux-musl/release/chai ./
+          tar -czf chai-linux-musl.tar.gz chai assets/* examples/* README.md LICENSE
       - name: Update CHANGELOG
         id: changelog
         uses: requarks/changelog-action@v1
@@ -45,7 +35,6 @@ jobs:
           tag: ${{ github.ref_name }}
           writeToFile: false
           includeInvalidCommits: true
-
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "chai*.tar.gz"
@@ -57,36 +46,24 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      # 拉取代码
-      - name: Checkout
+      - name: 拉取代码
         uses: actions/checkout@v3
-
-      - name: Get Assets
-        run: |
-          make assets
-          mkdir -p dist/assets
-          cp assets/* dist/assets
-          cp *.md LICENSE dist/
-
+      - name: 获取静态资源
+        run: make fetch
       - name: Install Zig
         uses: goto-bus-stop/setup-zig@v2
-
       - name: Install Rust Toolchains
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: "x86_64-apple-darwin, aarch64-apple-darwin"
-
       - name: Install cargo-zigbuild
         run: cargo install cargo-zigbuild
-
       - name: Build
         run: cargo zigbuild --target universal2-apple-darwin --bin chai --release
-
       - name: Archive
         run: |
-          cp target/universal2-apple-darwin/release/chai dist/chai
-          tar -czf chai_macos.tar.gz dist/*
-
+          cp target/universal2-apple-darwin/release/chai ./
+          tar -czf chai-macos.tar.gz chai assets/* examples/* README.md LICENSE
       - name: Update CHANGELOG
         id: changelog
         uses: requarks/changelog-action@v1
@@ -95,10 +72,9 @@ jobs:
           tag: ${{ github.ref_name }}
           writeToFile: false
           includeInvalidCommits: true
-
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "chai_macos.tar.gz"
+          artifacts: "chai-macos.tar.gz"
           allowUpdates: true
           body: |
             ${{ steps.changelog.outputs.changes }}
@@ -107,32 +83,22 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      # 拉取代码
-      - name: Checkout
+      - name: 拉取代码
         uses: actions/checkout@v3
-
-      - name: Get Assets
+      - name: 获取静态资源
         run: |
           choco install curl
-          make assets
-          mkdir -p dist/assets
-          cp assets/* dist/assets
-          cp *.md dist/
-          cp LICENSE dist/
-
+          make fetch
       - name: Install Rust Toolchains
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: "x86_64-pc-windows-msvc"
-
       - name: Build
         run: cargo build --bin chai --release
-
       - name: Archive
         run: |
-          cp target/release/chai.exe dist/
-          7z a -tzip chai_windows.zip dist
-
+          cp target/release/chai.exe ./
+          7z a -tzip chai-windows.zip chai.exe assets/* examples/* README.md LICENSE
       - name: Update CHANGELOG
         id: changelog
         uses: requarks/changelog-action@v1
@@ -141,10 +107,9 @@ jobs:
           tag: ${{ github.ref_name }}
           writeToFile: false
           includeInvalidCommits: true
-
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "chai_windows.zip"
+          artifacts: "chai-windows.zip"
           allowUpdates: true
           body: |
             ${{ steps.changelog.outputs.changes }}

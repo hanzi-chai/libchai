@@ -22,3 +22,12 @@ jobs:
 
       - name: Build
         run: cargo build --bin chai
+
+      - name: Build documentation
+        run: cargo doc --no-deps
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/doc
