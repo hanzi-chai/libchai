@@ -5,165 +5,165 @@ use rustc_hash::FxHashMap;
 use std::iter::zip;
 
 pub struct 默认编码器 {
-    buffer: Vec<编码信息>,
-    config: 编码配置,
-    encodables: Vec<可编码对象>,
-    full_space: 编码空间,
-    short_space: 编码空间,
-    involved_message: Vec<Vec<usize>>,
+    编码结果: Vec<编码信息>,
+    编码配置: 编码配置,
+    词信息: Vec<可编码对象>,
+    全码空间: 编码空间,
+    简码空间: 编码空间,
+    包含元素的词: Vec<Vec<usize>>,
 }
 
 impl 默认编码器 {
     /// 提供配置表示、拆分表、词表和共用资源来创建一个编码引擎
     /// 字需要提供拆分表
     /// 词只需要提供词表，它对应的拆分序列从字推出
-    pub fn 新建(representation: &数据) -> Result<Self, 错误> {
-        let encoder = &representation.配置.encoder;
+    pub fn 新建(数据: &数据) -> Result<Self, 错误> {
+        let encoder = &数据.配置.encoder;
         let max_length = encoder.max_length;
         if max_length >= 8 {
             return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
         }
-        let encodables = representation.词列表.clone();
-        let buffer = encodables.iter().map(编码信息::new).collect();
-        let vector_length = representation.进制.pow(max_length as u32) as usize;
+        let 词信息 = 数据.词列表.clone();
+        let 编码结果 = 词信息.iter().map(编码信息::new).collect();
+        let vector_length = 数据.进制.pow(max_length as u32) as usize;
         let vector = vec![u8::default(); vector_length];
-        let full_space = 编码空间 {
+        let 全码空间 = 编码空间 {
             vector,
             vector_length,
             hashmap: FxHashMap::default(),
         };
-        let short_space = full_space.clone();
-        let mut involved_message = vec![];
-        for _ in 0..=representation.元素转数字.len() {
-            involved_message.push(vec![]);
+        let 简码空间 = 全码空间.clone();
+        let mut 包含元素的词 = vec![];
+        for _ in 0..=数据.元素转数字.len() {
+            包含元素的词.push(vec![]);
         }
-        for (index, encodable) in encodables.iter().enumerate() {
+        for (index, encodable) in 词信息.iter().enumerate() {
             for element in &encodable.元素序列 {
-                involved_message[*element].push(index);
+                包含元素的词[*element].push(index);
             }
         }
-        let config = 编码配置::new(representation)?;
+        let 编码配置 = 编码配置::new(数据)?;
         let encoder = Self {
-            buffer,
-            config,
-            encodables,
-            full_space,
-            short_space,
-            involved_message,
+            编码结果,
+            编码配置,
+            词信息,
+            全码空间,
+            简码空间,
+            包含元素的词,
         };
         Ok(encoder)
     }
 
     fn 重置(&mut self) {
-        self.full_space.vector.iter_mut().for_each(|x| {
+        self.全码空间.vector.iter_mut().for_each(|x| {
             *x = 0;
         });
-        self.full_space.hashmap.clear();
-        self.short_space.vector.iter_mut().for_each(|x| {
+        self.全码空间.hashmap.clear();
+        self.简码空间.vector.iter_mut().for_each(|x| {
             *x = 0;
         });
-        self.short_space.hashmap.clear();
+        self.简码空间.hashmap.clear();
     }
 
-    fn 输出全码(&mut self, keymap: &元素映射, moved_elements: &Option<Vec<元素>>) {
-        let config = &self.config;
-        let buffer = &mut self.buffer;
-        let weights: Vec<_> = (0..=config.max_length)
-            .map(|x| config.radix.pow(x as u32))
+    fn 输出全码(&mut self, 映射: &元素映射, 移动的元素: &Option<Vec<元素>>) {
+        let 编码配置 = &self.编码配置;
+        let 编码结果 = &mut self.编码结果;
+        let 乘数: Vec<_> = (0..=编码配置.最大码长)
+            .map(|x| 编码配置.进制.pow(x as u32))
             .collect();
-        if let Some(moved_elements) = moved_elements {
-            for element in moved_elements {
-                for index in &self.involved_message[*element] {
-                    let pointer = &mut buffer[*index];
-                    let encodable = &self.encodables[*index];
-                    let sequence = &encodable.元素序列;
-                    let full = &mut pointer.全码;
-                    let mut code = 0_u64;
-                    for (element, weight) in zip(sequence, &weights) {
-                        code += keymap[*element] * weight;
+        if let Some(移动的元素) = 移动的元素 {
+            for 元素 in 移动的元素 {
+                for 索引 in &self.包含元素的词[*元素] {
+                    let 编码信息 = &mut 编码结果[*索引];
+                    let 词 = &self.词信息[*索引];
+                    let 全码 = &mut 编码信息.全码;
+                    let mut 原始编码 = 0_u64;
+                    for (element, weight) in zip(&词.元素序列, &乘数) {
+                        原始编码 += 映射[*element] * weight;
                     }
-                    full.原始编码 = code;
-                    let actual = config.wrap_actual(code, 0, weights[sequence.len()]);
-                    full.写入编码(actual);
+                    全码.原始编码 = 原始编码;
+                    let 编码 = 编码配置.生成编码(原始编码, 0, 乘数[词.元素序列.len()]);
+                    全码.写入编码(编码);
                 }
             }
         } else {
-            for (encodable, pointer) in zip(&self.encodables, buffer.iter_mut()) {
-                let sequence = &encodable.元素序列;
-                let full = &mut pointer.全码;
-                let mut code = 0_u64;
-                for (element, weight) in zip(sequence, &weights) {
-                    code += keymap[*element] * weight;
+            for (词, 编码结果) in zip(&self.词信息, 编码结果.iter_mut()) {
+                let 全码 = &mut 编码结果.全码;
+                let mut 原始编码 = 0_u64;
+                for (element, weight) in zip(&词.元素序列, &乘数) {
+                    原始编码 += 映射[*element] * weight;
                 }
                 // 对于全码，计算实际编码时不考虑第二及以后的选重键
-                full.原始编码 = code;
-                let actual = config.wrap_actual(code, 0, weights[sequence.len()]);
-                full.写入编码(actual);
+                全码.原始编码 = 原始编码;
+                let 编码 = 编码配置.生成编码(原始编码, 0, 乘数[词.元素序列.len()]);
+                全码.写入编码(编码);
             }
         }
 
-        for pointer in buffer.iter_mut() {
-            let full = &mut pointer.全码;
-            let duplicate = self.full_space.rank(full.原始编码) > 0;
-            full.写入选重(duplicate);
-            self.full_space.insert(full.原始编码);
+        for 编码信息 in 编码结果.iter_mut() {
+            let 全码 = &mut 编码信息.全码;
+            let 是否重码 = self.全码空间.查找数量(全码.原始编码) > 0;
+            全码.写入选重(是否重码);
+            self.全码空间.添加(全码.原始编码);
         }
     }
 
     fn 输出简码(&mut self) {
-        let config = &self.config;
-        let buffer = &mut self.buffer;
-        let weights: Vec<_> = (0..=config.max_length)
-            .map(|x| config.radix.pow(x as u32))
+        let 编码配置 = &self.编码配置;
+        let 编码结果 = &mut self.编码结果;
+        let 乘数: Vec<_> = (0..=编码配置.最大码长)
+            .map(|x| 编码配置.进制.pow(x as u32))
             .collect();
-        let short_code = config.short_code.as_ref().unwrap();
+        let 简码配置列表 = 编码配置.简码配置列表.as_ref().unwrap();
         // 优先简码
-        for (encodable, pointer) in zip(&self.encodables, buffer.iter_mut()) {
-            if encodable.简码等级 == u64::MAX {
+        for (词, 编码结果) in zip(&self.词信息, 编码结果.iter_mut()) {
+            if 词.简码等级 == u64::MAX {
                 continue;
             }
-            let code = pointer.全码.原始编码 % weights[encodable.简码等级 as usize];
-            let rank = self.short_space.rank(code);
-            let actual = config.wrap_actual(code, rank, weights[encodable.简码等级 as usize]);
-            pointer.简码.写入(actual, rank > 0);
-            self.short_space.insert(code);
+            let 原始编码 = 编码结果.全码.原始编码 % 乘数[词.简码等级 as usize];
+            编码结果.简码.原始编码 = 原始编码;
+            let 序号 = self.简码空间.查找数量(原始编码);
+            let 编码 = 编码配置.生成编码(原始编码, 序号, 乘数[词.简码等级 as usize]);
+            编码结果.简码.写入(编码, 序号 > 0);
+            self.简码空间.添加(原始编码);
         }
         // 常规简码
-        for (pointer, encodable) in zip(buffer.iter_mut(), &self.encodables) {
-            if encodable.简码等级 != u64::MAX {
+        for (词, 编码结果) in zip(&self.词信息, 编码结果.iter_mut()) {
+            if 词.简码等级 != u64::MAX {
                 continue;
             }
-            let schemes = &short_code[encodable.词长 - 1];
-            let mut has_short = false;
-            let full = &pointer.全码;
-            let short = &mut pointer.简码;
-            for scheme in schemes {
+            let 简码配置 = &简码配置列表[词.词长 - 1];
+            let mut 有简码 = false;
+            let 全码信息 = &编码结果.全码;
+            let 简码信息 = &mut 编码结果.简码;
+            for 出简方式 in 简码配置 {
                 let 简码配置 {
                     prefix,
                     select_keys,
-                } = scheme;
-                let weight = weights[*prefix];
+                } = 出简方式;
+                let 权重 = 乘数[*prefix];
                 // 如果根本没有这么多码，就放弃
-                if full.原始编码 < weight {
+                if 全码信息.原始编码 < 权重 {
                     continue;
                 }
                 // 首先将全码截取一部分出来
-                let code = full.原始编码 % weight;
-                let rank = self.full_space.rank(code) + self.short_space.rank(code);
-                if rank >= select_keys.len() as u8 {
+                let 原始编码 = 全码信息.原始编码 % 权重;
+                let 序号 = self.全码空间.查找数量(原始编码) + self.简码空间.查找数量(原始编码);
+                if 序号 >= select_keys.len() as u8 {
                     continue;
                 }
-                let actual = config.wrap_actual(code, rank, weight);
-                short.写入(actual, false);
-                self.short_space.insert(code);
-                has_short = true;
+                let 编码 = 编码配置.生成编码(原始编码, 序号, 权重);
+                简码信息.原始编码 = 原始编码;
+                简码信息.写入(编码, false);
+                self.简码空间.添加(原始编码);
+                有简码 = true;
                 break;
             }
-            if !has_short {
-                let code = full.原始编码;
-                let rank = self.short_space.rank(full.原始编码);
-                short.写入(full.实际编码, rank > 0);
-                self.short_space.insert(code);
+            if !有简码 {
+                let 序号 = self.简码空间.查找数量(全码信息.原始编码);
+                简码信息.原始编码 = 全码信息.原始编码;
+                简码信息.写入(全码信息.实际编码, 序号 > 0);
+                self.简码空间.添加(全码信息.原始编码);
             }
         }
     }
@@ -177,10 +177,12 @@ impl 编码器 for 默认编码器 {
     ) -> &mut Vec<编码信息> {
         self.重置();
         self.输出全码(keymap, moved_elements);
-        if self.config.short_code.is_none() || self.config.short_code.as_ref().unwrap().is_empty() {
-            return &mut self.buffer;
+        if self.编码配置.简码配置列表.is_none()
+            || self.编码配置.简码配置列表.as_ref().unwrap().is_empty()
+        {
+            return &mut self.编码结果;
         }
         self.输出简码();
-        &mut self.buffer
+        &mut self.编码结果
     }
 }
