@@ -6,13 +6,33 @@ on:
       - "v*"
 
 jobs:
-  build-linux:
+  fetch:
     runs-on: ubuntu-latest
     steps:
       - name: 拉取代码
         uses: actions/checkout@v3
       - name: 获取静态资源
-        run: make fetch
+        run: |
+          chmod +x fetch.sh
+          ./fetch.sh
+      - name: 上传
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample
+          path: |
+            assets
+            examples
+
+  build-linux:
+    needs: fetch
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v3
+      - name: 获取静态资源
+        uses: actions/download-artifact@v4
+        with:
+          name: sample
       - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -44,12 +64,15 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build-macos:
+    needs: fetch
     runs-on: macos-latest
     steps:
       - name: 拉取代码
         uses: actions/checkout@v3
       - name: 获取静态资源
-        run: make fetch
+        uses: actions/download-artifact@v4
+        with:
+          name: sample
       - name: Install Zig
         uses: goto-bus-stop/setup-zig@v2
         with:
@@ -83,14 +106,15 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build-windows:
+    needs: fetch
     runs-on: windows-latest
     steps:
       - name: 拉取代码
         uses: actions/checkout@v3
       - name: 获取静态资源
-        run: |
-          choco install curl
-          make fetch
+        uses: actions/download-artifact@v4
+        with:
+          name: sample
       - name: Install Rust Toolchains
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
