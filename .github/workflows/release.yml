@@ -6,8 +6,10 @@ on:
       - "v*"
 
 jobs:
-  fetch:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.build_changelog.outputs.changelog }}
     steps:
       - name: 拉取代码
         uses: actions/checkout@v3
@@ -22,9 +24,26 @@ jobs:
           path: |
             assets
             examples
+      - name: Build Changelog
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v5          
+        with: 
+          mode: "COMMIT"
+          configurationJson: |
+            {
+              "template": "Change log from #{{FROM_TAG}} to #{{TO_TAG}}: #{{RELEASE_DIFF}}\n#{{UNCATEGORIZED}}",
+              "pr_template": "- [#{{MERGE_SHA}}] - #{{TITLE}}"
+            }
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          body: |
+            ${{ steps.build_changelog.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   build-linux:
-    needs: fetch
+    needs: prepare
     runs-on: ubuntu-latest
     steps:
       - name: 拉取代码
@@ -47,24 +66,15 @@ jobs:
           tar -czf chai-linux-gnu.tar.gz chai assets/* examples/* README.md LICENSE
           cp target/x86_64-unknown-linux-musl/release/chai ./
           tar -czf chai-linux-musl.tar.gz chai assets/* examples/* README.md LICENSE
-      - name: Update CHANGELOG
-        id: changelog
-        uses: requarks/changelog-action@v1
-        with:
-          token: ${{ github.token }}
-          tag: ${{ github.ref_name }}
-          writeToFile: false
-          includeInvalidCommits: true
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "chai*.tar.gz"
           allowUpdates: true
-          body: |
-            ${{ steps.changelog.outputs.changes }}
+          body: ${{ needs.prepare.outputs.changelog }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build-macos:
-    needs: fetch
+    needs: prepare
     runs-on: macos-latest
     steps:
       - name: 拉取代码
@@ -89,24 +99,15 @@ jobs:
         run: |
           cp target/universal2-apple-darwin/release/chai ./
           tar -czf chai-macos.tar.gz chai assets/* examples/* README.md LICENSE
-      - name: Update CHANGELOG
-        id: changelog
-        uses: requarks/changelog-action@v1
-        with:
-          token: ${{ github.token }}
-          tag: ${{ github.ref_name }}
-          writeToFile: false
-          includeInvalidCommits: true
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "chai-macos.tar.gz"
           allowUpdates: true
-          body: |
-            ${{ steps.changelog.outputs.changes }}
+          body: ${{ needs.prepare.outputs.changelog }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build-windows:
-    needs: fetch
+    needs: prepare
     runs-on: windows-latest
     steps:
       - name: 拉取代码
@@ -125,18 +126,9 @@ jobs:
         run: |
           cp target/release/chai.exe ./
           7z a -tzip chai-windows.zip chai.exe assets/* examples/* README.md LICENSE
-      - name: Update CHANGELOG
-        id: changelog
-        uses: requarks/changelog-action@v1
-        with:
-          token: ${{ github.token }}
-          tag: ${{ github.ref_name }}
-          writeToFile: false
-          includeInvalidCommits: true
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "chai-windows.zip"
           allowUpdates: true
-          body: |
-            ${{ steps.changelog.outputs.changes }}
+          body: ${{ needs.prepare.outputs.changelog }}
           token: ${{ secrets.GITHUB_TOKEN }}
