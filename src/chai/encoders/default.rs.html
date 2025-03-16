@@ -184,172 +184,174 @@
 <a href="#183" id="183">183</a>
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a></pre></div><pre class="rust"><code><span class="kw">use super</span>::{简码配置, 编码器, 编码空间, 编码配置};
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a></pre></div><pre class="rust"><code><span class="kw">use super</span>::{简码配置, 编码器, 编码空间, 编码配置};
 <span class="kw">use </span><span class="kw">crate</span>::data::{元素, 元素映射, 可编码对象, 数据, 编码信息};
 <span class="kw">use </span><span class="kw">crate</span>::错误;
 <span class="kw">use </span>rustc_hash::FxHashMap;
 <span class="kw">use </span>std::iter::zip;
 
 <span class="kw">pub struct </span>默认编码器 {
-    buffer: Vec&lt;编码信息&gt;,
-    config: 编码配置,
-    encodables: Vec&lt;可编码对象&gt;,
-    full_space: 编码空间,
-    short_space: 编码空间,
-    involved_message: Vec&lt;Vec&lt;usize&gt;&gt;,
+    编码结果: Vec&lt;编码信息&gt;,
+    编码配置: 编码配置,
+    词信息: Vec&lt;可编码对象&gt;,
+    全码空间: 编码空间,
+    简码空间: 编码空间,
+    包含元素的词: Vec&lt;Vec&lt;usize&gt;&gt;,
 }
 
 <span class="kw">impl </span>默认编码器 {
     <span class="doccomment">/// 提供配置表示、拆分表、词表和共用资源来创建一个编码引擎
     /// 字需要提供拆分表
     /// 词只需要提供词表，它对应的拆分序列从字推出
-    </span><span class="kw">pub fn </span>新建(representation: <span class="kw-2">&amp;</span>数据) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, 错误&gt; {
-        <span class="kw">let </span>encoder = <span class="kw-2">&amp;</span>representation.配置.encoder;
+    </span><span class="kw">pub fn </span>新建(数据: <span class="kw-2">&amp;</span>数据) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, 错误&gt; {
+        <span class="kw">let </span>encoder = <span class="kw-2">&amp;</span>数据.配置.encoder;
         <span class="kw">let </span>max_length = encoder.max_length;
         <span class="kw">if </span>max_length &gt;= <span class="number">8 </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"目前暂不支持最大码长大于等于 8 的方案计算！"</span>.into());
         }
-        <span class="kw">let </span>encodables = representation.词列表.clone();
-        <span class="kw">let </span>buffer = encodables.iter().map(编码信息::new).collect();
-        <span class="kw">let </span>vector_length = representation.进制.pow(max_length <span class="kw">as </span>u32) <span class="kw">as </span>usize;
+        <span class="kw">let </span>词信息 = 数据.词列表.clone();
+        <span class="kw">let </span>编码结果 = 词信息.iter().map(编码信息::new).collect();
+        <span class="kw">let </span>vector_length = 数据.进制.pow(max_length <span class="kw">as </span>u32) <span class="kw">as </span>usize;
         <span class="kw">let </span>vector = <span class="macro">vec!</span>[u8::default(); vector_length];
-        <span class="kw">let </span>full_space = 编码空间 {
+        <span class="kw">let </span>全码空间 = 编码空间 {
             vector,
             vector_length,
             hashmap: FxHashMap::default(),
         };
-        <span class="kw">let </span>short_space = full_space.clone();
-        <span class="kw">let </span><span class="kw-2">mut </span>involved_message = <span class="macro">vec!</span>[];
-        <span class="kw">for _ in </span><span class="number">0</span>..=representation.元素转数字.len() {
-            involved_message.push(<span class="macro">vec!</span>[]);
+        <span class="kw">let </span>简码空间 = 全码空间.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>包含元素的词 = <span class="macro">vec!</span>[];
+        <span class="kw">for _ in </span><span class="number">0</span>..=数据.元素转数字.len() {
+            包含元素的词.push(<span class="macro">vec!</span>[]);
         }
-        <span class="kw">for </span>(index, encodable) <span class="kw">in </span>encodables.iter().enumerate() {
+        <span class="kw">for </span>(index, encodable) <span class="kw">in </span>词信息.iter().enumerate() {
             <span class="kw">for </span>element <span class="kw">in </span><span class="kw-2">&amp;</span>encodable.元素序列 {
-                involved_message[<span class="kw-2">*</span>element].push(index);
+                包含元素的词[<span class="kw-2">*</span>element].push(index);
             }
         }
-        <span class="kw">let </span>config = 编码配置::new(representation)<span class="question-mark">?</span>;
+        <span class="kw">let </span>编码配置 = 编码配置::new(数据)<span class="question-mark">?</span>;
         <span class="kw">let </span>encoder = <span class="self">Self </span>{
-            buffer,
-            config,
-            encodables,
-            full_space,
-            short_space,
-            involved_message,
+            编码结果,
+            编码配置,
+            词信息,
+            全码空间,
+            简码空间,
+            包含元素的词,
         };
         <span class="prelude-val">Ok</span>(encoder)
     }
 
     <span class="kw">fn </span>重置(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="self">self</span>.full_space.vector.iter_mut().for_each(|x| {
+        <span class="self">self</span>.全码空间.vector.iter_mut().for_each(|x| {
             <span class="kw-2">*</span>x = <span class="number">0</span>;
         });
-        <span class="self">self</span>.full_space.hashmap.clear();
-        <span class="self">self</span>.short_space.vector.iter_mut().for_each(|x| {
+        <span class="self">self</span>.全码空间.hashmap.clear();
+        <span class="self">self</span>.简码空间.vector.iter_mut().for_each(|x| {
             <span class="kw-2">*</span>x = <span class="number">0</span>;
         });
-        <span class="self">self</span>.short_space.hashmap.clear();
+        <span class="self">self</span>.简码空间.hashmap.clear();
     }
 
-    <span class="kw">fn </span>输出全码(<span class="kw-2">&amp;mut </span><span class="self">self</span>, keymap: <span class="kw-2">&amp;</span>元素映射, moved_elements: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Vec&lt;元素&gt;&gt;) {
-        <span class="kw">let </span>config = <span class="kw-2">&amp;</span><span class="self">self</span>.config;
-        <span class="kw">let </span>buffer = <span class="kw-2">&amp;mut </span><span class="self">self</span>.buffer;
-        <span class="kw">let </span>weights: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..=config.max_length)
-            .map(|x| config.radix.pow(x <span class="kw">as </span>u32))
+    <span class="kw">fn </span>输出全码(<span class="kw-2">&amp;mut </span><span class="self">self</span>, 映射: <span class="kw-2">&amp;</span>元素映射, 移动的元素: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Vec&lt;元素&gt;&gt;) {
+        <span class="kw">let </span>编码配置 = <span class="kw-2">&amp;</span><span class="self">self</span>.编码配置;
+        <span class="kw">let </span>编码结果 = <span class="kw-2">&amp;mut </span><span class="self">self</span>.编码结果;
+        <span class="kw">let </span>乘数: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..=编码配置.最大码长)
+            .map(|x| 编码配置.进制.pow(x <span class="kw">as </span>u32))
             .collect();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(moved_elements) = moved_elements {
-            <span class="kw">for </span>element <span class="kw">in </span>moved_elements {
-                <span class="kw">for </span>index <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.involved_message[<span class="kw-2">*</span>element] {
-                    <span class="kw">let </span>pointer = <span class="kw-2">&amp;mut </span>buffer[<span class="kw-2">*</span>index];
-                    <span class="kw">let </span>encodable = <span class="kw-2">&amp;</span><span class="self">self</span>.encodables[<span class="kw-2">*</span>index];
-                    <span class="kw">let </span>sequence = <span class="kw-2">&amp;</span>encodable.元素序列;
-                    <span class="kw">let </span>full = <span class="kw-2">&amp;mut </span>pointer.全码;
-                    <span class="kw">let </span><span class="kw-2">mut </span>code = <span class="number">0_u64</span>;
-                    <span class="kw">for </span>(element, weight) <span class="kw">in </span>zip(sequence, <span class="kw-2">&amp;</span>weights) {
-                        code += keymap[<span class="kw-2">*</span>element] * weight;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(移动的元素) = 移动的元素 {
+            <span class="kw">for </span>元素 <span class="kw">in </span>移动的元素 {
+                <span class="kw">for </span>索引 <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.包含元素的词[<span class="kw-2">*</span>元素] {
+                    <span class="kw">let </span>编码信息 = <span class="kw-2">&amp;mut </span>编码结果[<span class="kw-2">*</span>索引];
+                    <span class="kw">let </span>词 = <span class="kw-2">&amp;</span><span class="self">self</span>.词信息[<span class="kw-2">*</span>索引];
+                    <span class="kw">let </span>全码 = <span class="kw-2">&amp;mut </span>编码信息.全码;
+                    <span class="kw">let </span><span class="kw-2">mut </span>原始编码 = <span class="number">0_u64</span>;
+                    <span class="kw">for </span>(element, weight) <span class="kw">in </span>zip(<span class="kw-2">&amp;</span>词.元素序列, <span class="kw-2">&amp;</span>乘数) {
+                        原始编码 += 映射[<span class="kw-2">*</span>element] * weight;
                     }
-                    full.原始编码 = code;
-                    <span class="kw">let </span>actual = config.wrap_actual(code, <span class="number">0</span>, weights[sequence.len()]);
-                    full.写入编码(actual);
+                    全码.原始编码 = 原始编码;
+                    <span class="kw">let </span>编码 = 编码配置.生成编码(原始编码, <span class="number">0</span>, 乘数[词.元素序列.len()]);
+                    全码.写入编码(编码);
                 }
             }
         } <span class="kw">else </span>{
-            <span class="kw">for </span>(encodable, pointer) <span class="kw">in </span>zip(<span class="kw-2">&amp;</span><span class="self">self</span>.encodables, buffer.iter_mut()) {
-                <span class="kw">let </span>sequence = <span class="kw-2">&amp;</span>encodable.元素序列;
-                <span class="kw">let </span>full = <span class="kw-2">&amp;mut </span>pointer.全码;
-                <span class="kw">let </span><span class="kw-2">mut </span>code = <span class="number">0_u64</span>;
-                <span class="kw">for </span>(element, weight) <span class="kw">in </span>zip(sequence, <span class="kw-2">&amp;</span>weights) {
-                    code += keymap[<span class="kw-2">*</span>element] * weight;
+            <span class="kw">for </span>(词, 编码结果) <span class="kw">in </span>zip(<span class="kw-2">&amp;</span><span class="self">self</span>.词信息, 编码结果.iter_mut()) {
+                <span class="kw">let </span>全码 = <span class="kw-2">&amp;mut </span>编码结果.全码;
+                <span class="kw">let </span><span class="kw-2">mut </span>原始编码 = <span class="number">0_u64</span>;
+                <span class="kw">for </span>(element, weight) <span class="kw">in </span>zip(<span class="kw-2">&amp;</span>词.元素序列, <span class="kw-2">&amp;</span>乘数) {
+                    原始编码 += 映射[<span class="kw-2">*</span>element] * weight;
                 }
                 <span class="comment">// 对于全码，计算实际编码时不考虑第二及以后的选重键
-                </span>full.原始编码 = code;
-                <span class="kw">let </span>actual = config.wrap_actual(code, <span class="number">0</span>, weights[sequence.len()]);
-                full.写入编码(actual);
+                </span>全码.原始编码 = 原始编码;
+                <span class="kw">let </span>编码 = 编码配置.生成编码(原始编码, <span class="number">0</span>, 乘数[词.元素序列.len()]);
+                全码.写入编码(编码);
             }
         }
 
-        <span class="kw">for </span>pointer <span class="kw">in </span>buffer.iter_mut() {
-            <span class="kw">let </span>full = <span class="kw-2">&amp;mut </span>pointer.全码;
-            <span class="kw">let </span>duplicate = <span class="self">self</span>.full_space.rank(full.原始编码) &gt; <span class="number">0</span>;
-            full.写入选重(duplicate);
-            <span class="self">self</span>.full_space.insert(full.原始编码);
+        <span class="kw">for </span>编码信息 <span class="kw">in </span>编码结果.iter_mut() {
+            <span class="kw">let </span>全码 = <span class="kw-2">&amp;mut </span>编码信息.全码;
+            <span class="kw">let </span>是否重码 = <span class="self">self</span>.全码空间.查找数量(全码.原始编码) &gt; <span class="number">0</span>;
+            全码.写入选重(是否重码);
+            <span class="self">self</span>.全码空间.添加(全码.原始编码);
         }
     }
 
     <span class="kw">fn </span>输出简码(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">let </span>config = <span class="kw-2">&amp;</span><span class="self">self</span>.config;
-        <span class="kw">let </span>buffer = <span class="kw-2">&amp;mut </span><span class="self">self</span>.buffer;
-        <span class="kw">let </span>weights: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..=config.max_length)
-            .map(|x| config.radix.pow(x <span class="kw">as </span>u32))
+        <span class="kw">let </span>编码配置 = <span class="kw-2">&amp;</span><span class="self">self</span>.编码配置;
+        <span class="kw">let </span>编码结果 = <span class="kw-2">&amp;mut </span><span class="self">self</span>.编码结果;
+        <span class="kw">let </span>乘数: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..=编码配置.最大码长)
+            .map(|x| 编码配置.进制.pow(x <span class="kw">as </span>u32))
             .collect();
-        <span class="kw">let </span>short_code = config.short_code.as_ref().unwrap();
+        <span class="kw">let </span>简码配置列表 = 编码配置.简码配置列表.as_ref().unwrap();
         <span class="comment">// 优先简码
-        </span><span class="kw">for </span>(encodable, pointer) <span class="kw">in </span>zip(<span class="kw-2">&amp;</span><span class="self">self</span>.encodables, buffer.iter_mut()) {
-            <span class="kw">if </span>encodable.简码等级 == u64::MAX {
+        </span><span class="kw">for </span>(词, 编码结果) <span class="kw">in </span>zip(<span class="kw-2">&amp;</span><span class="self">self</span>.词信息, 编码结果.iter_mut()) {
+            <span class="kw">if </span>词.简码等级 == u64::MAX {
                 <span class="kw">continue</span>;
             }
-            <span class="kw">let </span>code = pointer.全码.原始编码 % weights[encodable.简码等级 <span class="kw">as </span>usize];
-            <span class="kw">let </span>rank = <span class="self">self</span>.short_space.rank(code);
-            <span class="kw">let </span>actual = config.wrap_actual(code, rank, weights[encodable.简码等级 <span class="kw">as </span>usize]);
-            pointer.简码.写入(actual, rank &gt; <span class="number">0</span>);
-            <span class="self">self</span>.short_space.insert(code);
+            <span class="kw">let </span>原始编码 = 编码结果.全码.原始编码 % 乘数[词.简码等级 <span class="kw">as </span>usize];
+            编码结果.简码.原始编码 = 原始编码;
+            <span class="kw">let </span>序号 = <span class="self">self</span>.简码空间.查找数量(原始编码);
+            <span class="kw">let </span>编码 = 编码配置.生成编码(原始编码, 序号, 乘数[词.简码等级 <span class="kw">as </span>usize]);
+            编码结果.简码.写入(编码, 序号 &gt; <span class="number">0</span>);
+            <span class="self">self</span>.简码空间.添加(原始编码);
         }
         <span class="comment">// 常规简码
-        </span><span class="kw">for </span>(pointer, encodable) <span class="kw">in </span>zip(buffer.iter_mut(), <span class="kw-2">&amp;</span><span class="self">self</span>.encodables) {
-            <span class="kw">if </span>encodable.简码等级 != u64::MAX {
+        </span><span class="kw">for </span>(词, 编码结果) <span class="kw">in </span>zip(<span class="kw-2">&amp;</span><span class="self">self</span>.词信息, 编码结果.iter_mut()) {
+            <span class="kw">if </span>词.简码等级 != u64::MAX {
                 <span class="kw">continue</span>;
             }
-            <span class="kw">let </span>schemes = <span class="kw-2">&amp;</span>short_code[encodable.词长 - <span class="number">1</span>];
-            <span class="kw">let </span><span class="kw-2">mut </span>has_short = <span class="bool-val">false</span>;
-            <span class="kw">let </span>full = <span class="kw-2">&amp;</span>pointer.全码;
-            <span class="kw">let </span>short = <span class="kw-2">&amp;mut </span>pointer.简码;
-            <span class="kw">for </span>scheme <span class="kw">in </span>schemes {
+            <span class="kw">let </span>简码配置 = <span class="kw-2">&amp;</span>简码配置列表[词.词长 - <span class="number">1</span>];
+            <span class="kw">let </span><span class="kw-2">mut </span>有简码 = <span class="bool-val">false</span>;
+            <span class="kw">let </span>全码信息 = <span class="kw-2">&amp;</span>编码结果.全码;
+            <span class="kw">let </span>简码信息 = <span class="kw-2">&amp;mut </span>编码结果.简码;
+            <span class="kw">for </span>出简方式 <span class="kw">in </span>简码配置 {
                 <span class="kw">let </span>简码配置 {
                     prefix,
                     select_keys,
-                } = scheme;
-                <span class="kw">let </span>weight = weights[<span class="kw-2">*</span>prefix];
+                } = 出简方式;
+                <span class="kw">let </span>权重 = 乘数[<span class="kw-2">*</span>prefix];
                 <span class="comment">// 如果根本没有这么多码，就放弃
-                </span><span class="kw">if </span>full.原始编码 &lt; weight {
+                </span><span class="kw">if </span>全码信息.原始编码 &lt; 权重 {
                     <span class="kw">continue</span>;
                 }
                 <span class="comment">// 首先将全码截取一部分出来
-                </span><span class="kw">let </span>code = full.原始编码 % weight;
-                <span class="kw">let </span>rank = <span class="self">self</span>.full_space.rank(code) + <span class="self">self</span>.short_space.rank(code);
-                <span class="kw">if </span>rank &gt;= select_keys.len() <span class="kw">as </span>u8 {
+                </span><span class="kw">let </span>原始编码 = 全码信息.原始编码 % 权重;
+                <span class="kw">let </span>序号 = <span class="self">self</span>.全码空间.查找数量(原始编码) + <span class="self">self</span>.简码空间.查找数量(原始编码);
+                <span class="kw">if </span>序号 &gt;= select_keys.len() <span class="kw">as </span>u8 {
                     <span class="kw">continue</span>;
                 }
-                <span class="kw">let </span>actual = config.wrap_actual(code, rank, weight);
-                short.写入(actual, <span class="bool-val">false</span>);
-                <span class="self">self</span>.short_space.insert(code);
-                has_short = <span class="bool-val">true</span>;
+                <span class="kw">let </span>编码 = 编码配置.生成编码(原始编码, 序号, 权重);
+                简码信息.原始编码 = 原始编码;
+                简码信息.写入(编码, <span class="bool-val">false</span>);
+                <span class="self">self</span>.简码空间.添加(原始编码);
+                有简码 = <span class="bool-val">true</span>;
                 <span class="kw">break</span>;
             }
-            <span class="kw">if </span>!has_short {
-                <span class="kw">let </span>code = full.原始编码;
-                <span class="kw">let </span>rank = <span class="self">self</span>.short_space.rank(full.原始编码);
-                short.写入(full.实际编码, rank &gt; <span class="number">0</span>);
-                <span class="self">self</span>.short_space.insert(code);
+            <span class="kw">if </span>!有简码 {
+                <span class="kw">let </span>序号 = <span class="self">self</span>.简码空间.查找数量(全码信息.原始编码);
+                简码信息.原始编码 = 全码信息.原始编码;
+                简码信息.写入(全码信息.实际编码, 序号 &gt; <span class="number">0</span>);
+                <span class="self">self</span>.简码空间.添加(全码信息.原始编码);
             }
         }
     }
@@ -363,11 +365,13 @@
     ) -&gt; <span class="kw-2">&amp;mut </span>Vec&lt;编码信息&gt; {
         <span class="self">self</span>.重置();
         <span class="self">self</span>.输出全码(keymap, moved_elements);
-        <span class="kw">if </span><span class="self">self</span>.config.short_code.is_none() || <span class="self">self</span>.config.short_code.as_ref().unwrap().is_empty() {
-            <span class="kw">return </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.buffer;
+        <span class="kw">if </span><span class="self">self</span>.编码配置.简码配置列表.is_none()
+            || <span class="self">self</span>.编码配置.简码配置列表.as_ref().unwrap().is_empty()
+        {
+            <span class="kw">return </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.编码结果;
         }
         <span class="self">self</span>.输出简码();
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>.buffer
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>.编码结果
     }
 }
 </code></pre></div></section></main></body></html>

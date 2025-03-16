@@ -129,7 +129,7 @@
 
 <span class="kw">impl </span>编码空间 {
     <span class="attr">#[inline(always)]
-    </span><span class="kw">pub fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, code: u64) {
+    </span><span class="kw">pub fn </span>添加(<span class="kw-2">&amp;mut </span><span class="self">self</span>, code: u64) {
         <span class="kw">if </span>code &lt; <span class="self">self</span>.vector_length <span class="kw">as </span>u64 {
             <span class="kw">let </span>index = code <span class="kw">as </span>usize;
             <span class="self">self</span>.vector[index] = <span class="self">self</span>.vector[index].saturating_add(<span class="number">1</span>);
@@ -142,7 +142,7 @@
     }
 
     <span class="attr">#[inline(always)]
-    </span><span class="kw">pub fn </span>rank(<span class="kw-2">&amp;</span><span class="self">self</span>, code: u64) -&gt; u8 {
+    </span><span class="kw">pub fn </span>查找数量(<span class="kw-2">&amp;</span><span class="self">self</span>, code: u64) -&gt; u8 {
         <span class="kw">if </span>code &lt; <span class="self">self</span>.vector_length <span class="kw">as </span>u64 {
             <span class="kw">let </span>index = code <span class="kw">as </span>usize;
             <span class="self">self</span>.vector[index]
@@ -159,12 +159,12 @@
 }
 
 <span class="kw">pub struct </span>编码配置 {
-    <span class="kw">pub </span>radix: u64,
-    <span class="kw">pub </span>max_length: usize,
-    <span class="kw">pub </span>auto_select: 自动上屏,
-    <span class="kw">pub </span>select_keys: Vec&lt;键&gt;,
-    <span class="kw">pub </span>first_key: 键,
-    <span class="kw">pub </span>short_code: <span class="prelude-ty">Option</span>&lt;[Vec&lt;简码配置&gt;; 最大词长]&gt;,
+    <span class="kw">pub </span>进制: u64,
+    <span class="kw">pub </span>最大码长: usize,
+    <span class="kw">pub </span>自动上屏查找表: 自动上屏,
+    <span class="kw">pub </span>选择键: Vec&lt;键&gt;,
+    <span class="kw">pub </span>首选键: 键,
+    <span class="kw">pub </span>简码配置列表: <span class="prelude-ty">Option</span>&lt;[Vec&lt;简码配置&gt;; 最大词长]&gt;,
 }
 
 <span class="kw">impl </span>编码配置 {
@@ -180,29 +180,29 @@
             short_code = <span class="prelude-val">Some</span>(representation.预处理简码配置(configs.clone())<span class="question-mark">?</span>);
         }
         <span class="kw">let </span>result = <span class="self">Self </span>{
-            auto_select,
-            max_length,
-            radix: representation.进制,
-            select_keys: representation.选择键.clone(),
-            first_key: representation.选择键[<span class="number">0</span>],
-            short_code,
+            自动上屏查找表: auto_select,
+            最大码长: max_length,
+            进制: representation.进制,
+            选择键: representation.选择键.clone(),
+            首选键: representation.选择键[<span class="number">0</span>],
+            简码配置列表: short_code,
         };
         <span class="prelude-val">Ok</span>(result)
     }
 
     <span class="attr">#[inline(always)]
-    </span><span class="kw">pub fn </span>wrap_actual(<span class="kw-2">&amp;</span><span class="self">self</span>, code: u64, rank: u8, weight: u64) -&gt; u64 {
+    </span><span class="kw">pub fn </span>生成编码(<span class="kw-2">&amp;</span><span class="self">self</span>, code: u64, rank: u8, weight: u64) -&gt; u64 {
         <span class="kw">if </span>rank == <span class="number">0 </span>{
-            <span class="kw">if </span><span class="kw-2">*</span><span class="self">self</span>.auto_select.get(code <span class="kw">as </span>usize).unwrap_or(<span class="kw-2">&amp;</span><span class="bool-val">true</span>) {
+            <span class="kw">if </span><span class="kw-2">*</span><span class="self">self</span>.自动上屏查找表.get(code <span class="kw">as </span>usize).unwrap_or(<span class="kw-2">&amp;</span><span class="bool-val">true</span>) {
                 <span class="kw">return </span>code;
             } <span class="kw">else </span>{
-                <span class="kw">return </span>code + <span class="self">self</span>.first_key * weight;
+                <span class="kw">return </span>code + <span class="self">self</span>.首选键 * weight;
             }
         }
         <span class="kw">let </span>select = <span class="kw-2">*</span><span class="self">self
-            </span>.select_keys
+            </span>.选择键
             .get(rank <span class="kw">as </span>usize)
-            .unwrap_or(<span class="kw-2">&amp;</span><span class="self">self</span>.select_keys[<span class="number">0</span>]);
+            .unwrap_or(<span class="kw-2">&amp;</span><span class="self">self</span>.选择键[<span class="number">0</span>]);
         code + select * weight
     }
 }
