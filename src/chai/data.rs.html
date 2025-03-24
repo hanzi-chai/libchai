@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/data.rs`."><title>data.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="../../static.files/src-script-56102188.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/</div>data.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/data.rs`."><title>data.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.1 (4eb161250 2025-03-15)" data-channel="1.85.1" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="../../static.files/src-script-56102188.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/</div>data.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
 <a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
@@ -614,10 +614,65 @@
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a></pre></div><pre class="rust"><code><span class="doccomment">//! 数据结构的定义
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a></pre></div><pre class="rust"><code><span class="doccomment">//! 数据结构的定义
 
 </span><span class="kw">use crate</span>::{
-    config::{Mapped, MappedKey, Scheme, ShortCodeConfig, 配置},
+    config::{Mapped, MappedKey, Regularization, Scheme, ShortCodeConfig, 配置},
     encoders::简码配置,
     objectives::metric::get_fingering_types,
     错误,
@@ -685,13 +740,13 @@
 <span class="doccomment">/// 全码或简码的编码信息
 </span><span class="attr">#[derive(Clone, Debug, Copy, Default)]
 </span><span class="kw">pub struct </span>部分编码信息 {
-    <span class="kw">pub </span>原始编码: 编码,   <span class="comment">// 原始编码
-    </span><span class="kw">pub </span>原始编码候选位置: u8,          <span class="comment">// 原始编码上的选重位置
-    </span><span class="kw">pub </span>实际编码: 编码,        <span class="comment">// 实际编码
-    </span><span class="kw">pub </span>选重标记: bool,   <span class="comment">// 实际编码是否算作重码
-    </span><span class="kw">pub </span>上一个实际编码: 编码,      <span class="comment">// 前一个实际编码
+    <span class="kw">pub </span>原始编码: 编码,       <span class="comment">// 原始编码
+    </span><span class="kw">pub </span>原始编码候选位置: u8, <span class="comment">// 原始编码上的选重位置
+    </span><span class="kw">pub </span>实际编码: 编码,       <span class="comment">// 实际编码
+    </span><span class="kw">pub </span>选重标记: bool,       <span class="comment">// 实际编码是否算作重码
+    </span><span class="kw">pub </span>上一个实际编码: 编码, <span class="comment">// 前一个实际编码
     </span><span class="kw">pub </span>上一个选重标记: bool, <span class="comment">// 前一个实际编码是否算作重码
-    </span><span class="kw">pub </span>有变化: bool, <span class="comment">// 编码是否发生了变化
+    </span><span class="kw">pub </span>有变化: bool,         <span class="comment">// 编码是否发生了变化
 </span>}
 
 <span class="kw">impl </span>部分编码信息 {
@@ -772,6 +827,8 @@
     <span class="kw">pub </span>short_rank: u8,
 }
 
+<span class="kw">pub type </span>正则化 = FxHashMap&lt;元素, Vec&lt;(元素, f64)&gt;&gt;;
+
 <span class="doccomment">/// 将用户提供的输入转换为内部数据结构，并提供了一些实用的方法
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>数据 {
@@ -780,6 +837,7 @@
     <span class="kw">pub </span>键位分布信息: 键位分布信息,
     <span class="kw">pub </span>当量信息: 当量信息,
     <span class="kw">pub </span>初始映射: 元素映射,
+    <span class="kw">pub </span>正则化: 正则化,
     <span class="kw">pub </span>进制: u64,
     <span class="kw">pub </span>选择键: Vec&lt;键&gt;,
     <span class="kw">pub </span>键转数字: FxHashMap&lt;char, 键&gt;,
@@ -822,6 +880,17 @@
         <span class="kw">let </span>编码空间大小 = 进制.pow(组合长度 <span class="kw">as </span>u32) <span class="kw">as </span>usize;
         <span class="kw">let </span>键位分布信息 = <span class="self">Self</span>::预处理键位分布信息(<span class="kw-2">&amp;</span>原始键位分布信息, 进制, <span class="kw-2">&amp;</span>数字转键);
         <span class="kw">let </span>当量信息 = <span class="self">Self</span>::预处理当量信息(<span class="kw-2">&amp;</span>原始当量信息, 编码空间大小, 进制, <span class="kw-2">&amp;</span>数字转键);
+        <span class="kw">let </span>正则化 = <span class="kw">if let </span><span class="prelude-val">Some</span>(正则化配置) = 配置
+            .optimization
+            .clone()
+            .and_then(|x| <span class="prelude-val">Some</span>(x.objective))
+            .and_then(|x| <span class="prelude-val">Some</span>(x.regularization))
+            .flatten()
+        {
+            <span class="self">Self</span>::预处理正则化(<span class="kw-2">&amp;</span>正则化配置, <span class="kw-2">&amp;</span>元素转数字)<span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            FxHashMap::default()
+        };
         <span class="kw">let </span>repr = <span class="self">Self </span>{
             配置,
             词列表,
@@ -834,6 +903,7 @@
             数字转键,
             进制,
             选择键,
+            正则化,
         };
         <span class="prelude-val">Ok</span>(repr)
     }
@@ -878,41 +948,76 @@
 
     <span class="doccomment">/// 读取元素映射，然后把每一个元素转换成无符号整数，从而可以用向量来表示一个元素布局，向量的下标就是元素对应的数
     </span><span class="kw">pub fn </span>预处理映射(
-        config: <span class="kw-2">&amp;</span>配置,
-        key_repr: <span class="kw-2">&amp;</span>FxHashMap&lt;char, 键&gt;,
-        radix: u64,
+        配置: <span class="kw-2">&amp;</span>配置,
+        键转数字: <span class="kw-2">&amp;</span>FxHashMap&lt;char, 键&gt;,
+        进制: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;映射信息, 错误&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>keymap: 元素映射 = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>element_repr: FxHashMap&lt;String, 元素&gt; = FxHashMap::default();
-        <span class="kw">let </span><span class="kw-2">mut </span>repr_element: FxHashMap&lt;元素, String&gt; = FxHashMap::default();
-        <span class="kw">for </span>x <span class="kw">in </span><span class="number">0</span>..radix {
-            keymap.push(x);
+        <span class="kw">let </span><span class="kw-2">mut </span>元素映射: 元素映射 = (<span class="number">0</span>..进制).collect();
+        <span class="kw">let </span><span class="kw-2">mut </span>元素转数字: FxHashMap&lt;String, 元素&gt; = FxHashMap::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>数字转元素: FxHashMap&lt;元素, String&gt; = FxHashMap::default();
+        <span class="kw">for </span>(键字符, 键) <span class="kw">in </span>键转数字 {
+            元素转数字.insert(键字符.to_string(), <span class="kw-2">*</span>键 <span class="kw">as </span>usize);
+            数字转元素.insert(<span class="kw-2">*</span>键 <span class="kw">as </span>usize, 键字符.to_string());
         }
-        <span class="kw">for </span>(key, value) <span class="kw">in </span>key_repr {
-            element_repr.insert(key.to_string(), <span class="kw-2">*</span>value <span class="kw">as </span>usize);
-            repr_element.insert(<span class="kw-2">*</span>value <span class="kw">as </span>usize, key.to_string());
-        }
-        <span class="kw">for </span>(element, mapped) <span class="kw">in </span><span class="kw-2">&amp;</span>config.form.mapping {
-            <span class="kw">let </span>normalized = mapped.normalize();
-            <span class="kw">for </span>(index, mapped_key) <span class="kw">in </span>normalized.iter().enumerate() {
-                <span class="kw">if let </span>MappedKey::Ascii(x) = mapped_key {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(key) = key_repr.get(x) {
-                        <span class="kw">let </span>name = <span class="self">Self</span>::assemble(element, index);
-                        element_repr.insert(name.clone(), keymap.len());
-                        repr_element.insert(keymap.len(), name.clone());
-                        keymap.push(<span class="kw-2">*</span>key);
+        <span class="kw">for </span>(元素, 映射值) <span class="kw">in </span><span class="kw-2">&amp;</span>配置.form.mapping {
+            <span class="kw">let </span>映射值 = 映射值.normalize();
+            <span class="kw">for </span>(序号, 映射键) <span class="kw">in </span>映射值.iter().enumerate() {
+                <span class="kw">if let </span>MappedKey::Ascii(x) = 映射键 {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(键) = 键转数字.get(x) {
+                        <span class="kw">let </span>元素名 = <span class="self">Self</span>::序列化(元素, 序号);
+                        元素转数字.insert(元素名.clone(), 元素映射.len());
+                        数字转元素.insert(元素映射.len(), 元素名.clone());
+                        元素映射.push(<span class="kw-2">*</span>键);
                     } <span class="kw">else </span>{
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(
-                            <span class="macro">format!</span>(<span class="string">"元素 {element} 的编码中的字符 {x} 并不在字母表中"</span>).into()
-                        );
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"元素 {元素} 的编码中的字符 {x} 并不在字母表中"</span>).into());
                     }
                 }
             }
         }
-        <span class="prelude-val">Ok</span>((keymap, element_repr, repr_element))
+        <span class="prelude-val">Ok</span>((元素映射, 元素转数字, 数字转元素))
     }
 
-    <span class="kw">pub fn </span>assemble(element: <span class="kw-2">&amp;</span>String, index: usize) -&gt; String {
+    <span class="kw">pub fn </span>预处理正则化(
+        正则化: <span class="kw-2">&amp;</span>Regularization,
+        元素转数字: <span class="kw-2">&amp;</span>FxHashMap&lt;String, 元素&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;FxHashMap&lt;元素, Vec&lt;(元素, f64)&gt;&gt;, 错误&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>result = FxHashMap::default();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(列表) = <span class="kw-2">&amp;</span>正则化.element_affinities {
+            <span class="kw">for </span>规则 <span class="kw">in </span>列表 {
+                <span class="kw">let </span>元素名称 = <span class="self">Self</span>::序列化(<span class="kw-2">&amp;</span>规则.from.element, 规则.from.index);
+                <span class="kw">let </span>元素 = 元素转数字
+                    .get(<span class="kw-2">&amp;</span>元素名称)
+                    .ok_or(<span class="macro">format!</span>(<span class="string">"元素 {元素名称} 不存在"</span>))<span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>亲和度列表 = Vec::new();
+                <span class="kw">for </span>目标 <span class="kw">in </span>规则.to.iter() {
+                    <span class="kw">let </span>目标元素名称 = <span class="self">Self</span>::序列化(<span class="kw-2">&amp;</span>目标.element.element, 目标.element.index);
+                    <span class="kw">let </span>目标元素 = 元素转数字
+                        .get(<span class="kw-2">&amp;</span>目标元素名称)
+                        .ok_or(<span class="macro">format!</span>(<span class="string">"目标元素 {目标元素名称} 不存在"</span>))<span class="question-mark">?</span>;
+                    亲和度列表.push((<span class="kw-2">*</span>目标元素, 目标.affinity));
+                }
+                result.insert(<span class="kw-2">*</span>元素, 亲和度列表);
+            }
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(列表) = <span class="kw-2">&amp;</span>正则化.key_affinities {
+            <span class="kw">for </span>规则 <span class="kw">in </span>列表 {
+                <span class="kw">let </span>元素名称 = <span class="self">Self</span>::序列化(<span class="kw-2">&amp;</span>规则.from.element, 规则.from.index);
+                <span class="kw">let </span>元素 = 元素转数字
+                    .get(<span class="kw-2">&amp;</span>元素名称)
+                    .ok_or(<span class="macro">format!</span>(<span class="string">"元素 {元素名称} 不存在"</span>))<span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>亲和度列表 = Vec::new();
+                <span class="kw">for </span>目标 <span class="kw">in </span>规则.to.iter() {
+                    <span class="kw">let </span>目标键位 = 元素转数字
+                        .get(<span class="kw-2">&amp;</span>目标.element.to_string())
+                        .ok_or(<span class="macro">format!</span>(<span class="string">"目标键位不存在"</span>))<span class="question-mark">?</span>;
+                    亲和度列表.push((<span class="kw-2">*</span>目标键位, 目标.affinity));
+                }
+                result.insert(<span class="kw-2">*</span>元素, 亲和度列表);
+            }
+        }
+        <span class="prelude-val">Ok</span>(result)
+    }
+    <span class="kw">pub fn </span>序列化(element: <span class="kw-2">&amp;</span>String, index: usize) -&gt; String {
         <span class="kw">if </span>index == <span class="number">0 </span>{
             element.to_string()
         } <span class="kw">else </span>{
@@ -1003,7 +1108,7 @@
                 Mapped::Basic(string) =&gt; {
                     <span class="kw">let </span><span class="kw-2">mut </span>all_codes = String::new();
                     <span class="kw">for </span>index <span class="kw">in </span><span class="number">0</span>..string.len() {
-                        <span class="kw">let </span>name = <span class="self">Self</span>::assemble(element, index);
+                        <span class="kw">let </span>name = <span class="self">Self</span>::序列化(element, index);
                         all_codes.push(lookup(<span class="kw-2">&amp;</span>name));
                     }
                     Mapped::Basic(all_codes)
@@ -1014,7 +1119,7 @@
                         .enumerate()
                         .map(|(index, mapped_key)| <span class="kw">match </span>mapped_key {
                             MappedKey::Ascii(<span class="kw">_</span>) =&gt; {
-                                MappedKey::Ascii(lookup(<span class="kw-2">&amp;</span><span class="self">Self</span>::assemble(element, index)))
+                                MappedKey::Ascii(lookup(<span class="kw-2">&amp;</span><span class="self">Self</span>::序列化(element, index)))
                             }
                             other =&gt; other.clone(),
                         })
@@ -1028,7 +1133,9 @@
     }
 
     <span class="doccomment">/// 如前所述，建立了一个按键到整数的映射之后，可以将字符串看成具有某个进制的数。所以，给定一个数，也可以把它转化为字符串
-    </span><span class="kw">pub fn </span>数字转编码(code: 编码, 进制: u64, repr_key: <span class="kw-2">&amp;</span>FxHashMap&lt;键, char&gt;) -&gt; Vec&lt;char&gt; {
+    </span><span class="kw">pub fn </span>数字转编码(
+        code: 编码, 进制: u64, repr_key: <span class="kw-2">&amp;</span>FxHashMap&lt;键, char&gt;
+    ) -&gt; Vec&lt;char&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>chars = Vec::new();
         <span class="kw">let </span><span class="kw-2">mut </span>remainder = code;
         <span class="kw">while </span>remainder &gt; <span class="number">0 </span>{
@@ -1170,7 +1277,10 @@
         <span class="prelude-val">Ok</span>(result)
     }
 
-    <span class="kw">pub fn </span>预处理简码规则(<span class="kw-2">&amp;</span><span class="self">self</span>, schemes: <span class="kw-2">&amp;</span>Vec&lt;Scheme&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;简码配置&gt;, 错误&gt; {
+    <span class="kw">pub fn </span>预处理简码规则(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        schemes: <span class="kw-2">&amp;</span>Vec&lt;Scheme&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;简码配置&gt;, 错误&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>compiled_schemes = Vec::new();
         <span class="kw">for </span>scheme <span class="kw">in </span>schemes {
             <span class="kw">let </span>prefix = scheme.prefix;

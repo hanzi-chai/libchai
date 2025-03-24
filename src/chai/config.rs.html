@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/config.rs`."><title>config.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="../../static.files/src-script-56102188.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/</div>config.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/config.rs`."><title>config.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.1 (4eb161250 2025-03-15)" data-channel="1.85.1" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../static.files/storage-59e33391.js"></script><script defer src="../../static.files/src-script-56102188.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/</div>config.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
 <a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
@@ -376,7 +376,39 @@
 <a href="#375" id="375">375</a>
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a></pre></div><pre class="rust"><code><span class="doccomment">//! 配置文件的定义
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a></pre></div><pre class="rust"><code><span class="doccomment">//! 配置文件的定义
 //!
 //! 这部分内容太多，就不一一注释了。后期会写一个「`config.yaml` 详解」来统一解释各种配置文件的字段。
 //!
@@ -473,7 +505,7 @@
 </span><span class="kw">pub struct </span>PrimitiveCharacter {
     <span class="kw">pub </span>unicode: usize,
     <span class="kw">pub </span>tygf: u8,
-    <span class="kw">pub </span>gb2312: bool,
+    <span class="kw">pub </span>gb2312: u8,
     <span class="attr">#[serialize_always] </span><span class="comment">// JavaScript null
     </span><span class="kw">pub </span>name: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="attr">#[serialize_always] </span><span class="comment">// JavaScript null
@@ -661,6 +693,38 @@
     <span class="kw">pub </span>levels: <span class="prelude-ty">Option</span>&lt;Vec&lt;LevelWeights&gt;&gt;,
 }
 
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ElementWithIndex {
+    <span class="kw">pub </span>element: String,
+    <span class="kw">pub </span>index: usize,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ElementAffinityEntry {
+    <span class="kw">pub </span>element: ElementWithIndex,
+    <span class="kw">pub </span>affinity: f64,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>KeyAffinityEntry {
+    <span class="kw">pub </span>element: char,
+    <span class="kw">pub </span>affinity: f64,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>AffinityList&lt;T&gt; {
+    <span class="kw">pub </span>from: ElementWithIndex,
+    <span class="kw">pub </span>to: Vec&lt;T&gt;,
+}
+
+<span class="attr">#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>Regularization {
+    <span class="kw">pub </span>strength: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+    <span class="kw">pub </span>element_affinities: <span class="prelude-ty">Option</span>&lt;Vec&lt;AffinityList&lt;ElementAffinityEntry&gt;&gt;&gt;,
+    <span class="kw">pub </span>key_affinities: <span class="prelude-ty">Option</span>&lt;Vec&lt;AffinityList&lt;KeyAffinityEntry&gt;&gt;&gt;,
+}
+
 <span class="attr">#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ObjectiveConfig {
@@ -668,7 +732,7 @@
     <span class="kw">pub </span>words_full: <span class="prelude-ty">Option</span>&lt;PartialWeights&gt;,
     <span class="kw">pub </span>characters_short: <span class="prelude-ty">Option</span>&lt;PartialWeights&gt;,
     <span class="kw">pub </span>words_short: <span class="prelude-ty">Option</span>&lt;PartialWeights&gt;,
-    <span class="kw">pub </span>fingering: <span class="prelude-ty">Option</span>&lt;FingeringWeights&gt;,
+    <span class="kw">pub </span>regularization: <span class="prelude-ty">Option</span>&lt;Regularization&gt;,
 }
 
 <span class="attr">#[skip_serializing_none]

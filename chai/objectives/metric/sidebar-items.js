@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_fingering_types","get_partial_fingering_types"],"struct":["FingeringTypes","LevelMetric","LevelMetricUniform","Metric","PartialMetric","TierMetric"],"type":["FingeringMetric","FingeringMetricUniform"]};
+window.SIDEBAR_ITEMS = {"fn":["get_fingering_types","get_partial_fingering_types"],"struct":["FingeringTypes","LevelMetric","LevelMetricUniform","PartialMetric","TierMetric","默认指标"],"type":["FingeringMetric","FingeringMetricUniform"]};
