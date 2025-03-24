@@ -1,7 +1,7 @@
 //! 数据结构的定义
 
 use crate::{
-    config::{Mapped, MappedKey, Scheme, ShortCodeConfig, 配置},
+    config::{Mapped, MappedKey, Regularization, Scheme, ShortCodeConfig, 配置},
     encoders::简码配置,
     objectives::metric::get_fingering_types,
     错误,
@@ -69,13 +69,13 @@ pub struct 可编码对象 {
 /// 全码或简码的编码信息
 #[derive(Clone, Debug, Copy, Default)]
 pub struct 部分编码信息 {
-    pub 原始编码: 编码,   // 原始编码
-    pub 原始编码候选位置: u8,          // 原始编码上的选重位置
-    pub 实际编码: 编码,        // 实际编码
-    pub 选重标记: bool,   // 实际编码是否算作重码
-    pub 上一个实际编码: 编码,      // 前一个实际编码
+    pub 原始编码: 编码,       // 原始编码
+    pub 原始编码候选位置: u8, // 原始编码上的选重位置
+    pub 实际编码: 编码,       // 实际编码
+    pub 选重标记: bool,       // 实际编码是否算作重码
+    pub 上一个实际编码: 编码, // 前一个实际编码
     pub 上一个选重标记: bool, // 前一个实际编码是否算作重码
-    pub 有变化: bool, // 编码是否发生了变化
+    pub 有变化: bool,         // 编码是否发生了变化
 }
 
 impl 部分编码信息 {
@@ -156,6 +156,8 @@ pub struct 码表项 {
     pub short_rank: u8,
 }
 
+pub type 正则化 = FxHashMap<元素, Vec<(元素, f64)>>;
+
 /// 将用户提供的输入转换为内部数据结构，并提供了一些实用的方法
 #[derive(Debug, Clone)]
 pub struct 数据 {
@@ -164,6 +166,7 @@ pub struct 数据 {
     pub 键位分布信息: 键位分布信息,
     pub 当量信息: 当量信息,
     pub 初始映射: 元素映射,
+    pub 正则化: 正则化,
     pub 进制: u64,
     pub 选择键: Vec<键>,
     pub 键转数字: FxHashMap<char, 键>,
@@ -206,6 +209,17 @@ impl 数据 {
         let 编码空间大小 = 进制.pow(组合长度 as u32) as usize;
         let 键位分布信息 = Self::预处理键位分布信息(&原始键位分布信息, 进制, &数字转键);
         let 当量信息 = Self::预处理当量信息(&原始当量信息, 编码空间大小, 进制, &数字转键);
+        let 正则化 = if let Some(正则化配置) = 配置
+            .optimization
+            .clone()
+            .and_then(|x| Some(x.objective))
+            .and_then(|x| Some(x.regularization))
+            .flatten()
+        {
+            Self::预处理正则化(&正则化配置, &元素转数字)?
+        } else {
+            FxHashMap::default()
+        };
         let repr = Self {
             配置,
             词列表,
@@ -218,6 +232,7 @@ impl 数据 {
             数字转键,
             进制,
             选择键,
+            正则化,
         };
         Ok(repr)
     }
@@ -262,41 +277,76 @@ impl 数据 {
 
     /// 读取元素映射，然后把每一个元素转换成无符号整数，从而可以用向量来表示一个元素布局，向量的下标就是元素对应的数
     pub fn 预处理映射(
-        config: &配置,
-        key_repr: &FxHashMap<char, 键>,
-        radix: u64,
+        配置: &配置,
+        键转数字: &FxHashMap<char, 键>,
+        进制: u64,
     ) -> Result<映射信息, 错误> {
-        let mut keymap: 元素映射 = Vec::new();
-        let mut element_repr: FxHashMap<String, 元素> = FxHashMap::default();
-        let mut repr_element: FxHashMap<元素, String> = FxHashMap::default();
-        for x in 0..radix {
-            keymap.push(x);
+        let mut 元素映射: 元素映射 = (0..进制).collect();
+        let mut 元素转数字: FxHashMap<String, 元素> = FxHashMap::default();
+        let mut 数字转元素: FxHashMap<元素, String> = FxHashMap::default();
+        for (键字符, 键) in 键转数字 {
+            元素转数字.insert(键字符.to_string(), *键 as usize);
+            数字转元素.insert(*键 as usize, 键字符.to_string());
         }
-        for (key, value) in key_repr {
-            element_repr.insert(key.to_string(), *value as usize);
-            repr_element.insert(*value as usize, key.to_string());
-        }
-        for (element, mapped) in &config.form.mapping {
-            let normalized = mapped.normalize();
-            for (index, mapped_key) in normalized.iter().enumerate() {
-                if let MappedKey::Ascii(x) = mapped_key {
-                    if let Some(key) = key_repr.get(x) {
-                        let name = Self::assemble(element, index);
-                        element_repr.insert(name.clone(), keymap.len());
-                        repr_element.insert(keymap.len(), name.clone());
-                        keymap.push(*key);
+        for (元素, 映射值) in &配置.form.mapping {
+            let 映射值 = 映射值.normalize();
+            for (序号, 映射键) in 映射值.iter().enumerate() {
+                if let MappedKey::Ascii(x) = 映射键 {
+                    if let Some(键) = 键转数字.get(x) {
+                        let 元素名 = Self::序列化(元素, 序号);
+                        元素转数字.insert(元素名.clone(), 元素映射.len());
+                        数字转元素.insert(元素映射.len(), 元素名.clone());
+                        元素映射.push(*键);
                     } else {
-                        return Err(
-                            format!("元素 {element} 的编码中的字符 {x} 并不在字母表中").into()
-                        );
+                        return Err(format!("元素 {元素} 的编码中的字符 {x} 并不在字母表中").into());
                     }
                 }
             }
         }
-        Ok((keymap, element_repr, repr_element))
+        Ok((元素映射, 元素转数字, 数字转元素))
     }
 
-    pub fn assemble(element: &String, index: usize) -> String {
+    pub fn 预处理正则化(
+        正则化: &Regularization,
+        元素转数字: &FxHashMap<String, 元素>,
+    ) -> Result<FxHashMap<元素, Vec<(元素, f64)>>, 错误> {
+        let mut result = FxHashMap::default();
+        if let Some(列表) = &正则化.element_affinities {
+            for 规则 in 列表 {
+                let 元素名称 = Self::序列化(&规则.from.element, 规则.from.index);
+                let 元素 = 元素转数字
+                    .get(&元素名称)
+                    .ok_or(format!("元素 {元素名称} 不存在"))?;
+                let mut 亲和度列表 = Vec::new();
+                for 目标 in 规则.to.iter() {
+                    let 目标元素名称 = Self::序列化(&目标.element.element, 目标.element.index);
+                    let 目标元素 = 元素转数字
+                        .get(&目标元素名称)
+                        .ok_or(format!("目标元素 {目标元素名称} 不存在"))?;
+                    亲和度列表.push((*目标元素, 目标.affinity));
+                }
+                result.insert(*元素, 亲和度列表);
+            }
+        }
+        if let Some(列表) = &正则化.key_affinities {
+            for 规则 in 列表 {
+                let 元素名称 = Self::序列化(&规则.from.element, 规则.from.index);
+                let 元素 = 元素转数字
+                    .get(&元素名称)
+                    .ok_or(format!("元素 {元素名称} 不存在"))?;
+                let mut 亲和度列表 = Vec::new();
+                for 目标 in 规则.to.iter() {
+                    let 目标键位 = 元素转数字
+                        .get(&目标.element.to_string())
+                        .ok_or(format!("目标键位不存在"))?;
+                    亲和度列表.push((*目标键位, 目标.affinity));
+                }
+                result.insert(*元素, 亲和度列表);
+            }
+        }
+        Ok(result)
+    }
+    pub fn 序列化(element: &String, index: usize) -> String {
         if index == 0 {
             element.to_string()
         } else {
@@ -387,7 +437,7 @@ impl 数据 {
                 Mapped::Basic(string) => {
                     let mut all_codes = String::new();
                     for index in 0..string.len() {
-                        let name = Self::assemble(element, index);
+                        let name = Self::序列化(element, index);
                         all_codes.push(lookup(&name));
                     }
                     Mapped::Basic(all_codes)
@@ -398,7 +448,7 @@ impl 数据 {
                         .enumerate()
                         .map(|(index, mapped_key)| match mapped_key {
                             MappedKey::Ascii(_) => {
-                                MappedKey::Ascii(lookup(&Self::assemble(element, index)))
+                                MappedKey::Ascii(lookup(&Self::序列化(element, index)))
                             }
                             other => other.clone(),
                         })
@@ -412,7 +462,9 @@ impl 数据 {
     }
 
     /// 如前所述，建立了一个按键到整数的映射之后，可以将字符串看成具有某个进制的数。所以，给定一个数，也可以把它转化为字符串
-    pub fn 数字转编码(code: 编码, 进制: u64, repr_key: &FxHashMap<键, char>) -> Vec<char> {
+    pub fn 数字转编码(
+        code: 编码, 进制: u64, repr_key: &FxHashMap<键, char>
+    ) -> Vec<char> {
         let mut chars = Vec::new();
         let mut remainder = code;
         while remainder > 0 {
@@ -554,7 +606,10 @@ impl 数据 {
         Ok(result)
     }
 
-    pub fn 预处理简码规则(&self, schemes: &Vec<Scheme>) -> Result<Vec<简码配置>, 错误> {
+    pub fn 预处理简码规则(
+        &self,
+        schemes: &Vec<Scheme>,
+    ) -> Result<Vec<简码配置>, 错误> {
         let mut compiled_schemes = Vec::new();
         for scheme in schemes {
             let prefix = scheme.prefix;

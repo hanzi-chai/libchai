@@ -108,7 +108,7 @@ impl 默认操作 {
             let elements: Vec<usize> = match (element, index) {
                 // 如果指定了元素和码位
                 (Some(element), Some(index)) => {
-                    let element = *lookup(数据::assemble(element, *index))?;
+                    let element = *lookup(数据::序列化(element, *index))?;
                     vec![element]
                 }
                 // 如果指定了码位
@@ -117,7 +117,7 @@ impl 默认操作 {
                     for (key, value) in mapping {
                         let normalized = value.normalize();
                         if let Some(MappedKey::Ascii(_)) = normalized.get(*index) {
-                            let element = *lookup(数据::assemble(key, *index))?;
+                            let element = *lookup(数据::序列化(key, *index))?;
                             elements.push(element);
                         }
                     }
@@ -131,7 +131,7 @@ impl 默认操作 {
                     let mut elements = Vec::new();
                     for (i, x) in mapped.normalize().iter().enumerate() {
                         if let MappedKey::Ascii(_) = x {
-                            elements.push(*lookup(数据::assemble(element, i))?);
+                            elements.push(*lookup(数据::序列化(element, i))?);
                         }
                     }
                     elements

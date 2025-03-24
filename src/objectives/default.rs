@@ -1,8 +1,10 @@
 use super::cache::Cache;
-use super::metric::Metric;
+use super::metric::默认指标;
 use super::目标函数;
 use crate::config::PartialWeights;
-use crate::data::{数据, 用指标记, 编码信息, 键位分布损失函数};
+use crate::data::{
+    元素映射, 数据, 正则化, 用指标记, 编码信息, 键位分布损失函数
+};
 use crate::错误;
 
 #[derive(Clone)]
@@ -16,6 +18,8 @@ pub struct Parameters {
     pub ideal_distribution: Vec<键位分布损失函数>,
     pub pair_equivalence: Vec<f64>,
     pub fingering_types: Vec<用指标记>,
+    pub 正则化: 正则化,
+    pub 正则化强度: f64,
 }
 
 pub type Frequencies = Vec<f64>;
@@ -39,6 +43,7 @@ impl 默认目标函数 {
     pub fn 新建(数据: &数据) -> Result<Self, 错误> {
         let ideal_distribution = 数据.键位分布信息.clone();
         let pair_equivalence = 数据.当量信息.clone();
+        let 正则化 = 数据.正则化.clone();
         let fingering_types = 数据.预处理指法标记();
         let config = 数据
             .配置
@@ -59,6 +64,8 @@ impl 默认目标函数 {
             ideal_distribution,
             pair_equivalence,
             fingering_types,
+            正则化,
+            正则化强度: config.regularization.and_then(|x| x.strength).unwrap_or(1.0)
         };
         let objective = Self {
             parameters,
@@ -70,7 +77,9 @@ impl 默认目标函数 {
 
 impl 目标函数 for 默认目标函数 {
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
-    fn 计算(&mut self, 编码结果: &mut [编码信息]) -> (Metric, f64) {
+    fn 计算(
+        &mut self, 编码结果: &mut [编码信息], 映射: &元素映射
+    ) -> (默认指标, f64) {
         let parameters = &self.parameters;
 
         // 开始计算指标
@@ -90,11 +99,12 @@ impl 目标函数 for 默认目标函数 {
         }
 
         let mut loss = 0.0;
-        let mut metric = Metric {
+        let mut metric = 默认指标 {
             characters_full: None,
             words_full: None,
             characters_short: None,
             words_short: None,
+            memory: None,
         };
         for (index, bucket) in self.buckets.iter().enumerate() {
             let _ = &bucket[0].as_ref().map(|x| {
@@ -117,6 +127,27 @@ impl 目标函数 for 默认目标函数 {
             });
         }
 
+        if !parameters.正则化.is_empty() {
+            let mut 记忆量 = 映射.len() as f64;
+            for (元素, 键) in 映射.iter().enumerate() {
+                if 元素 as u64 == *键 {
+                    记忆量 -= 1.0;
+                    continue;
+                }
+                if let Some(归并列表) = parameters.正则化.get(&元素) {
+                    let mut 最大亲和度 = 0.0;
+                    for (目标元素, 亲和度) in 归并列表.iter() {
+                        if 映射[*目标元素] == *键 {
+                            最大亲和度 = 亲和度.max(最大亲和度);
+                        }
+                    }
+                    记忆量 -= 最大亲和度;
+                }
+            }
+            metric.memory = Some(记忆量);
+            let 归一化记忆量 = 记忆量 / 映射.len() as f64;
+            loss += 归一化记忆量 * parameters.正则化强度;
+        }
         (metric, loss)
     }
 }

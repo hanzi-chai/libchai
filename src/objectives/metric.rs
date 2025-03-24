@@ -216,15 +216,19 @@ impl Display for PartialMetric {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Metric {
+pub struct 默认指标 {
     pub characters_full: Option<PartialMetric>,
     pub characters_short: Option<PartialMetric>,
     pub words_full: Option<PartialMetric>,
     pub words_short: Option<PartialMetric>,
+    pub memory: Option<f64>,
 }
 
-impl Display for Metric {
+impl Display for 默认指标 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(记忆量) = &self.memory {
+            f.write_str(&format!("记忆量：{:.2}；\n", 记忆量))?;
+        }
         if let Some(characters) = &self.characters_full {
             f.write_str(&format!("一字全码［{}］\n", characters))?;
         }

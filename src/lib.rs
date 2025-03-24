@@ -20,7 +20,7 @@ use encoders::default::默认编码器;
 use encoders::编码器;
 use js_sys::Function;
 use objectives::default::默认目标函数;
-use objectives::{metric::Metric, 目标函数};
+use objectives::{metric::默认指标, 目标函数};
 use operators::default::默认操作;
 use optimizers::{优化方法, 优化问题};
 use serde::{Deserialize, Serialize};
@@ -28,7 +28,7 @@ use serde_wasm_bindgen::{from_value, to_value};
 use serde_with::skip_serializing_none;
 use std::collections::HashMap;
 use std::fs::{create_dir_all, read_to_string, write, OpenOptions};
-use std::io::Write;
+use std::io::{self, Write};
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use wasm_bindgen::{prelude::*, JsError};
@@ -47,6 +47,14 @@ impl From<String> for 错误 {
 
 impl From<&str> for 错误 {
     fn from(value: &str) -> Self {
+        Self {
+            message: value.to_string(),
+        }
+    }
+}
+
+impl From<io::Error> for 错误 {
+    fn from(value: io::Error) -> Self {
         Self {
             message: value.to_string(),
         }
@@ -99,14 +107,16 @@ pub enum 消息 {
     Progress {
         steps: usize,
         temperature: f64,
-        metric: Metric,
+        metric: 默认指标,
     },
     BetterSolution {
-        metric: Metric,
+        metric: 默认指标,
         config: 配置,
         save: bool,
     },
-    Elapsed(u128),
+    Elapsed {
+        time: u64,
+    }
 }
 
 /// 定义了向用户报告消息的接口，用于统一命令行和图形界面的输出方式
@@ -163,7 +173,7 @@ impl Web {
         let mut 编码结果 = 编码器.编码(&数据.初始映射, &None).clone();
         let 码表 = 数据.生成码表(&编码结果);
         let mut 目标函数 = 默认目标函数::新建(&数据)?;
-        let (指标, _) = 目标函数.计算(&mut 编码结果);
+        let (指标, _) = 目标函数.计算(&mut 编码结果, &数据.初始映射);
         Ok(to_value(&(码表, 指标))?)
     }
 
@@ -320,7 +330,7 @@ impl 命令行 {
         println!("已完成编码，结果保存在 {} 中", path.clone().display());
     }
 
-    pub fn 输出评测指标(&self, metric: Metric) {
+    pub fn 输出评测指标(&self, metric: 默认指标) {
         let path = self.输出目录.join("评测指标.yaml");
         print!("{}", metric);
         let metric_str = serde_yaml::to_string(&metric).unwrap();
@@ -370,7 +380,7 @@ impl 界面 for 命令行 {
                 "参数寻找完成，从最高温 {} 降到最低温 {}……",
                 t_max, t_min
             ),
-            消息::Elapsed(time) => writeln!(&mut writer, "计算一次评测用时：{} μs", time),
+            消息::Elapsed { time } => writeln!(&mut writer, "计算一次评测用时：{} μs", time),
             消息::Progress {
                 steps,
                 temperature,

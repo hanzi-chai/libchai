@@ -95,7 +95,7 @@ pub struct Reading {
 pub struct PrimitiveCharacter {
     pub unicode: usize,
     pub tygf: u8,
-    pub gb2312: bool,
+    pub gb2312: u8,
     #[serialize_always] // JavaScript null
     pub name: Option<String>,
     #[serialize_always] // JavaScript null
@@ -283,6 +283,38 @@ pub struct PartialWeights {
     pub levels: Option<Vec<LevelWeights>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElementWithIndex {
+    pub element: String,
+    pub index: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElementAffinityEntry {
+    pub element: ElementWithIndex,
+    pub affinity: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyAffinityEntry {
+    pub element: char,
+    pub affinity: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AffinityList<T> {
+    pub from: ElementWithIndex,
+    pub to: Vec<T>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Regularization {
+    pub strength: Option<f64>,
+    pub element_affinities: Option<Vec<AffinityList<ElementAffinityEntry>>>,
+    pub key_affinities: Option<Vec<AffinityList<KeyAffinityEntry>>>,
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectiveConfig {
@@ -290,7 +322,7 @@ pub struct ObjectiveConfig {
     pub words_full: Option<PartialWeights>,
     pub characters_short: Option<PartialWeights>,
     pub words_short: Option<PartialWeights>,
-    pub fingering: Option<FingeringWeights>,
+    pub regularization: Option<Regularization>,
 }
 
 #[skip_serializing_none]

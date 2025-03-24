@@ -1,7 +1,5 @@
 //! 退火算法
 
-use std::time::Instant;
-
 use super::{优化方法, 优化结果, 优化问题};
 use crate::{
     data::元素映射,
@@ -12,6 +10,8 @@ use crate::{
 };
 use rand::random;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
+use web_time::Instant;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 /// 退火算法的参数，包括最高温、最低温、步数
@@ -21,6 +21,7 @@ pub struct 降温时间表 {
     pub steps: usize,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct 退火方法 {
     pub parameters: Option<降温时间表>,
@@ -73,8 +74,8 @@ impl 退火方法 {
                     metric: annealing_rank.0.clone(),
                 });
                 if step == update_interval {
-                    let elapsed = start.elapsed().as_micros() / update_interval as u128;
-                    interface.发送(消息::Elapsed(elapsed));
+                    let elapsed = start.elapsed().as_micros() as u64 / update_interval as u64;
+                    interface.发送(消息::Elapsed { time: elapsed });
                 }
             }
             // 生成一个新解
