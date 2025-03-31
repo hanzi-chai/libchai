@@ -35,7 +35,7 @@ impl<F: 变异> 优化方法<F> for 退火方法 {
         &self,
         问题: &mut 优化问题<E, O, F>,
         界面: &dyn 界面,
-    ) -> 优化结果 {
+    ) -> 优化结果<O> {
         let 降温时间表 = self.parameters.unwrap_or_else(|| self.调参(问题, 界面));
         self.solve_with(问题, 降温时间表, 界面)
     }
@@ -48,7 +48,7 @@ impl 退火方法 {
         问题: &mut 优化问题<E, O, F>,
         parameters: 降温时间表,
         interface: &dyn 界面,
-    ) -> 优化结果 {
+    ) -> 优化结果<O> {
         let mut best_candidate = 问题.数据.初始映射.clone();
         let mut best_rank = 问题.计算(&best_candidate, &None);
         let mut annealing_candidate = best_candidate.clone();
@@ -67,11 +67,11 @@ impl 退火方法 {
             let progress = step as f64 / steps as f64;
             let temperature = t_max * (t_min / t_max).powf(progress);
             // 每过一定的步数，报告当前状态和计算速度
-            if step % update_interval == 0 {
+            if step % update_interval == 0 || step == steps - 1 {
                 interface.发送(消息::Progress {
                     steps: step,
                     temperature,
-                    metric: annealing_rank.0.clone(),
+                    metric: format!("{}", annealing_rank.0),
                 });
                 if step == update_interval {
                     let elapsed = start.elapsed().as_micros() as u64 / update_interval as u64;
@@ -98,29 +98,22 @@ impl 退火方法 {
                 best_rank = annealing_rank.clone();
                 best_candidate.clone_from(&annealing_candidate);
                 let save = progress > self.report_after.unwrap_or(0.9);
-                let 配置 = 问题.数据.更新配置(&best_candidate);
                 interface.发送(消息::BetterSolution {
-                    metric: best_rank.0.clone(),
-                    config: 配置,
+                    metric: format!("{}", best_rank.0),
+                    config: 问题.数据.更新配置(&best_candidate),
                     save,
                 })
             }
         }
-        interface.发送(消息::Progress {
-            steps,
-            temperature: t_min,
-            metric: best_rank.0.clone(),
-        });
-        let 配置 = 问题.数据.更新配置(&best_candidate);
         interface.发送(消息::BetterSolution {
-            metric: best_rank.0.clone(),
-            config: 配置,
+            metric: format!("{}", best_rank.0),
+            config: 问题.数据.更新配置(&best_candidate),
             save: true,
         });
         优化结果 {
             映射: best_candidate,
             指标: best_rank.0.clone(),
-            分数: start.elapsed().as_secs_f64(),
+            分数: best_rank.1,
         }
     }
 

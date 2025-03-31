@@ -20,13 +20,14 @@ use encoders::default::默认编码器;
 use encoders::编码器;
 use js_sys::Function;
 use objectives::default::默认目标函数;
-use objectives::{metric::默认指标, 目标函数};
+use objectives::目标函数;
 use operators::default::默认操作;
 use optimizers::{优化方法, 优化问题};
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::{from_value, to_value};
+use serde_wasm_bindgen::{from_value, to_value, Serializer};
 use serde_with::skip_serializing_none;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs::{create_dir_all, read_to_string, write, OpenOptions};
 use std::io::{self, Write};
 use std::iter::FromIterator;
@@ -107,16 +108,16 @@ pub enum 消息 {
     Progress {
         steps: usize,
         temperature: f64,
-        metric: 默认指标,
+        metric: String,
     },
     BetterSolution {
-        metric: 默认指标,
+        metric: String,
         config: 配置,
         save: bool,
     },
     Elapsed {
         time: u64,
-    }
+    },
 }
 
 /// 定义了向用户报告消息的接口，用于统一命令行和图形界面的输出方式
@@ -137,9 +138,9 @@ pub struct Web {
 #[wasm_bindgen]
 pub fn validate(js_config: JsValue) -> Result<JsValue, JsError> {
     set_once();
-    let config: 配置 = from_value(js_config)?;
-    let config_str = serde_yaml::to_string(&config).unwrap();
-    Ok(to_value(&config_str)?)
+    let 配置: 配置 = from_value(js_config)?;
+    let 序列化 = Serializer::json_compatible();
+    Ok(配置.serialize(&序列化)?)
 }
 
 #[wasm_bindgen]
@@ -197,9 +198,10 @@ impl Web {
 }
 
 impl 界面 for Web {
-    fn 发送(&self, message: 消息) {
-        let js_message = to_value(&message).unwrap();
-        self.回调.call1(&JsValue::null(), &js_message).unwrap();
+    fn 发送(&self, 消息: 消息) {
+        let 序列化 = Serializer::json_compatible();
+        let 前端消息 = 消息.serialize(&序列化).unwrap();
+        self.回调.call1(&JsValue::null(), &前端消息).unwrap();
     }
 }
 
@@ -330,7 +332,7 @@ impl 命令行 {
         println!("已完成编码，结果保存在 {} 中", path.clone().display());
     }
 
-    pub fn 输出评测指标(&self, metric: 默认指标) {
+    pub fn 输出评测指标<M: Display + Serialize>(&self, metric: M) {
         let path = self.输出目录.join("评测指标.yaml");
         print!("{}", metric);
         let metric_str = serde_yaml::to_string(&metric).unwrap();
@@ -395,31 +397,33 @@ impl 界面 for 命令行 {
                 config,
                 save,
             } => {
-                let time = Local::now();
-                let prefix = time.format("%m-%d+%H_%M_%S_%3f").to_string();
-                let config_path = self.输出目录.join(format!("{}.yaml", prefix));
-                let metric_path = self.输出目录.join(format!("{}.metric.yaml", prefix));
-                let mut res1 = writeln!(
-                    &mut writer,
-                    "{} 系统搜索到了一个更好的方案，评测指标如下：\n{}",
-                    time.format("%H:%M:%S"),
-                    metric
-                );
-                let config = serde_yaml::to_string(&config).unwrap();
-                let metric = serde_yaml::to_string(&metric).unwrap();
+                let 时刻 = Local::now();
+                let 时间戳 = 时刻.format("%m-%d+%H_%M_%S_%3f").to_string();
+                let 配置路径 = self.输出目录.join(format!("{}.yaml", 时间戳));
+                let 指标路径 = self.输出目录.join(format!("{}.txt", 时间戳));
                 if save {
-                    write(metric_path, metric).unwrap();
-                    write(config_path, config).unwrap();
-                    let res2 = writeln!(
+                    let mut 配置 = config.clone();
+                    if let Some(info) = 配置.info.as_mut() {
+                        info.version = Some(时间戳.clone());
+                    }
+                    let 序列化配置 = serde_yaml::to_string(&配置).unwrap();
+                    write(指标路径, metric.clone()).unwrap();
+                    write(配置路径, 序列化配置).unwrap();
+                    writeln!(
                         &mut writer,
                         "方案文件保存于 {}.yaml 中，评测指标保存于 {}.metric.yaml 中",
-                        prefix, prefix
-                    );
-                    res1 = res1.and(res2);
+                        时间戳, 时间戳
+                    )
+                    .unwrap();
                 }
-                res1
+                writeln!(
+                    &mut writer,
+                    "{} 系统搜索到了一个更好的方案，评测指标如下：\n{}",
+                    时刻.format("%H:%M:%S"),
+                    metric
+                )
             }
         };
-        result.unwrap();
+        result.unwrap()
     }
 }

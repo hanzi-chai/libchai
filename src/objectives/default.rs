@@ -9,8 +9,8 @@ use crate::错误;
 
 #[derive(Clone)]
 pub struct 默认目标函数 {
-    parameters: Parameters,
-    buckets: Vec<[Option<Cache>; 2]>,
+    pub parameters: Parameters,
+    pub buckets: Vec<[Option<Cache>; 2]>,
 }
 
 #[derive(Clone)]
@@ -76,6 +76,8 @@ impl 默认目标函数 {
 }
 
 impl 目标函数 for 默认目标函数 {
+    type 目标值 = 默认指标;
+
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
     fn 计算(
         &mut self, 编码结果: &mut [编码信息], 映射: &元素映射

@@ -12,7 +12,7 @@ use std::collections::HashMap;
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Info {
-    pub name: String,
+    pub name: Option<String>,
     pub version: Option<String>,
     pub author: Option<String>,
     pub description: Option<String>,
@@ -38,6 +38,7 @@ pub enum Draw {
     V { parameterList: [i8; 1] },
     C { parameterList: [i8; 6] },
     Z { parameterList: [i8; 6] },
+    A { parameterList: [i8; 1] },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +76,12 @@ pub enum Glyph {
         source: String,
         strokes: Vec<Stroke>,
     },
+    SplicedComponent {
+        tags: Option<Vec<String>>,
+        operator: String,
+        operandList: Vec<String>,
+        order: Option<Vec<Block>>,
+    },
     Compound {
         tags: Option<Vec<String>>,
         operator: String,
@@ -100,6 +107,8 @@ pub struct PrimitiveCharacter {
     pub name: Option<String>,
     #[serialize_always] // JavaScript null
     pub gf0014_id: Option<usize>,
+    #[serialize_always] // JavaScript null
+    pub gf3001_id: Option<usize>,
     pub readings: Vec<Reading>,
     pub glyphs: Vec<Glyph>,
     pub ambiguous: bool,
@@ -290,14 +299,14 @@ pub struct ElementWithIndex {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ElementAffinityEntry {
+pub struct ElementAffinityTarget {
     pub element: ElementWithIndex,
     pub affinity: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KeyAffinityEntry {
-    pub element: char,
+pub struct KeyAffinityTarget {
+    pub key: char,
     pub affinity: f64,
 }
 
@@ -311,8 +320,8 @@ pub struct AffinityList<T> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Regularization {
     pub strength: Option<f64>,
-    pub element_affinities: Option<Vec<AffinityList<ElementAffinityEntry>>>,
-    pub key_affinities: Option<Vec<AffinityList<KeyAffinityEntry>>>,
+    pub element_affinities: Option<Vec<AffinityList<ElementAffinityTarget>>>,
+    pub key_affinities: Option<Vec<AffinityList<KeyAffinityTarget>>>,
 }
 
 #[skip_serializing_none]
@@ -358,19 +367,48 @@ pub struct OptimizationConfig {
 }
 // config.optimization end
 
+// config.diagram begin
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutRow {
+    pub keys: Vec<char>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BoxConfig {
+    Key { style: Option<String> },
+    Uppercase { style: Option<String> },
+    Element { r#match: Option<String>, style: Option<String> },
+    Custom { mapping: Option<String>, style: Option<String> },
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagramConfig {
+    pub layout: Vec<LayoutRow>,
+    pub contents: Vec<BoxConfig>,
+    pub row_style: Option<String>,
+    pub cell_style: Option<String>,
+}
+
+// config.diagram end
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct 配置 {
     pub version: Option<String>,
     #[serialize_always] // JavaScript null
     pub source: Option<String>,
-    pub info: Info,
+    pub info: Option<Info>,
     pub data: Option<Data>,
     pub analysis: Option<Analysis>,
     pub algebra: Option<Algebra>,
     pub form: FormConfig,
     pub encoder: EncoderConfig,
     pub optimization: Option<OptimizationConfig>,
+    pub diagram: Option<DiagramConfig>,
 }
 
 impl Default for 配置 {
@@ -378,12 +416,7 @@ impl Default for 配置 {
         配置 {
             version: None,
             source: None,
-            info: Info {
-                name: "default".to_string(),
-                version: None,
-                author: None,
-                description: None,
-            },
+            info: None,
             data: None,
             analysis: None,
             algebra: None,
@@ -405,6 +438,7 @@ impl Default for 配置 {
                 priority_short_codes: None,
             },
             optimization: None,
+            diagram: None,
         }
     }
 }

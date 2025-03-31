@@ -337,7 +337,7 @@ impl 数据 {
                 let mut 亲和度列表 = Vec::new();
                 for 目标 in 规则.to.iter() {
                     let 目标键位 = 元素转数字
-                        .get(&目标.element.to_string())
+                        .get(&目标.key.to_string())
                         .ok_or(format!("目标键位不存在"))?;
                     亲和度列表.push((*目标键位, 目标.affinity));
                 }

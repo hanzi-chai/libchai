@@ -4,7 +4,7 @@
 use crate::{
     data::{元素, 元素映射, 数据},
     encoders::编码器,
-    objectives::{metric::默认指标, 目标函数},
+    objectives::目标函数,
     界面,
 };
 pub mod genetic;
@@ -31,9 +31,9 @@ pub static mut 全局计时器: 计时器 = 计时器 {
     objective_accept: 0,
 };
 
-pub struct 优化结果 {
+pub struct 优化结果<O: 目标函数> {
     pub 映射: 元素映射,
-    pub 指标: 默认指标,
+    pub 指标: O::目标值,
     pub 分数: f64,
 }
 
@@ -54,7 +54,9 @@ impl<E: 编码器, O: 目标函数, F> 优化问题<E, O, F> {
         }
     }
 
-    pub fn 计算(&mut self, 映射: &元素映射, 变化: &Option<Vec<元素>>) -> (默认指标, f64) {
+    pub fn 计算(
+        &mut self, 映射: &元素映射, 变化: &Option<Vec<元素>>
+    ) -> (O::目标值, f64) {
         let 编码结果 = self.编码器.编码(映射, 变化);
         self.目标函数.计算(编码结果, 映射)
     }
@@ -65,5 +67,5 @@ pub trait 优化方法<F> {
         &self,
         问题: &mut 优化问题<E, O, F>,
         界面: &dyn 界面,
-    ) -> 优化结果;
+    ) -> 优化结果<O>;
 }
