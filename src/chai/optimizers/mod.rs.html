@@ -67,13 +67,15 @@
 <a href="#66" id="66">66</a>
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a></pre></div><pre class="rust"><code><span class="doccomment">//! 优化方法接口，以及若干优化方法的实现
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a></pre></div><pre class="rust"><code><span class="doccomment">//! 优化方法接口，以及若干优化方法的实现
 //!
 
 </span><span class="kw">use crate</span>::{
     data::{元素, 元素映射, 数据},
     encoders::编码器,
-    objectives::{metric::默认指标, 目标函数},
+    objectives::目标函数,
     界面,
 };
 <span class="kw">pub mod </span>genetic;
@@ -100,9 +102,9 @@
     objective_accept: <span class="number">0</span>,
 };
 
-<span class="kw">pub struct </span>优化结果 {
+<span class="kw">pub struct </span>优化结果&lt;O: 目标函数&gt; {
     <span class="kw">pub </span>映射: 元素映射,
-    <span class="kw">pub </span>指标: 默认指标,
+    <span class="kw">pub </span>指标: O::目标值,
     <span class="kw">pub </span>分数: f64,
 }
 
@@ -123,7 +125,9 @@
         }
     }
 
-    <span class="kw">pub fn </span>计算(<span class="kw-2">&amp;mut </span><span class="self">self</span>, 映射: <span class="kw-2">&amp;</span>元素映射, 变化: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Vec&lt;元素&gt;&gt;) -&gt; (默认指标, f64) {
+    <span class="kw">pub fn </span>计算(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, 映射: <span class="kw-2">&amp;</span>元素映射, 变化: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Vec&lt;元素&gt;&gt;
+    ) -&gt; (O::目标值, f64) {
         <span class="kw">let </span>编码结果 = <span class="self">self</span>.编码器.编码(映射, 变化);
         <span class="self">self</span>.目标函数.计算(编码结果, 映射)
     }
@@ -134,6 +138,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         问题: <span class="kw-2">&amp;mut </span>优化问题&lt;E, O, F&gt;,
         界面: <span class="kw-2">&amp;</span><span class="kw">dyn </span>界面,
-    ) -&gt; 优化结果;
+    ) -&gt; 优化结果&lt;O&gt;;
 }
 </code></pre></div></section></main></body></html>

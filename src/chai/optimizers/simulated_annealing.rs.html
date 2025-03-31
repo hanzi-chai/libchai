@@ -215,14 +215,7 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a></pre></div><pre class="rust"><code><span class="doccomment">//! 退火算法
+<a href="#217" id="217">217</a></pre></div><pre class="rust"><code><span class="doccomment">//! 退火算法
 
 </span><span class="kw">use super</span>::{优化方法, 优化结果, 优化问题};
 <span class="kw">use crate</span>::{
@@ -259,7 +252,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         问题: <span class="kw-2">&amp;mut </span>优化问题&lt;E, O, F&gt;,
         界面: <span class="kw-2">&amp;</span><span class="kw">dyn </span>界面,
-    ) -&gt; 优化结果 {
+    ) -&gt; 优化结果&lt;O&gt; {
         <span class="kw">let </span>降温时间表 = <span class="self">self</span>.parameters.unwrap_or_else(|| <span class="self">self</span>.调参(问题, 界面));
         <span class="self">self</span>.solve_with(问题, 降温时间表, 界面)
     }
@@ -272,7 +265,7 @@
         问题: <span class="kw-2">&amp;mut </span>优化问题&lt;E, O, F&gt;,
         parameters: 降温时间表,
         interface: <span class="kw-2">&amp;</span><span class="kw">dyn </span>界面,
-    ) -&gt; 优化结果 {
+    ) -&gt; 优化结果&lt;O&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>best_candidate = 问题.数据.初始映射.clone();
         <span class="kw">let </span><span class="kw-2">mut </span>best_rank = 问题.计算(<span class="kw-2">&amp;</span>best_candidate, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>annealing_candidate = best_candidate.clone();
@@ -291,11 +284,11 @@
             </span><span class="kw">let </span>progress = step <span class="kw">as </span>f64 / steps <span class="kw">as </span>f64;
             <span class="kw">let </span>temperature = t_max * (t_min / t_max).powf(progress);
             <span class="comment">// 每过一定的步数，报告当前状态和计算速度
-            </span><span class="kw">if </span>step % update_interval == <span class="number">0 </span>{
+            </span><span class="kw">if </span>step % update_interval == <span class="number">0 </span>|| step == steps - <span class="number">1 </span>{
                 interface.发送(消息::Progress {
                     steps: step,
                     temperature,
-                    metric: annealing_rank.<span class="number">0</span>.clone(),
+                    metric: <span class="macro">format!</span>(<span class="string">"{}"</span>, annealing_rank.<span class="number">0</span>),
                 });
                 <span class="kw">if </span>step == update_interval {
                     <span class="kw">let </span>elapsed = start.elapsed().as_micros() <span class="kw">as </span>u64 / update_interval <span class="kw">as </span>u64;
@@ -322,29 +315,22 @@
                 best_rank = annealing_rank.clone();
                 best_candidate.clone_from(<span class="kw-2">&amp;</span>annealing_candidate);
                 <span class="kw">let </span>save = progress &gt; <span class="self">self</span>.report_after.unwrap_or(<span class="number">0.9</span>);
-                <span class="kw">let </span>配置 = 问题.数据.更新配置(<span class="kw-2">&amp;</span>best_candidate);
                 interface.发送(消息::BetterSolution {
-                    metric: best_rank.<span class="number">0</span>.clone(),
-                    config: 配置,
+                    metric: <span class="macro">format!</span>(<span class="string">"{}"</span>, best_rank.<span class="number">0</span>),
+                    config: 问题.数据.更新配置(<span class="kw-2">&amp;</span>best_candidate),
                     save,
                 })
             }
         }
-        interface.发送(消息::Progress {
-            steps,
-            temperature: t_min,
-            metric: best_rank.<span class="number">0</span>.clone(),
-        });
-        <span class="kw">let </span>配置 = 问题.数据.更新配置(<span class="kw-2">&amp;</span>best_candidate);
         interface.发送(消息::BetterSolution {
-            metric: best_rank.<span class="number">0</span>.clone(),
-            config: 配置,
+            metric: <span class="macro">format!</span>(<span class="string">"{}"</span>, best_rank.<span class="number">0</span>),
+            config: 问题.数据.更新配置(<span class="kw-2">&amp;</span>best_candidate),
             save: <span class="bool-val">true</span>,
         });
         优化结果 {
             映射: best_candidate,
             指标: best_rank.<span class="number">0</span>.clone(),
-            分数: start.elapsed().as_secs_f64(),
+            分数: best_rank.<span class="number">1</span>,
         }
     }
 

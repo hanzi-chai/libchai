@@ -151,7 +151,9 @@
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::cache::Cache;
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::cache::Cache;
 <span class="kw">use </span><span class="kw">super</span>::metric::默认指标;
 <span class="kw">use </span><span class="kw">super</span>::目标函数;
 <span class="kw">use </span><span class="kw">crate</span>::config::PartialWeights;
@@ -162,8 +164,8 @@
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>默认目标函数 {
-    parameters: Parameters,
-    buckets: Vec&lt;[<span class="prelude-ty">Option</span>&lt;Cache&gt;; <span class="number">2</span>]&gt;,
+    <span class="kw">pub </span>parameters: Parameters,
+    <span class="kw">pub </span>buckets: Vec&lt;[<span class="prelude-ty">Option</span>&lt;Cache&gt;; <span class="number">2</span>]&gt;,
 }
 
 <span class="attr">#[derive(Clone)]
@@ -229,6 +231,8 @@
 }
 
 <span class="kw">impl </span>目标函数 <span class="kw">for </span>默认目标函数 {
+    <span class="kw">type </span>目标值 = 默认指标;
+
     <span class="doccomment">/// 计算各个部分编码的指标，然后将它们合并成一个指标输出
     </span><span class="kw">fn </span>计算(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, 编码结果: <span class="kw-2">&amp;mut </span>[编码信息], 映射: <span class="kw-2">&amp;</span>元素映射

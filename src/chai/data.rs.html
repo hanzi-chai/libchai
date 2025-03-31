@@ -1008,7 +1008,7 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>亲和度列表 = Vec::new();
                 <span class="kw">for </span>目标 <span class="kw">in </span>规则.to.iter() {
                     <span class="kw">let </span>目标键位 = 元素转数字
-                        .get(<span class="kw-2">&amp;</span>目标.element.to_string())
+                        .get(<span class="kw-2">&amp;</span>目标.key.to_string())
                         .ok_or(<span class="macro">format!</span>(<span class="string">"目标键位不存在"</span>))<span class="question-mark">?</span>;
                     亲和度列表.push((<span class="kw-2">*</span>目标键位, 目标.affinity));
                 }
