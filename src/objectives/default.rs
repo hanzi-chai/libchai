@@ -1,23 +1,26 @@
-use super::cache::Cache;
+use rustc_hash::FxHashMap;
+
+use super::cache::缓存;
 use super::metric::默认指标;
 use super::目标函数;
 use crate::config::PartialWeights;
 use crate::data::{
-    元素映射, 数据, 正则化, 用指标记, 编码信息, 键位分布损失函数
+    元素映射, 指法向量, 数据, 正则化, 编码信息, 键位分布损失函数
 };
 use crate::错误;
 
 #[derive(Clone)]
 pub struct 默认目标函数 {
-    pub parameters: Parameters,
-    pub buckets: Vec<[Option<Cache>; 2]>,
+    pub 参数: 默认目标函数参数,
+    pub 计数桶列表: Vec<[Option<缓存>; 2]>,
 }
 
 #[derive(Clone)]
-pub struct Parameters {
-    pub ideal_distribution: Vec<键位分布损失函数>,
-    pub pair_equivalence: Vec<f64>,
-    pub fingering_types: Vec<用指标记>,
+pub struct 默认目标函数参数 {
+    pub 键位分布信息: Vec<键位分布损失函数>,
+    pub 当量信息: Vec<f64>,
+    pub 指法计数: Vec<指法向量>,
+    pub 数字转键: FxHashMap<u64, char>,
     pub 正则化: 正则化,
     pub 正则化强度: f64,
 }
@@ -41,10 +44,10 @@ impl PartialType {
 impl 默认目标函数 {
     /// 通过传入配置表示、编码器和共用资源来构造一个目标函数
     pub fn 新建(数据: &数据) -> Result<Self, 错误> {
-        let ideal_distribution = 数据.键位分布信息.clone();
-        let pair_equivalence = 数据.当量信息.clone();
+        let 键位分布信息 = 数据.键位分布信息.clone();
+        let 当量信息 = 数据.当量信息.clone();
         let 正则化 = 数据.正则化.clone();
-        let fingering_types = 数据.预处理指法标记();
+        let 指法计数 = 数据.预处理指法标记();
         let config = 数据
             .配置
             .optimization
@@ -52,26 +55,27 @@ impl 默认目标函数 {
             .ok_or("优化配置不存在")?
             .objective
             .clone();
-        let radix = 数据.进制;
-        let max_index = pair_equivalence.len() as u64;
-        let make_cache = |x: &PartialWeights| Cache::new(x, radix, 数据.词列表.len(), max_index);
-        let cf = config.characters_full.as_ref().map(make_cache);
-        let cs = config.characters_short.as_ref().map(make_cache);
-        let wf = config.words_full.as_ref().map(make_cache);
-        let ws = config.words_short.as_ref().map(make_cache);
-        let buckets = vec![[cf, cs], [wf, ws]];
-        let parameters = Parameters {
-            ideal_distribution,
-            pair_equivalence,
-            fingering_types,
+        let 最大编码 = 当量信息.len() as u64;
+        let 构造缓存 = |x: &PartialWeights| 缓存::new(x, 数据.进制, 数据.词列表.len(), 最大编码);
+        let 一字全码 = config.characters_full.as_ref().map(构造缓存);
+        let 一字简码 = config.characters_short.as_ref().map(构造缓存);
+        let 多字全码 = config.words_full.as_ref().map(构造缓存);
+        let 多字简码 = config.words_short.as_ref().map(构造缓存);
+        let 计数桶列表 = vec![[一字全码, 一字简码], [多字全码, 多字简码]];
+        let 参数 = 默认目标函数参数 {
+            键位分布信息,
+            当量信息,
+            指法计数,
+            数字转键: 数据.数字转键.clone(),
             正则化,
-            正则化强度: config.regularization.and_then(|x| x.strength).unwrap_or(1.0)
+            正则化强度: config
+                .regularization
+                .and_then(|x| x.strength)
+                .unwrap_or(1.0),
         };
-        let objective = Self {
-            parameters,
-            buckets,
-        };
-        Ok(objective)
+        Ok(Self {
+            参数, 计数桶列表
+        })
     }
 }
 
@@ -82,21 +86,21 @@ impl 目标函数 for 默认目标函数 {
     fn 计算(
         &mut self, 编码结果: &mut [编码信息], 映射: &元素映射
     ) -> (默认指标, f64) {
-        let parameters = &self.parameters;
+        let parameters = &self.参数;
 
         // 开始计算指标
         for (index, code_info) in 编码结果.iter_mut().enumerate() {
             let frequency = code_info.频率;
             let bucket = if code_info.词长 == 1 {
-                &mut self.buckets[0]
+                &mut self.计数桶列表[0]
             } else {
-                &mut self.buckets[1]
+                &mut self.计数桶列表[1]
             };
             if let Some(cache) = &mut bucket[0] {
-                cache.process(index, frequency, &mut code_info.全码, parameters);
+                cache.处理(index, frequency, &mut code_info.全码, parameters);
             }
             if let Some(cache) = &mut bucket[1] {
-                cache.process(index, frequency, &mut code_info.简码, parameters);
+                cache.处理(index, frequency, &mut code_info.简码, parameters);
             }
         }
 
@@ -108,9 +112,9 @@ impl 目标函数 for 默认目标函数 {
             words_short: None,
             memory: None,
         };
-        for (index, bucket) in self.buckets.iter().enumerate() {
+        for (index, bucket) in self.计数桶列表.iter().enumerate() {
             let _ = &bucket[0].as_ref().map(|x| {
-                let (partial, accum) = x.finalize(parameters);
+                let (partial, accum) = x.汇总(parameters);
                 loss += accum;
                 if index == 0 {
                     metric.characters_full = Some(partial);
@@ -119,7 +123,7 @@ impl 目标函数 for 默认目标函数 {
                 }
             });
             let _ = &bucket[1].as_ref().map(|x| {
-                let (partial, accum) = x.finalize(parameters);
+                let (partial, accum) = x.汇总(parameters);
                 loss += accum;
                 if index == 0 {
                     metric.characters_short = Some(partial);

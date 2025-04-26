@@ -3,7 +3,7 @@
 use crate::{
     config::{Mapped, MappedKey, Regularization, Scheme, ShortCodeConfig, 配置},
     encoders::简码配置,
-    objectives::metric::get_fingering_types,
+    objectives::metric::指法标记,
     错误,
 };
 use regex::Regex;
@@ -80,37 +80,15 @@ pub struct 部分编码信息 {
 
 impl 部分编码信息 {
     #[inline(always)]
-    pub fn 写入(&mut self, code: 编码, duplicate: bool) {
-        if self.实际编码 == code && self.选重标记 == duplicate {
+    pub fn 更新(&mut self, 编码: 编码, 选重标记: bool) {
+        if self.实际编码 == 编码 && self.选重标记 == 选重标记 {
             return;
         }
         self.有变化 = true;
         self.上一个实际编码 = self.实际编码;
         self.上一个选重标记 = self.选重标记;
-        self.实际编码 = code;
-        self.选重标记 = duplicate;
-    }
-
-    #[inline(always)]
-    pub fn 写入编码(&mut self, code: 编码) {
-        if self.实际编码 == code {
-            return;
-        }
-        self.有变化 = true;
-        self.上一个实际编码 = self.实际编码;
-        self.上一个选重标记 = self.选重标记;
-        self.实际编码 = code;
-    }
-
-    #[inline(always)]
-    pub fn 写入选重(&mut self, duplicate: bool) {
-        if self.选重标记 == duplicate {
-            return;
-        }
-        self.有变化 = true;
-        self.上一个实际编码 = self.实际编码;
-        self.上一个选重标记 = self.选重标记;
-        self.选重标记 = duplicate;
+        self.实际编码 = 编码;
+        self.选重标记 = 选重标记;
     }
 }
 
@@ -141,7 +119,7 @@ pub type 键 = u64;
 pub type 元素映射 = Vec<键>;
 
 /// 用指标记
-pub type 用指标记 = [u8; 8];
+pub type 指法向量 = [u8; 8];
 
 /// 自动上屏判断数组
 pub type 自动上屏 = Vec<bool>;
@@ -241,15 +219,15 @@ impl 数据 {
     /// 1, ... n = 所有常规编码键
     /// n + 1, ..., m = 所有选择键
     pub fn 预处理字母表(config: &配置) -> Result<字母表信息, 错误> {
-        let mut key_repr: FxHashMap<char, 键> = FxHashMap::default();
-        let mut repr_key: FxHashMap<键, char> = FxHashMap::default();
+        let mut 键转数字: FxHashMap<char, 键> = FxHashMap::default();
+        let mut 数字转键: FxHashMap<键, char> = FxHashMap::default();
         let mut index = 1;
         for key in config.form.alphabet.chars() {
-            if key_repr.contains_key(&key) {
+            if 键转数字.contains_key(&key) {
                 return Err("编码键有重复！".into());
             };
-            key_repr.insert(key, index);
-            repr_key.insert(index, key);
+            键转数字.insert(key, index);
+            数字转键.insert(index, key);
             index += 1;
         }
         let default_select_keys = vec!['_'];
@@ -263,16 +241,16 @@ impl 数据 {
         }
         let mut parsed_select_keys: Vec<键> = vec![];
         for key in select_keys {
-            if key_repr.contains_key(key) {
+            if 键转数字.contains_key(key) {
                 return Err("编码键有重复！".into());
             };
-            key_repr.insert(*key, index);
-            repr_key.insert(index, *key);
+            键转数字.insert(*key, index);
+            数字转键.insert(index, *key);
             parsed_select_keys.push(index);
             index += 1;
         }
         let radix = index;
-        Ok((radix, parsed_select_keys, key_repr, repr_key))
+        Ok((radix, parsed_select_keys, 键转数字, 数字转键))
     }
 
     /// 读取元素映射，然后把每一个元素转换成无符号整数，从而可以用向量来表示一个元素布局，向量的下标就是元素对应的数
@@ -481,31 +459,33 @@ impl 数据 {
 
     /// 根据编码字符和未归一化的键位分布，生成一个理想的键位分布
     pub fn 预处理键位分布信息(
-        key_distribution: &原始键位分布信息,
+        原始键位分布信息: &原始键位分布信息,
         进制: u64,
-        repr_key: &FxHashMap<键, char>,
+        数字转键: &FxHashMap<键, char>,
     ) -> Vec<键位分布损失函数> {
         let default_loss = 键位分布损失函数 {
-            ideal: 0.1,
+            ideal: 0.0,
             lt_penalty: 0.0,
             gt_penalty: 1.0,
         };
-        let mut result: Vec<键位分布损失函数> = (0..进制)
-            .map(|x| {
+        let mut 键位分布信息: Vec<键位分布损失函数> = (0..进制)
+            .map(|键| {
                 // 0 只是为了占位，不需要统计
-                if x == 0 {
-                    return default_loss.clone();
+                if 键 == 0 {
+                    default_loss.clone()
+                } else {
+                    let 键名称 = 数字转键[&键];
+                    原始键位分布信息
+                        .get(&键名称)
+                        .unwrap_or(&default_loss)
+                        .clone()
                 }
-                let key = repr_key.get(&x).unwrap();
-                key_distribution.get(key).unwrap_or(&default_loss).clone()
             })
             .collect();
-        // 归一化
-        let sum: f64 = result.iter().map(|x| x.ideal).sum();
-        for i in result.iter_mut() {
-            i.ideal /= sum;
-        }
-        result
+        键位分布信息.iter_mut().for_each(|x| {
+            x.ideal /= 100.0;
+        });
+        键位分布信息
     }
 
     /// 将编码空间内所有的编码组合预先计算好速度当量
@@ -537,41 +517,41 @@ impl 数据 {
     /// 标记压缩到一个 64 位整数中，每四位表示一个字符的差指法标记
     /// 从低位到高位，依次是：同手、同指大跨排、同指小跨排、小指干扰、错手、三连击
     /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
-    pub fn 预处理指法标记(&self) -> Vec<用指标记> {
-        let fingering_types = get_fingering_types();
-        let mut result: Vec<用指标记> = Vec::with_capacity(self.get_space());
+    pub fn 预处理指法标记(&self) -> Vec<指法向量> {
+        let 指法标记 = 指法标记::new();
+        let mut result: Vec<指法向量> = Vec::with_capacity(self.get_space());
         for code in 0..self.get_space() {
             let chars = Self::数字转编码(code as u64, self.进制, &self.数字转键);
             if chars.len() < 2 {
-                result.push(用指标记::default());
+                result.push(指法向量::default());
                 continue;
             }
-            let mut total = 用指标记::default();
+            let mut 指法向量 = 指法向量::default();
             for i in 0..(chars.len() - 1) {
                 let pair = (chars[i], chars[i + 1]);
-                if fingering_types.same_hand.contains(&pair) {
-                    total[0] += 1;
+                if 指法标记.同手.contains(&pair) {
+                    指法向量[0] += 1;
                 }
-                if fingering_types.same_finger_large_jump.contains(&pair) {
-                    total[1] += 1;
+                if 指法标记.同指大跨排.contains(&pair) {
+                    指法向量[1] += 1;
                 }
-                if fingering_types.same_finger_small_jump.contains(&pair) {
-                    total[2] += 1;
+                if 指法标记.同指小跨排.contains(&pair) {
+                    指法向量[2] += 1;
                 }
-                if fingering_types.little_finger_interference.contains(&pair) {
-                    total[3] += 1;
+                if 指法标记.小指干扰.contains(&pair) {
+                    指法向量[3] += 1;
                 }
-                if fingering_types.awkward_upside_down.contains(&pair) {
-                    total[4] += 1;
+                if 指法标记.错手.contains(&pair) {
+                    指法向量[4] += 1;
                 }
             }
             for i in 0..(chars.len() - 2) {
                 let triple = (chars[i], chars[i + 1], chars[i + 2]);
                 if triple.0 == triple.1 && triple.1 == triple.2 {
-                    total[5] += 1;
+                    指法向量[5] += 1;
                 }
             }
-            result.push(total);
+            result.push(指法向量);
         }
         result
     }

@@ -1,19 +1,21 @@
-use super::default::Parameters;
+use super::default::默认目标函数参数;
 use super::metric::FingeringMetric;
 use super::metric::FingeringMetricUniform;
-use super::metric::LevelMetric;
 use super::metric::LevelMetricUniform;
-use super::metric::PartialMetric;
-use super::metric::TierMetric;
+use super::metric::分组指标;
+use super::metric::层级指标;
+use super::metric::键长指标;
 use crate::config::PartialWeights;
 use crate::data::最大按键组合长度;
 use crate::data::编码;
 use crate::data::部分编码信息;
 use crate::data::键位分布损失函数;
+use std::collections::HashMap;
 use std::iter::zip;
 
+// 用于缓存计算目标函数的中间结果，方便实现增量计算
 #[derive(Debug, Clone)]
-pub struct Cache {
+pub struct 缓存 {
     partial_weights: PartialWeights,
     total_count: usize,
     total_frequency: i64,
@@ -34,73 +36,81 @@ pub struct Cache {
     radix: u64,
 }
 
-impl Cache {
+impl 缓存 {
     #[inline(always)]
-    pub fn process(
+    pub fn 处理(
         &mut self,
-        index: usize,
-        frequency: u64,
-        c: &mut 部分编码信息,
-        parameters: &Parameters,
+        序号: usize,
+        频率: u64,
+        编码信息: &mut 部分编码信息,
+        参数: &默认目标函数参数,
     ) {
-        if !c.有变化 {
+        if !编码信息.有变化 {
             return;
         }
-        c.有变化 = false;
-        self.accumulate(index, frequency, c.实际编码, c.选重标记, parameters, 1);
-        if c.上一个实际编码 == 0 {
+        编码信息.有变化 = false;
+        self.增减(序号, 频率, 编码信息.实际编码, 编码信息.选重标记, 参数, 1);
+        if 编码信息.上一个实际编码 == 0 {
             return;
         }
-        self.accumulate(
-            index,
-            frequency,
-            c.上一个实际编码,
-            c.上一个选重标记,
-            parameters,
+        self.增减(
+            序号,
+            频率,
+            编码信息.上一个实际编码,
+            编码信息.上一个选重标记,
+            参数,
             -1,
         );
     }
 
-    pub fn finalize(&self, parameters: &Parameters) -> (PartialMetric, f64) {
+    pub fn 汇总(&self, 参数: &默认目标函数参数) -> (分组指标, f64) {
         let partial_weights = &self.partial_weights;
-        let ideal_distribution = &parameters.ideal_distribution;
+        let 键位分布信息 = &参数.键位分布信息;
         // 初始化返回值和标量化的损失函数
-        let mut partial_metric = PartialMetric {
+        let mut 分组指标 = 分组指标 {
             tiers: None,
             key_distribution: None,
+            key_distribution_loss: None,
             pair_equivalence: None,
             extended_pair_equivalence: None,
             fingering: None,
             duplication: None,
             levels: None,
         };
-        let mut loss = 0.0;
+        let mut 损失函数 = 0.0;
         // 一、全局指标
         // 1. 按键分布
         if let Some(key_distribution_weight) = partial_weights.key_distribution {
             // 首先归一化
-            let total: i64 = self.distribution.iter().sum();
-            let distribution = self
+            let 总频率: i64 = self.distribution.iter().sum();
+            let 分布 = self
                 .distribution
                 .iter()
-                .map(|x| *x as f64 / total as f64)
+                .map(|x| *x as f64 / 总频率 as f64)
                 .collect();
-            let distance = Cache::get_distribution_distance(&distribution, ideal_distribution);
-            partial_metric.key_distribution = Some(distance);
-            loss += distance * key_distribution_weight;
+            let 距离 = 缓存::计算键位分布距离(&分布, 键位分布信息);
+            let mut 分布映射 = HashMap::new();
+            for (i, x) in 分布.iter().enumerate() {
+                if let Some(键) = 参数.数字转键.get(&(i as u64)) {
+                    分布映射.insert(*键, *x);
+                }
+            }
+            分组指标.key_distribution = Some(分布映射);
+            分组指标.key_distribution_loss = Some(距离);
+            损失函数 += 距离 * key_distribution_weight;
         }
         // 2. 组合当量
         if let Some(equivalence_weight) = partial_weights.pair_equivalence {
             let equivalence = self.total_pair_equivalence / self.total_pairs as f64;
-            partial_metric.pair_equivalence = Some(equivalence);
-            loss += equivalence * equivalence_weight;
+            分组指标.pair_equivalence = Some(equivalence);
+            损失函数 += equivalence * equivalence_weight;
         }
         // 3. 词间当量
         if let Some(equivalence_weight) = partial_weights.extended_pair_equivalence {
             let equivalence =
                 self.total_extended_pair_equivalence / self.total_extended_pairs as f64;
-            partial_metric.extended_pair_equivalence = Some(equivalence);
-            loss += equivalence * equivalence_weight;
+            分组指标.extended_pair_equivalence = Some(equivalence);
+            损失函数 += equivalence * equivalence_weight;
         }
         // 4. 差指法
         if let Some(fingering_weight) = &partial_weights.fingering {
@@ -108,35 +118,35 @@ impl Cache {
             for (i, weight) in fingering_weight.iter().enumerate() {
                 if let Some(weight) = weight {
                     fingering[i] = Some(self.total_fingering[i] as f64 / self.total_pairs as f64);
-                    loss += self.total_fingering[i] as f64 * weight;
+                    损失函数 += self.total_fingering[i] as f64 * weight;
                 }
             }
-            partial_metric.fingering = Some(fingering);
+            分组指标.fingering = Some(fingering);
         }
         // 5. 重码
         if let Some(duplication_weight) = partial_weights.duplication {
             let duplication = self.total_duplication as f64 / self.total_frequency as f64;
-            partial_metric.duplication = Some(duplication);
-            loss += duplication * duplication_weight;
+            分组指标.duplication = Some(duplication);
+            损失函数 += duplication * duplication_weight;
         }
         // 6. 简码
         if let Some(levels_weight) = &partial_weights.levels {
-            let mut levels: Vec<LevelMetric> = Vec::new();
+            let mut levels: Vec<键长指标> = Vec::new();
             for (ilevel, level) in levels_weight.iter().enumerate() {
                 let value = self.total_levels[ilevel] as f64 / self.total_frequency as f64;
-                loss += value * level.frequency;
-                levels.push(LevelMetric {
+                损失函数 += value * level.frequency;
+                levels.push(键长指标 {
                     length: level.length,
                     frequency: value,
                 });
             }
-            partial_metric.levels = Some(levels);
+            分组指标.levels = Some(levels);
         }
         // 二、分级指标
         if let Some(tiers_weight) = &partial_weights.tiers {
-            let mut tiers: Vec<TierMetric> = tiers_weight
+            let mut tiers: Vec<层级指标> = tiers_weight
                 .iter()
-                .map(|x| TierMetric {
+                .map(|x| 层级指标 {
                     top: x.top,
                     duplication: None,
                     levels: None,
@@ -148,13 +158,14 @@ impl Cache {
                 // 1. 重码
                 if let Some(duplication_weight) = tier_weights.duplication {
                     let duplication = self.tiers_duplication[itier];
-                    loss += duplication as f64 / count * duplication_weight;
+                    损失函数 += duplication as f64 / count * duplication_weight;
                     tiers[itier].duplication = Some(duplication as u64);
                 }
                 // 2. 简码
                 if let Some(level_weight) = &tier_weights.levels {
                     for (ilevel, level) in level_weight.iter().enumerate() {
-                        loss += self.tiers_levels[itier][ilevel] as f64 / count * level.frequency;
+                        损失函数 +=
+                            self.tiers_levels[itier][ilevel] as f64 / count * level.frequency;
                     }
                     tiers[itier].levels = Some(
                         level_weight
@@ -174,19 +185,19 @@ impl Cache {
                         if let Some(weight) = weight {
                             let value = self.tiers_fingering[itier][i];
                             fingering[i] = Some(value as u64);
-                            loss += value as f64 / count * weight;
+                            损失函数 += value as f64 / count * weight;
                         }
                     }
                     tiers[itier].fingering = Some(fingering);
                 }
             }
-            partial_metric.tiers = Some(tiers);
+            分组指标.tiers = Some(tiers);
         }
-        (partial_metric, loss)
+        (分组指标, 损失函数)
     }
 }
 
-impl Cache {
+impl 缓存 {
     pub fn new(
         partial_weights: &PartialWeights,
         radix: u64,
@@ -244,7 +255,7 @@ impl Cache {
 
     /// 用指分布偏差
     /// 计算按键使用率与理想使用率之间的偏差。对于每个按键，偏差是实际频率与理想频率之间的差值乘以一个惩罚系数。用户可以根据自己的喜好自定义理想频率和惩罚系数。
-    fn get_distribution_distance(
+    fn 计算键位分布距离(
         distribution: &Vec<f64>,
         ideal_distribution: &Vec<键位分布损失函数>,
     ) -> f64 {
@@ -261,13 +272,13 @@ impl Cache {
     }
 
     #[inline(always)]
-    pub fn accumulate(
+    pub fn 增减(
         &mut self,
         index: usize,
         frequency: u64,
         code: 编码,
         duplicate: bool,
-        parameters: &Parameters,
+        parameters: &默认目标函数参数,
         sign: i64,
     ) {
         let frequency = frequency as i64 * sign;
@@ -297,8 +308,7 @@ impl Cache {
             let mut code = code;
             while code > self.radix {
                 let partial_code = (code % self.max_index) as usize;
-                self.total_pair_equivalence +=
-                    parameters.pair_equivalence[partial_code] * frequency as f64;
+                self.total_pair_equivalence += parameters.当量信息[partial_code] * frequency as f64;
                 code /= self.segment;
             }
         }
@@ -306,7 +316,7 @@ impl Cache {
         if let Some(fingering) = &partial_weights.fingering {
             let mut code = code;
             while code > radix {
-                let label = parameters.fingering_types[(code % self.max_index) as usize];
+                let label = parameters.指法计数[(code % self.max_index) as usize];
                 for (i, weight) in fingering.iter().enumerate() {
                     if weight.is_some() {
                         self.total_fingering[i] += frequency * label[i] as i64;
@@ -349,7 +359,7 @@ impl Cache {
                 if let Some(fingering) = &tier.fingering {
                     let mut code = code;
                     while code > radix {
-                        let label = parameters.fingering_types[(code % self.max_index) as usize];
+                        let label = parameters.指法计数[(code % self.max_index) as usize];
                         for (i, weight) in fingering.iter().enumerate() {
                             if weight.is_some() {
                                 self.tiers_fingering[itier][i] += sign * label[i] as i64;

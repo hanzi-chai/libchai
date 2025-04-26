@@ -18,32 +18,31 @@ pub trait 编码器 {
 
 #[derive(Clone)]
 pub struct 编码空间 {
-    pub vector: Vec<u8>,
-    pub vector_length: usize,
-    pub hashmap: FxHashMap<编码, u8>,
+    pub 线性表: Vec<u8>,
+    pub 线性表长度: usize,
+    pub 哈希表: FxHashMap<编码, u8>,
 }
 
 impl 编码空间 {
     #[inline(always)]
-    pub fn 添加(&mut self, code: u64) {
-        if code < self.vector_length as u64 {
-            let index = code as usize;
-            self.vector[index] = self.vector[index].saturating_add(1);
+    pub fn 添加(&mut self, 编码: u64) {
+        if 编码 < self.线性表长度 as u64 {
+            let 编码 = 编码 as usize;
+            self.线性表[编码] = self.线性表[编码].saturating_add(1);
         } else {
-            self.hashmap
-                .entry(code)
+            self.哈希表
+                .entry(编码)
                 .and_modify(|x| *x = x.saturating_add(1))
                 .or_insert(1);
         }
     }
 
     #[inline(always)]
-    pub fn 查找数量(&self, code: u64) -> u8 {
-        if code < self.vector_length as u64 {
-            let index = code as usize;
-            self.vector[index]
+    pub fn 查找数量(&self, 编码: u64) -> u8 {
+        if 编码 < self.线性表长度 as u64 {
+            self.线性表[编码 as usize]
         } else {
-            *self.hashmap.get(&code).unwrap_or(&0)
+            *self.哈希表.get(&编码).unwrap_or(&0)
         }
     }
 }
@@ -56,6 +55,7 @@ pub struct 简码配置 {
 
 pub struct 编码配置 {
     pub 进制: u64,
+    pub 乘数列表: Vec<u64>,
     pub 最大码长: usize,
     pub 自动上屏查找表: 自动上屏,
     pub 选择键: Vec<键>,
@@ -64,41 +64,45 @@ pub struct 编码配置 {
 }
 
 impl 编码配置 {
-    pub fn new(representation: &数据) -> Result<Self, 错误> {
-        let encoder = &representation.配置.encoder;
-        let max_length = encoder.max_length;
-        if max_length >= 8 {
+    pub fn new(数据: &数据) -> Result<Self, 错误> {
+        let 编码器配置 = &数据.配置.encoder;
+        let 最大码长 = 编码器配置.max_length;
+        if 最大码长 >= 8 {
             return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
         }
-        let auto_select = representation.预处理自动上屏()?;
-        let mut short_code = None;
-        if let Some(configs) = &encoder.short_code {
-            short_code = Some(representation.预处理简码配置(configs.clone())?);
+        let 自动上屏查找表 = 数据.预处理自动上屏()?;
+        let mut 简码配置列表 = None;
+        if let Some(configs) = &编码器配置.short_code {
+            简码配置列表 = Some(数据.预处理简码配置(configs.clone())?);
         }
-        let result = Self {
-            自动上屏查找表: auto_select,
-            最大码长: max_length,
-            进制: representation.进制,
-            选择键: representation.选择键.clone(),
-            首选键: representation.选择键[0],
-            简码配置列表: short_code,
-        };
-        Ok(result)
+        Ok(Self {
+            自动上屏查找表,
+            最大码长,
+            进制: 数据.进制,
+            乘数列表: (0..=最大码长).map(|x| 数据.进制.pow(x as u32)).collect(),
+            选择键: 数据.选择键.clone(),
+            首选键: 数据.选择键[0],
+            简码配置列表,
+        })
     }
 
     #[inline(always)]
-    pub fn 生成编码(&self, code: u64, rank: u8, weight: u64) -> u64 {
-        if rank == 0 {
-            if *self.自动上屏查找表.get(code as usize).unwrap_or(&true) {
-                return code;
+    pub fn 生成编码(
+        &self, 原始编码: u64, 原始编码候选位置: u8, 选择键乘数: u64
+    ) -> u64 {
+        // 如果位于首选，检查是否能自动上屏，不能则加上首选键
+        if 原始编码候选位置 == 0 {
+            if *self.自动上屏查找表.get(原始编码 as usize).unwrap_or(&true) {
+                return 原始编码;
             } else {
-                return code + self.首选键 * weight;
+                return 原始编码 + self.首选键 * 选择键乘数;
             }
         }
-        let select = *self
+        // 如果不是首选，无论如何都加上选择键
+        let 选择键 = *self
             .选择键
-            .get(rank as usize)
+            .get(原始编码候选位置 as usize)
             .unwrap_or(&self.选择键[0]);
-        code + select * weight
+        原始编码 + 选择键 * 选择键乘数
     }
 }
