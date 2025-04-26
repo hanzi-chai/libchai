@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Cache"]};
+window.SIDEBAR_ITEMS = {"struct":["缓存"]};
