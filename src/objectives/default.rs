@@ -86,61 +86,61 @@ impl 目标函数 for 默认目标函数 {
     fn 计算(
         &mut self, 编码结果: &mut [编码信息], 映射: &元素映射
     ) -> (默认指标, f64) {
-        let parameters = &self.参数;
+        let 参数 = &self.参数;
 
+        let mut 桶序号列表: Vec<_> = self.计数桶列表.iter().map(|_| 0).collect();
         // 开始计算指标
-        for (index, code_info) in 编码结果.iter_mut().enumerate() {
-            let frequency = code_info.频率;
-            let bucket = if code_info.词长 == 1 {
-                &mut self.计数桶列表[0]
-            } else {
-                &mut self.计数桶列表[1]
-            };
-            if let Some(cache) = &mut bucket[0] {
-                cache.处理(index, frequency, &mut code_info.全码, parameters);
+        for 编码信息 in 编码结果.iter_mut() {
+            let 频率 = 编码信息.频率;
+            let 桶索引 = if 编码信息.词长 == 1 { 0 } else { 1 };
+            let 桶 = &mut self.计数桶列表[桶索引];
+            let 桶序号 = 桶序号列表[桶索引];
+            if let Some(缓存) = &mut 桶[0] {
+                缓存.处理(桶序号, 频率, &mut 编码信息.全码, 参数);
             }
-            if let Some(cache) = &mut bucket[1] {
-                cache.处理(index, frequency, &mut code_info.简码, parameters);
+            if let Some(缓存) = &mut 桶[1] {
+                缓存.处理(桶序号, 频率, &mut 编码信息.简码, 参数);
             }
+            桶序号列表[桶索引] += 1;
         }
 
-        let mut loss = 0.0;
-        let mut metric = 默认指标 {
+        let mut 目标函数 = 0.0;
+        let mut 指标 = 默认指标 {
             characters_full: None,
             words_full: None,
             characters_short: None,
             words_short: None,
             memory: None,
         };
-        for (index, bucket) in self.计数桶列表.iter().enumerate() {
-            let _ = &bucket[0].as_ref().map(|x| {
-                let (partial, accum) = x.汇总(parameters);
-                loss += accum;
-                if index == 0 {
-                    metric.characters_full = Some(partial);
+        for (桶索引, 桶) in self.计数桶列表.iter().enumerate() {
+            let _ = &桶[0].as_ref().map(|x| {
+                let (分组指标, 分组目标函数) = x.汇总(参数);
+                目标函数 += 分组目标函数;
+                if 桶索引 == 0 {
+                    指标.characters_full = Some(分组指标);
                 } else {
-                    metric.words_full = Some(partial);
+                    指标.words_full = Some(分组指标);
                 }
             });
-            let _ = &bucket[1].as_ref().map(|x| {
-                let (partial, accum) = x.汇总(parameters);
-                loss += accum;
-                if index == 0 {
-                    metric.characters_short = Some(partial);
+            let _ = &桶[1].as_ref().map(|x| {
+                let (分组指标, 分组目标函数) = x.汇总(参数);
+                目标函数 += 分组目标函数;
+                if 桶索引 == 0 {
+                    指标.characters_short = Some(分组指标);
                 } else {
-                    metric.words_short = Some(partial);
+                    指标.words_short = Some(分组指标);
                 }
             });
         }
 
-        if !parameters.正则化.is_empty() {
+        if !参数.正则化.is_empty() {
             let mut 记忆量 = 映射.len() as f64;
             for (元素, 键) in 映射.iter().enumerate() {
                 if 元素 as u64 == *键 {
                     记忆量 -= 1.0;
                     continue;
                 }
-                if let Some(归并列表) = parameters.正则化.get(&元素) {
+                if let Some(归并列表) = 参数.正则化.get(&元素) {
                     let mut 最大亲和度 = 0.0;
                     for (目标元素, 亲和度) in 归并列表.iter() {
                         if 映射[*目标元素] == *键 {
@@ -150,10 +150,10 @@ impl 目标函数 for 默认目标函数 {
                     记忆量 -= 最大亲和度;
                 }
             }
-            metric.memory = Some(记忆量);
+            指标.memory = Some(记忆量);
             let 归一化记忆量 = 记忆量 / 映射.len() as f64;
-            loss += 归一化记忆量 * parameters.正则化强度;
+            目标函数 += 归一化记忆量 * 参数.正则化强度;
         }
-        (metric, loss)
+        (指标, 目标函数)
     }
 }
