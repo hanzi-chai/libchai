@@ -62,6 +62,14 @@ impl From<io::Error> for 错误 {
     }
 }
 
+impl From<serde_json::Error> for 错误 {
+    fn from(value: serde_json::Error) -> Self {
+        Self {
+            message: value.to_string(),
+        }
+    }
+}
+
 impl From<错误> for JsError {
     fn from(value: 错误) -> Self {
         JsError::new(&value.message)
@@ -186,7 +194,7 @@ impl Web {
             词列表,
         } = self.参数.clone();
         let 优化方法配置 = 配置.clone().optimization.unwrap().metaheuristic.unwrap();
-        let 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
+        let 数据: 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
         let 编码器 = 默认编码器::新建(&数据)?;
         let 目标函数 = 默认目标函数::新建(&数据)?;
         let 操作 = 默认操作::新建(&数据)?;
@@ -268,7 +276,7 @@ impl 命令行 {
             pair_equivalence: None,
             threads: None,
         };
-        let cli = 命令行::新建(参数, None);
+        let cli: 命令行 = 命令行::新建(参数, None);
         cli.准备数据()
     }
 
@@ -425,5 +433,99 @@ impl 界面 for 命令行 {
             }
         };
         result.unwrap()
+    }
+}
+
+/// 纯 Rust 的 Web API 模块，提供与 wasm_bindgen Web 一一对应的接口
+pub mod web_api {
+    use crate::objectives::metric::默认指标;
+
+    use super::*;
+
+    /// 纯 Rust 的 Web API 接口，与 wasm_bindgen Web 结构一一对应
+    pub struct WebApi {
+        参数: 图形界面参数,
+        回调: Option<Box<dyn Fn(&消息) + Send + Sync>>,
+    }
+
+    impl WebApi {
+        /// 创建新的 WebApi 实例，与 Web::new 对应
+        pub fn new() -> Self {
+            set_once();
+            let 参数 = 图形界面参数::default();
+            Self {
+                参数, 回调: None
+            }
+        }
+
+        /// 设置消息回调函数
+        pub fn set_callback<F>(&mut self, callback: F)
+        where
+            F: Fn(&消息) + Send + Sync + 'static,
+        {
+            self.回调 = Some(Box::new(callback));
+        }
+
+        /// 同步前端参数，与 Web::sync 对应
+        pub fn sync(&mut self, 前端参数: 图形界面参数) -> Result<(), 错误> {
+            self.参数 = 前端参数;
+            Ok(())
+        }
+
+        /// 编码评估，与 Web::encode_evaluate 对应
+        pub fn encode_evaluate(
+            &self,
+            目标函数配置: ObjectiveConfig,
+        ) -> Result<(Vec<码表项>, 默认指标), 错误> {
+            let 图形界面参数 {
+                mut 配置,
+                原始键位分布信息,
+                原始当量信息,
+                词列表,
+            } = self.参数.clone();
+
+            配置.optimization = Some(OptimizationConfig {
+                objective: 目标函数配置,
+                constraints: None,
+                metaheuristic: None,
+            });
+
+            let 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
+            let mut 编码器 = 默认编码器::新建(&数据)?;
+            let mut 编码结果 = 编码器.编码(&数据.初始映射, &None).clone();
+            let 码表 = 数据.生成码表(&编码结果);
+            let mut 目标函数 = 默认目标函数::新建(&数据)?;
+            let (指标, _) = 目标函数.计算(&mut 编码结果, &数据.初始映射);
+
+            Ok((码表, 指标))
+        }
+
+        /// 优化，与 Web::optimize 对应  
+        pub fn optimize(&self) -> Result<(), 错误> {
+            let 图形界面参数 {
+                配置,
+                原始键位分布信息,
+                原始当量信息,
+                词列表,
+            } = self.参数.clone();
+
+            let 优化方法配置 = 配置.clone().optimization.unwrap().metaheuristic.unwrap();
+            let 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
+            let 编码器 = 默认编码器::新建(&数据)?;
+            let 目标函数 = 默认目标函数::新建(&数据)?;
+            let 操作 = 默认操作::新建(&数据)?;
+            let mut 问题 = 优化问题::新建(数据, 编码器, 目标函数, 操作);
+            let SolverConfig::SimulatedAnnealing(退火) = 优化方法配置;
+            退火.优化(&mut 问题, self);
+            Ok(())
+        }
+    }
+
+    impl 界面 for WebApi {
+        fn 发送(&self, 消息: 消息) {
+            if let Some(ref callback) = self.回调 {
+                callback(&消息);
+            }
+        }
     }
 }

@@ -3,8 +3,8 @@ use crate::config::{AtomicConstraint, MappedKey, SolverConfig};
 use crate::data::{键, 数据};
 use crate::data::{元素, 元素映射};
 use crate::错误;
-use rand::seq::{IteratorRandom, SliceRandom};
-use rand::{random, thread_rng};
+use rand::seq::{IndexedRandom, IteratorRandom};
+use rand::{random, rng};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
@@ -162,7 +162,7 @@ impl 默认操作 {
     }
 
     fn get_movable_element(&self) -> usize {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         loop {
             let key = (self.radix..self.elements).choose(&mut rng).unwrap();
             if !self.fixed.contains(&key) {
@@ -172,7 +172,7 @@ impl 默认操作 {
     }
 
     fn get_swappable_element(&self) -> usize {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         loop {
             let key = (self.radix..self.elements).choose(&mut rng).unwrap();
             if !self.fixed.contains(&key) {
@@ -202,7 +202,7 @@ impl 默认操作 {
     }
 
     pub fn 有约束的整键随机交换(&self, keymap: &mut 元素映射) -> Vec<元素> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         // 寻找一个可移动元素和一个它的可行移动位置，然后把这两个键上的所有元素交换
         // 这样交换不成也至少能移动一次
         let movable_element = self.get_movable_element();
@@ -231,7 +231,7 @@ impl 默认操作 {
     }
 
     pub fn 有约束的随机移动(&self, keymap: &mut 元素映射) -> Vec<元素> {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let movable_element = self.get_movable_element();
         let current = keymap[movable_element];
         let destinations = self
