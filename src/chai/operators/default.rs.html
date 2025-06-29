@@ -1,10 +1,10 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/operators/default.rs`."><title>default.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/operators/</div>default.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">super</span>::变异;
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/operators/default.rs`."><title>default.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1a91846b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.88.0 (6b00bc388 2025-06-23)" data-channel="1.88.0" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-4e99c027.js"></script><script defer src="../../../static.files/src-script-63605ae7.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-7ef8a74a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/operators/</div>default.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">super</span>::变异;
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span><span class="kw">crate</span>::config::{AtomicConstraint, MappedKey, SolverConfig};
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">crate</span>::data::{键, 数据};
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span><span class="kw">crate</span>::data::{元素, 元素映射};
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span><span class="kw">crate</span>::错误;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>rand::seq::{IteratorRandom, SliceRandom};
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>rand::{random, thread_rng};
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>rand::seq::{IndexedRandom, IteratorRandom};
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>rand::{random, rng};
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>serde::{Deserialize, Serialize};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>serde_with::skip_serializing_none;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>std::collections::{HashMap, HashSet};
@@ -162,7 +162,7 @@
 <a href=#162 id=162 data-nosnippet>162</a>    }
 <a href=#163 id=163 data-nosnippet>163</a>
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">fn </span>get_movable_element(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = rng();
 <a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">loop </span>{
 <a href=#167 id=167 data-nosnippet>167</a>            <span class="kw">let </span>key = (<span class="self">self</span>.radix..<span class="self">self</span>.elements).choose(<span class="kw-2">&amp;mut </span>rng).unwrap();
 <a href=#168 id=168 data-nosnippet>168</a>            <span class="kw">if </span>!<span class="self">self</span>.fixed.contains(<span class="kw-2">&amp;</span>key) {
@@ -172,7 +172,7 @@
 <a href=#172 id=172 data-nosnippet>172</a>    }
 <a href=#173 id=173 data-nosnippet>173</a>
 <a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">fn </span>get_swappable_element(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-<a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = rng();
 <a href=#176 id=176 data-nosnippet>176</a>        <span class="kw">loop </span>{
 <a href=#177 id=177 data-nosnippet>177</a>            <span class="kw">let </span>key = (<span class="self">self</span>.radix..<span class="self">self</span>.elements).choose(<span class="kw-2">&amp;mut </span>rng).unwrap();
 <a href=#178 id=178 data-nosnippet>178</a>            <span class="kw">if </span>!<span class="self">self</span>.fixed.contains(<span class="kw-2">&amp;</span>key) {
@@ -202,7 +202,7 @@
 <a href=#202 id=202 data-nosnippet>202</a>    }
 <a href=#203 id=203 data-nosnippet>203</a>
 <a href=#204 id=204 data-nosnippet>204</a>    <span class="kw">pub fn </span>有约束的整键随机交换(<span class="kw-2">&amp;</span><span class="self">self</span>, keymap: <span class="kw-2">&amp;mut </span>元素映射) -&gt; Vec&lt;元素&gt; {
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = rng();
 <a href=#206 id=206 data-nosnippet>206</a>        <span class="comment">// 寻找一个可移动元素和一个它的可行移动位置，然后把这两个键上的所有元素交换
 <a href=#207 id=207 data-nosnippet>207</a>        // 这样交换不成也至少能移动一次
 <a href=#208 id=208 data-nosnippet>208</a>        </span><span class="kw">let </span>movable_element = <span class="self">self</span>.get_movable_element();
@@ -231,7 +231,7 @@
 <a href=#231 id=231 data-nosnippet>231</a>    }
 <a href=#232 id=232 data-nosnippet>232</a>
 <a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">pub fn </span>有约束的随机移动(<span class="kw-2">&amp;</span><span class="self">self</span>, keymap: <span class="kw-2">&amp;mut </span>元素映射) -&gt; Vec&lt;元素&gt; {
-<a href=#234 id=234 data-nosnippet>234</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
+<a href=#234 id=234 data-nosnippet>234</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = rng();
 <a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">let </span>movable_element = <span class="self">self</span>.get_movable_element();
 <a href=#236 id=236 data-nosnippet>236</a>        <span class="kw">let </span>current = keymap[movable_element];
 <a href=#237 id=237 data-nosnippet>237</a>        <span class="kw">let </span>destinations = <span class="self">self
