@@ -8,26 +8,125 @@ on:
       - "**.md"
 
 jobs:
-  build:
+  static:
     runs-on: ubuntu-latest
     steps:
       # 拉取代码
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+      # 获取静态资源
+      - name: Fetch Static Resources
+        run: |
+          chmod +x fetch.sh
+          ./fetch.sh
+      # 拉取前端代码
+      - name: Checkout Website
+        uses: actions/checkout@v4
+        with:
+          repository: hanzi-chai/hanzi-chai.github.io
+          path: hanzi-chai
+      # 安装 Bun
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      # 编译前端
+      - name: Build Website
+        run: |
+          cd hanzi-chai
+          bun install
+          bun run fetch
+          bun run build:CLIENT
+          cd ..
+          cp -r hanzi-chai/dist/client client
+      # 上传
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: static
+          path: |
+            assets
+            examples
+            client
+            README.md
+            LICENSE
 
       - name: Install Rust Toolchains
         uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          target: "x86_64-unknown-linux-gnu"
-
-      - name: Build
-        run: cargo build --bin chai
-
       - name: Build documentation
         run: cargo doc --no-deps
-
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target/doc
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+      - name: 安装 Rust 工具链
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: "x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl"
+      - name: 构建 chai
+        run: |
+          cargo build --target x86_64-unknown-linux-gnu --bins --release
+          cargo build --target x86_64-unknown-linux-musl --bins --release
+      - name: Upload gnu
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-gnu
+          path: |
+            target/x86_64-unknown-linux-gnu/release/chai
+            target/x86_64-unknown-linux-gnu/release/server
+      - name: Upload musl
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-musl
+          path: |
+            target/x86_64-unknown-linux-musl/release/chai
+            target/x86_64-unknown-linux-musl/release/server
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+      - name: Install Rust Toolchains
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: "x86_64-pc-windows-msvc"
+      - name: Build
+        run: cargo build --bins --release
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            target/release/chai.exe
+            target/release/server.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+      - name: Install Rust Toolchains
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: "x86_64-apple-darwin, aarch64-apple-darwin"
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild
+      - name: Build
+        run: cargo zigbuild --target universal2-apple-darwin --bins --release
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            target/universal2-apple-darwin/release/chai
+            target/universal2-apple-darwin/release/server
