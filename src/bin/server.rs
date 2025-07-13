@@ -7,8 +7,9 @@ use axum::{
     Json, Router,
 };
 use chai::config::{ObjectiveConfig, 配置};
-use chai::web_api::WebApi;
-use chai::图形界面参数;
+use chai::interfaces::server::WebApi;
+use chai::interfaces::web::图形界面参数;
+use chai::interfaces::消息;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -58,7 +59,7 @@ pub async fn validate_config(Json(config): Json<serde_json::Value>) -> Json<ApiR
         Err(e) => {
             // 配置解析失败
             Json(ApiResponse::Error {
-                error: format!("配置解析错误: {}", e),
+                error: format!("配置解析错误: {e}"),
             })
         }
     }
@@ -85,7 +86,7 @@ pub async fn sync_params(
             }
         }
         Err(e) => Json(ApiResponse::Error {
-            error: format!("参数解析错误: {}", e),
+            error: format!("参数解析错误: {e}"),
         }),
     }
 }
@@ -113,7 +114,7 @@ pub async fn encode_evaluate(
             }
         }
         Err(e) => Json(ApiResponse::Error {
-            error: format!("目标函数配置解析错误: {}", e),
+            error: format!("目标函数配置解析错误: {e}"),
         }),
     }
 }
@@ -380,16 +381,16 @@ pub fn create_app() -> Router {
         api.set_callback(move |消息| {
             // 只记录关键进度
             match 消息 {
-                chai::消息::Progress { steps, .. } => {
+                消息::Progress { steps, .. } => {
                     if steps % 100 == 0 {
                         // 每100步记录一次
                         info!("优化进度: {} 步", steps);
                     }
                 }
-                chai::消息::BetterSolution { .. } => {
+                消息::BetterSolution { .. } => {
                     info!("发现更优解");
                 }
-                chai::消息::Parameters { .. } => {
+                消息::Parameters { .. } => {
                     info!("设置优化参数");
                 }
                 _ => {} // 其他消息不记录，避免日志过多
@@ -428,9 +429,9 @@ pub async fn start_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let app = create_app();
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("0.0.0.0:{port}");
 
-    info!("Listening on: http://{}", addr);
+    info!("Listening on: http://{addr}");
     info!("API Endpoints:");
     info!("   POST /api/validate    - 验证配置");
     info!("   POST /api/sync        - 同步参数");

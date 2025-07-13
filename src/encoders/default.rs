@@ -1,11 +1,102 @@
-use super::{简码配置, 编码器, 编码空间, 编码配置};
-use crate::data::{元素, 元素映射, 可编码对象, 数据, 编码信息};
+use super::编码器;
+use crate::{元素, 元素映射, 可编码对象, 最大词长, 编码, 编码信息, 自动上屏, 键};
+use crate::contexts::default::默认上下文;
 use crate::错误;
 use rustc_hash::FxHashMap;
 use std::iter::zip;
 
+#[derive(Clone)]
+pub struct 编码空间 {
+    pub 线性表: Vec<u8>,
+    pub 线性表长度: usize,
+    pub 哈希表: FxHashMap<编码, u8>,
+}
+
+impl 编码空间 {
+    #[inline(always)]
+    pub fn 添加(&mut self, 编码: u64) {
+        if 编码 < self.线性表长度 as u64 {
+            let 编码 = 编码 as usize;
+            self.线性表[编码] = self.线性表[编码].saturating_add(1);
+        } else {
+            self.哈希表
+                .entry(编码)
+                .and_modify(|x| *x = x.saturating_add(1))
+                .or_insert(1);
+        }
+    }
+
+    #[inline(always)]
+    pub fn 查找数量(&self, 编码: u64) -> u8 {
+        if 编码 < self.线性表长度 as u64 {
+            self.线性表[编码 as usize]
+        } else {
+            *self.哈希表.get(&编码).unwrap_or(&0)
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct 简码配置 {
+    pub prefix: usize,
+    pub select_keys: Vec<键>,
+}
+
+pub struct 编码配置 {
+    pub 进制: u64,
+    pub 乘数列表: Vec<u64>,
+    pub 最大码长: usize,
+    pub 自动上屏查找表: 自动上屏,
+    pub 选择键: Vec<键>,
+    pub 首选键: 键,
+    pub 简码配置列表: Option<[Vec<简码配置>; 最大词长]>,
+}
+
+impl 编码配置 {
+    pub fn new(上下文: &默认上下文) -> Result<Self, 错误> {
+        let 编码器配置 = &上下文.配置.encoder;
+        let 最大码长 = 编码器配置.max_length;
+        if 最大码长 >= 8 {
+            return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
+        }
+        let 自动上屏查找表 = 上下文.预处理自动上屏()?;
+        let mut 简码配置列表 = None;
+        if let Some(configs) = &编码器配置.short_code {
+            简码配置列表 = Some(上下文.预处理简码配置(configs.clone())?);
+        }
+        Ok(Self {
+            自动上屏查找表,
+            最大码长,
+            进制: 上下文.棱镜.进制,
+            乘数列表: (0..=最大码长).map(|x| 上下文.棱镜.进制.pow(x as u32)).collect(),
+            选择键: 上下文.选择键.clone(),
+            首选键: 上下文.选择键[0],
+            简码配置列表,
+        })
+    }
+
+    #[inline(always)]
+    pub fn 生成编码(
+        &self, 原始编码: u64, 原始编码候选位置: u8, 选择键乘数: u64
+    ) -> u64 {
+        // 如果位于首选，检查是否能自动上屏，不能则加上首选键
+        if 原始编码候选位置 == 0 {
+            if *self.自动上屏查找表.get(原始编码 as usize).unwrap_or(&true) {
+                return 原始编码;
+            } else {
+                return 原始编码 + self.首选键 * 选择键乘数;
+            }
+        }
+        // 如果不是首选，无论如何都加上选择键
+        let 选择键 = *self
+            .选择键
+            .get(原始编码候选位置 as usize)
+            .unwrap_or(&self.选择键[0]);
+        原始编码 + 选择键 * 选择键乘数
+    }
+}
+
 pub struct 默认编码器 {
-    编码结果: Vec<编码信息>,
     编码配置: 编码配置,
     词信息: Vec<可编码对象>,
     全码空间: 编码空间,
@@ -17,15 +108,14 @@ impl 默认编码器 {
     /// 提供配置表示、拆分表、词表和共用资源来创建一个编码引擎
     /// 字需要提供拆分表
     /// 词只需要提供词表，它对应的拆分序列从字推出
-    pub fn 新建(数据: &数据) -> Result<Self, 错误> {
-        let 编码器配置 = &数据.配置.encoder;
+    pub fn 新建(上下文: &默认上下文) -> Result<Self, 错误> {
+        let 编码器配置 = &上下文.配置.encoder;
         let 最大码长 = 编码器配置.max_length;
         if 最大码长 >= 8 {
             return Err("目前暂不支持最大码长大于等于 8 的方案计算！".into());
         }
-        let 词信息 = 数据.词列表.clone();
-        let 编码结果 = 词信息.iter().map(编码信息::new).collect();
-        let 线性表长度 = 数据.进制.pow(最大码长 as u32) as usize;
+        let 词信息 = 上下文.词列表.clone();
+        let 线性表长度 = 上下文.棱镜.进制.pow(最大码长 as u32) as usize;
         let 全码空间 = 编码空间 {
             线性表: vec![u8::default(); 线性表长度],
             线性表长度,
@@ -33,7 +123,7 @@ impl 默认编码器 {
         };
         let 简码空间 = 全码空间.clone();
         let mut 包含元素的词 = vec![];
-        for _ in 0..=数据.元素转数字.len() {
+        for _ in 0..=上下文.棱镜.元素转数字.len() {
             包含元素的词.push(vec![]);
         }
         for (词序号, 词) in 词信息.iter().enumerate() {
@@ -41,9 +131,8 @@ impl 默认编码器 {
                 包含元素的词[*元素].push(词序号);
             }
         }
-        let 编码配置 = 编码配置::new(数据)?;
+        let 编码配置 = 编码配置::new(上下文)?;
         Ok(Self {
-            编码结果,
             编码配置,
             词信息,
             全码空间,
@@ -63,9 +152,13 @@ impl 默认编码器 {
         self.简码空间.哈希表.clear();
     }
 
-    fn 输出全码(&mut self, 映射: &元素映射, 移动的元素: &Option<Vec<元素>>) {
+    fn 输出全码(
+        &mut self,
+        映射: &元素映射,
+        移动的元素: &Option<Vec<元素>>,
+        编码结果: &mut [编码信息],
+    ) {
         let 编码配置 = &self.编码配置;
-        let 编码结果 = &mut self.编码结果;
         // 根据移动的元素更新编码结果，如果没有移动的元素则直接全部生成
         if let Some(移动的元素) = 移动的元素 {
             for 元素 in 移动的元素 {
@@ -105,9 +198,8 @@ impl 默认编码器 {
         }
     }
 
-    fn 输出简码(&mut self) {
+    fn 输出简码(&mut self, 编码结果: &mut [编码信息]) {
         let 编码配置 = &self.编码配置;
-        let 编码结果 = &mut self.编码结果;
         let 简码配置列表 = 编码配置.简码配置列表.as_ref().unwrap();
         // 优先简码
         for (词, 编码结果) in zip(&self.词信息, 编码结果.iter_mut()) {
@@ -168,19 +260,20 @@ impl 默认编码器 {
 }
 
 impl 编码器 for 默认编码器 {
+    type 解类型 = 元素映射;
     fn 编码(
         &mut self,
         映射: &元素映射,
         移动的元素: &Option<Vec<元素>>,
-    ) -> &mut Vec<编码信息> {
+        输出: &mut [编码信息],
+    ) {
         self.重置();
-        self.输出全码(映射, 移动的元素);
+        self.输出全码(映射, 移动的元素, 输出);
         if self.编码配置.简码配置列表.is_none()
             || self.编码配置.简码配置列表.as_ref().unwrap().is_empty()
         {
-            return &mut self.编码结果;
+            return;
         }
-        self.输出简码();
-        &mut self.编码结果
+        self.输出简码(输出);
     }
 }

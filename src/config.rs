@@ -4,9 +4,9 @@
 //!
 
 use crate::optimizers::simulated_annealing::退火方法;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::HashMap;
 
 // config.info begin
 #[skip_serializing_none]
@@ -25,8 +25,8 @@ pub struct Info {
 pub struct Data {
     pub character_set: Option<String>,
     pub repertoire: Option<PrimitiveRepertoire>,
-    pub glyph_customization: Option<HashMap<String, Glyph>>,
-    pub reading_customization: Option<HashMap<String, Vec<Reading>>>,
+    pub glyph_customization: Option<IndexMap<String, Glyph>>,
+    pub reading_customization: Option<IndexMap<String, Vec<Reading>>>,
     pub tags: Option<Vec<String>>,
 }
 
@@ -114,17 +114,17 @@ pub struct PrimitiveCharacter {
     pub ambiguous: bool,
 }
 
-pub type PrimitiveRepertoire = HashMap<String, PrimitiveCharacter>;
+pub type PrimitiveRepertoire = IndexMap<String, PrimitiveCharacter>;
 // config.data end
 
 // config.analysis begin
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Analysis {
-    pub classifier: Option<HashMap<String, usize>>,
+    pub classifier: Option<IndexMap<String, usize>>,
     pub degenerator: Option<Degenerator>,
     pub selector: Option<Vec<String>>,
-    pub customize: Option<HashMap<String, Vec<String>>>,
+    pub customize: Option<IndexMap<String, Vec<String>>>,
     pub strong: Option<Vec<String>>,
     pub weak: Option<Vec<String>>,
     pub serializer: Option<String>,
@@ -133,13 +133,13 @@ pub struct Analysis {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Degenerator {
-    pub feature: Option<HashMap<String, String>>,
+    pub feature: Option<IndexMap<String, String>>,
     pub no_cross: Option<bool>,
 }
 // config.analysis end
 
 // config.algebra begin
-type Algebra = HashMap<String, Vec<Rule>>;
+type Algebra = IndexMap<String, Vec<Rule>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -155,8 +155,8 @@ pub enum Rule {
 pub struct FormConfig {
     pub alphabet: String,
     pub mapping_type: Option<usize>,
-    pub mapping: HashMap<String, Mapped>,
-    pub grouping: Option<HashMap<String, String>>,
+    pub mapping: IndexMap<String, Mapped>,
+    pub grouping: Option<IndexMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,8 +184,8 @@ pub struct EncoderConfig {
     pub auto_select_length: Option<usize>,
     pub auto_select_pattern: Option<String>,
     // 一字词全码
-    pub sources: Option<HashMap<String, NodeConfig>>,
-    pub conditions: Option<HashMap<String, EdgeConfig>>,
+    pub sources: Option<IndexMap<String, NodeConfig>>,
+    pub conditions: Option<IndexMap<String, EdgeConfig>>,
     // 多字词全码
     pub rules: Option<Vec<WordRule>>,
     // 简码
@@ -378,10 +378,20 @@ pub struct LayoutRow {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BoxConfig {
-    Key { style: Option<String> },
-    Uppercase { style: Option<String> },
-    Element { r#match: Option<String>, style: Option<String> },
-    Custom { mapping: Option<String>, style: Option<String> },
+    Key {
+        style: Option<String>,
+    },
+    Uppercase {
+        style: Option<String>,
+    },
+    Element {
+        r#match: Option<String>,
+        style: Option<String>,
+    },
+    Custom {
+        mapping: Option<String>,
+        style: Option<String>,
+    },
 }
 
 #[skip_serializing_none]
@@ -423,7 +433,7 @@ impl Default for 配置 {
             form: FormConfig {
                 alphabet: "abcdefghijklmnopqrstuvwxyz".to_string(),
                 mapping_type: None,
-                mapping: HashMap::new(),
+                mapping: IndexMap::new(),
                 grouping: None,
             },
             encoder: EncoderConfig {

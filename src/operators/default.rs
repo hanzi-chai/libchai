@@ -1,17 +1,17 @@
 use super::变异;
 use crate::config::{AtomicConstraint, MappedKey, SolverConfig};
-use crate::data::{键, 数据};
-use crate::data::{元素, 元素映射};
+use crate::{元素, 元素映射, 元素标准名称, 键};
+use crate::contexts::default::默认上下文;
 use crate::错误;
 use rand::seq::{IndexedRandom, IteratorRandom};
 use rand::{random, rng};
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::{HashMap, HashSet};
 
 pub struct 默认操作 {
-    fixed: HashSet<元素>,
-    narrowed: HashMap<元素, Vec<键>>,
+    fixed: FxHashSet<元素>,
+    narrowed: FxHashMap<元素, Vec<键>>,
     alphabet: Vec<键>,
     radix: usize,    // 码表的基数
     elements: usize, // 键盘映射的元素个数
@@ -33,6 +33,7 @@ pub const DEFAULT_MUTATE: 变异配置 = 变异配置 {
 };
 
 impl 变异 for 默认操作 {
+    type 解类型 = 元素映射;
     fn 变异(&mut self, candidate: &mut 元素映射) -> Vec<元素> {
         let 变异配置 {
             random_move,
@@ -55,37 +56,37 @@ impl 变异 for 默认操作 {
 
 // 默认的问题实现，使用配置文件中的约束来定义各种算子
 impl 默认操作 {
-    pub fn 新建(数据: &数据) -> Result<Self, 错误> {
-        let (fixed, narrowed) = Self::make_constraints(数据)?;
-        let config = 数据.配置.optimization.clone();
+    pub fn 新建(上下文: &默认上下文) -> Result<Self, 错误> {
+        let (fixed, narrowed) = Self::make_constraints(上下文)?;
+        let config = 上下文.配置.optimization.clone();
         let SolverConfig::SimulatedAnnealing(退火方法) = config.unwrap().metaheuristic.unwrap();
         let 变异配置 = 退火方法.search_method.unwrap_or(DEFAULT_MUTATE);
-        let alphabet: Vec<_> = 数据
+        let alphabet: Vec<_> = 上下文
             .配置
             .form
             .alphabet
             .chars()
-            .map(|x| *数据.键转数字.get(&x).unwrap()) // 在生成表示的时候已经确保了这里一定有对应的键
+            .map(|x| *上下文.棱镜.键转数字.get(&x).unwrap()) // 在生成表示的时候已经确保了这里一定有对应的键
             .collect();
         Ok(Self {
             fixed,
             narrowed,
             alphabet,
-            radix: 数据.进制 as usize,
-            elements: 数据.初始映射.len(),
+            radix: 上下文.棱镜.进制 as usize,
+            elements: 上下文.初始映射.len(),
             变异配置,
         })
     }
 
     /// 传入配置表示来构造约束，把用户在配置文件中编写的约束「编译」成便于快速计算的数据结构
     fn make_constraints(
-        representation: &数据,
-    ) -> Result<(HashSet<元素>, HashMap<元素, Vec<键>>), 错误> {
-        let mut fixed: HashSet<元素> = HashSet::new();
-        let mut narrowed: HashMap<元素, Vec<键>> = HashMap::new();
+        representation: &默认上下文,
+    ) -> Result<(FxHashSet<元素>, FxHashMap<元素, Vec<键>>), 错误> {
+        let mut fixed: FxHashSet<元素> = FxHashSet::default();
+        let mut narrowed: FxHashMap<元素, Vec<键>> = FxHashMap::default();
         let mut values: Vec<AtomicConstraint> = Vec::new();
         let lookup = |x: String| {
-            let element_number = representation.元素转数字.get(&x);
+            let element_number = representation.棱镜.元素转数字.get(&x);
             element_number.ok_or(format!("{x} 不存在于键盘映射中"))
         };
         let optimization = representation
@@ -108,7 +109,7 @@ impl 默认操作 {
             let elements: Vec<usize> = match (element, index) {
                 // 如果指定了元素和码位
                 (Some(element), Some(index)) => {
-                    let element = *lookup(数据::序列化(element, *index))?;
+                    let element = *lookup(元素标准名称(element, *index))?;
                     vec![element]
                 }
                 // 如果指定了码位
@@ -117,7 +118,7 @@ impl 默认操作 {
                     for (key, value) in mapping {
                         let normalized = value.normalize();
                         if let Some(MappedKey::Ascii(_)) = normalized.get(*index) {
-                            let element = *lookup(数据::序列化(key, *index))?;
+                            let element = *lookup(元素标准名称(key, *index))?;
                             elements.push(element);
                         }
                     }
@@ -131,7 +132,7 @@ impl 默认操作 {
                     let mut elements = Vec::new();
                     for (i, x) in mapped.normalize().iter().enumerate() {
                         if let MappedKey::Ascii(_) = x {
-                            elements.push(*lookup(数据::序列化(element, i))?);
+                            elements.push(*lookup(元素标准名称(element, i))?);
                         }
                     }
                     elements
@@ -144,7 +145,7 @@ impl 默认操作 {
                     for key in keys {
                         transformed.push(
                             *representation
-                                .键转数字
+                                .棱镜.键转数字
                                 .get(key)
                                 .ok_or(format!("约束中的键 {key} 不在键盘映射中"))?,
                         );

@@ -1,16 +1,16 @@
 // 递归定义各种度量的数据结构以及它们输出到命令行的方式
 
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
-type 指法集 = HashSet<(char, char)>;
+type 指法集 = FxHashSet<(char, char)>;
 type 键盘布局 = [Vec<char>; 4];
 
 // 指法分析
 //
 // 参考法月的《科学形码测评系统》，基于定义来推导出各种差指法组合都有哪些，然后封装成一个结构体便于主程序使用。
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct 指法标记 {
     pub 同手: 指法集,
     pub 同指大跨排: 指法集,
@@ -56,11 +56,11 @@ impl 指法标记 {
         use 手指::*;
         let 列对应手指: [手指; 7] = [食指, 食指, 中指, 无名指, 小指, 小指, 小指];
         let 是长手指 = |x: 手指| x == 中指 || x == 无名指;
-        let mut 同手 = 指法集::new();
-        let mut 同指大跨排 = 指法集::new();
-        let mut 同指小跨排 = 指法集::new();
-        let mut 小指干扰 = 指法集::new();
-        let mut 错手 = 指法集::new();
+        let mut 同手 = 指法集::default();
+        let mut 同指大跨排 = 指法集::default();
+        let mut 同指小跨排 = 指法集::default();
+        let mut 小指干扰 = 指法集::default();
+        let mut 错手 = 指法集::default();
         for (行序号一, 行一) in 单手布局.iter().enumerate() {
             for (行序号二, 行二) in 单手布局.iter().enumerate() {
                 for (列序号一, 列一) in 行一.iter().enumerate() {
@@ -133,20 +133,18 @@ impl Display for 层级指标 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let hanzi_numbers: Vec<char> = "一二三四五六七八九十".chars().collect();
         let specifier = if let Some(top) = self.top {
-            format!("{} ", top)
+            format!("{top} ")
         } else {
             String::from("全部")
         };
         if let Some(duplication) = self.duplication {
-            f.write_str(&format!("{}选重：{}；", specifier, duplication))?;
+            f.write_str(&format!("{specifier}选重：{duplication}；"))?;
         }
         if let Some(levels) = &self.levels {
             for LevelMetricUniform { length, frequency } in levels {
                 f.write_str(&format!(
-                    "{}{}键：{}；",
-                    specifier,
+                    "{specifier}{}键：{frequency}；",
                     hanzi_numbers[length - 1],
-                    frequency
                 ))?;
             }
         }
@@ -165,7 +163,7 @@ impl Display for 层级指标 {
 pub struct 分组指标 {
     pub tiers: Option<Vec<层级指标>>,
     pub duplication: Option<f64>,
-    pub key_distribution: Option<HashMap<char, f64>>,
+    pub key_distribution: Option<FxHashMap<char, f64>>,
     pub key_distribution_loss: Option<f64>,
     pub pair_equivalence: Option<f64>,
     pub extended_pair_equivalence: Option<f64>,
@@ -194,10 +192,10 @@ impl Display for 分组指标 {
             ))?;
         }
         if let Some(equivalence) = self.pair_equivalence {
-            f.write_str(&format!("组合当量：{:.4}；", equivalence))?;
+            f.write_str(&format!("组合当量：{equivalence:.4}；"))?;
         }
         if let Some(equivalence) = self.extended_pair_equivalence {
-            f.write_str(&format!("词间当量：{:.4}；", equivalence))?;
+            f.write_str(&format!("词间当量：{equivalence:.4}；"))?;
         }
         if let Some(fingering) = &self.fingering {
             for (index, percent) in fingering.iter().enumerate() {
@@ -221,7 +219,7 @@ impl Display for 分组指标 {
         }
         if let Some(tiers) = &self.tiers {
             for tier in tiers {
-                f.write_str(&format!("{}", tier))?;
+                f.write_str(&format!("{tier}"))?;
             }
         }
         if let Some(key_distribution) = &self.key_distribution {
@@ -254,19 +252,19 @@ pub struct 默认指标 {
 impl Display for 默认指标 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(记忆量) = &self.memory {
-            f.write_str(&format!("记忆量：{:.2}；\n", 记忆量))?;
+            f.write_str(&format!("记忆量：{记忆量:.2}；\n"))?;
         }
         if let Some(characters) = &self.characters_full {
-            f.write_str(&format!("一字全码［{}］\n", characters))?;
+            f.write_str(&format!("一字全码［{characters}］\n"))?;
         }
         if let Some(words) = &self.words_full {
-            f.write_str(&format!("多字全码［{}］\n", words))?;
+            f.write_str(&format!("多字全码［{words}］\n"))?;
         }
         if let Some(characters_reduced) = &self.characters_short {
-            f.write_str(&format!("一字简码［{}］\n", characters_reduced))?;
+            f.write_str(&format!("一字简码［{characters_reduced}］\n"))?;
         }
         if let Some(words_reduced) = &self.words_short {
-            f.write_str(&format!("多字简码［{}］\n", words_reduced))?;
+            f.write_str(&format!("多字简码［{words_reduced}］\n"))?;
         }
         Ok(())
     }
@@ -275,7 +273,7 @@ impl Display for 默认指标 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn test_subset(all: HashSet<(char, char)>, target: &str) {
+    fn test_subset(all: FxHashSet<(char, char)>, target: &str) {
         for pair in target.split(' ') {
             let chars: Vec<char> = pair.chars().collect();
             assert!(all.contains(&(chars[0], chars[1])), "集合不包含：{}", pair);
