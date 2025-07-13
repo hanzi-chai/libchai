@@ -3,38 +3,340 @@
 //! chai 是使用 libchai 实现的命令行程序，用户提供方案配置文件、拆分表和评测信息，本程序能够生成编码并评测一系列指标，以及基于退火算法优化元素的布局。
 
 pub mod config;
-pub mod data;
+pub mod contexts;
 pub mod encoders;
+pub mod interfaces;
 pub mod objectives;
 pub mod operators;
 pub mod optimizers;
-pub mod server;
-
-use chrono::Local;
-use clap::{Parser, Subcommand};
-use config::{ObjectiveConfig, OptimizationConfig, SolverConfig, 配置};
-use console_error_panic_hook::set_once;
-use csv::{ReaderBuilder, WriterBuilder};
-use data::{原始可编码对象, 数据};
-use data::{原始当量信息, 原始键位分布信息, 码表项};
-use encoders::default::默认编码器;
-use encoders::编码器;
-use js_sys::Function;
-use objectives::default::默认目标函数;
-use objectives::metric::默认指标;
-use objectives::目标函数;
-use operators::default::默认操作;
-use optimizers::{优化方法, 优化问题};
+use config::{Mapped, MappedKey};
+use objectives::metric::指法标记;
+use optimizers::解特征;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::{from_value, to_value, Serializer};
-use serde_with::skip_serializing_none;
-use std::collections::HashMap;
-use std::fmt::Display;
-use std::fs::{create_dir_all, read_to_string, write, OpenOptions};
-use std::io::{self, Write};
-use std::iter::FromIterator;
-use std::path::{Path, PathBuf};
-use wasm_bindgen::{prelude::*, JsError};
+use std::cmp::Reverse;
+use std::io;
+use wasm_bindgen::JsError;
+
+/// 只考虑长度为 1 到 10 的词
+pub const 最大词长: usize = 10;
+
+/// 只对低于最大按键组合长度的编码预先计算当量
+pub const 最大按键组合长度: usize = 4;
+
+/// 从配置文件中读取的原始可编码对象
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct 原始可编码对象 {
+    pub name: String,
+    pub sequence: String,
+    pub frequency: u64,
+    #[serde(default = "原始可编码对象::默认级别")]
+    pub level: u64,
+}
+
+impl 原始可编码对象 {
+    const fn 默认级别() -> u64 {
+        u64::MAX
+    }
+}
+
+pub type 原始键位分布信息 = FxHashMap<char, 键位分布损失函数>;
+pub type 键位分布信息 = Vec<键位分布损失函数>;
+pub type 原始当量信息 = FxHashMap<String, f64>;
+pub type 当量信息 = Vec<f64>;
+
+/// 键位分布的理想值和惩罚值
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct 键位分布损失函数 {
+    pub ideal: f64,
+    pub lt_penalty: f64,
+    pub gt_penalty: f64,
+}
+
+/// 元素用一个无符号整数表示
+pub type 元素 = usize;
+
+/// 可编码对象的序列
+pub type 元素序列 = Vec<元素>;
+
+/// 编码用无符号整数表示
+pub type 编码 = u64;
+
+/// 包含词、词长、元素序列、频率等信息
+#[derive(Debug, Clone)]
+pub struct 可编码对象 {
+    pub 名称: String,
+    pub 词长: usize,
+    pub 元素序列: 元素序列,
+    pub 频率: u64,
+    pub 简码等级: u64,
+    pub 原始顺序: usize,
+}
+
+/// 全码或简码的编码信息
+#[derive(Clone, Debug, Copy, Default)]
+pub struct 部分编码信息 {
+    pub 原始编码: 编码,       // 原始编码
+    pub 原始编码候选位置: u8, // 原始编码上的选重位置
+    pub 实际编码: 编码,       // 实际编码
+    pub 选重标记: bool,       // 实际编码是否算作重码
+    pub 上一个实际编码: 编码, // 前一个实际编码
+    pub 上一个选重标记: bool, // 前一个实际编码是否算作重码
+    pub 有变化: bool,         // 编码是否发生了变化
+}
+
+impl 部分编码信息 {
+    #[inline(always)]
+    pub fn 更新(&mut self, 编码: 编码, 选重标记: bool) {
+        if self.实际编码 == 编码 && self.选重标记 == 选重标记 {
+            return;
+        }
+        self.有变化 = true;
+        self.上一个实际编码 = self.实际编码;
+        self.上一个选重标记 = self.选重标记;
+        self.实际编码 = 编码;
+        self.选重标记 = 选重标记;
+    }
+}
+
+/// 包含长度、频率、全码和简码，用于传给目标函数来统计
+#[derive(Clone, Debug)]
+pub struct 编码信息 {
+    pub 词长: usize,
+    pub 频率: u64,
+    pub 全码: 部分编码信息,
+    pub 简码: 部分编码信息,
+}
+
+impl 编码信息 {
+    pub fn new(词: &可编码对象) -> Self {
+        Self {
+            词长: 词.词长,
+            频率: 词.频率,
+            全码: 部分编码信息::default(),
+            简码: 部分编码信息::default(),
+        }
+    }
+}
+
+/// 按键用无符号整数表示
+pub type 键 = u64;
+
+/// 元素映射用一个数组表示，下标是元素
+pub type 元素映射 = Vec<键>;
+
+impl 解特征 for 元素映射 {
+    type 变化 = Vec<元素>;
+}
+
+/// 用指标记
+pub type 指法向量 = [u8; 8];
+
+/// 自动上屏判断数组
+pub type 自动上屏 = Vec<bool>;
+
+/// 用于输出为文本码表，包含了名称、全码、简码、全码排名和简码排名
+#[derive(Debug, Serialize)]
+pub struct 码表项 {
+    pub name: String,
+    pub full: String,
+    pub full_rank: u8,
+    pub short: String,
+    pub short_rank: u8,
+}
+
+pub type 正则化 = FxHashMap<元素, Vec<(元素, f64)>>;
+
+impl Mapped {
+    pub fn length(&self) -> usize {
+        match self {
+            Mapped::Basic(s) => s.len(),
+            Mapped::Advanced(v) => v.len(),
+        }
+    }
+
+    pub fn normalize(&self) -> Vec<MappedKey> {
+        match self {
+            Mapped::Advanced(vector) => vector.clone(),
+            Mapped::Basic(string) => string.chars().map(MappedKey::Ascii).collect(),
+        }
+    }
+}
+
+pub fn 元素标准名称(element: &String, index: usize) -> String {
+    if index == 0 {
+        element.to_string()
+    } else {
+        format!("{element}.{index}")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct 棱镜 {
+    pub 键转数字: FxHashMap<char, 键>,
+    pub 数字转键: FxHashMap<键, char>,
+    pub 元素转数字: FxHashMap<String, 元素>,
+    pub 数字转元素: FxHashMap<元素, String>,
+    pub 进制: u64,
+}
+
+impl 棱镜 {
+    /// 如前所述，建立了一个按键到整数的映射之后，可以将字符串看成具有某个进制的数。所以，给定一个数，也可以把它转化为字符串
+    pub fn 数字转编码(&self, code: 编码) -> Vec<char> {
+        let mut chars = Vec::new();
+        let mut remainder = code;
+        while remainder > 0 {
+            let k = remainder % self.进制;
+            remainder /= self.进制;
+            if k == 0 {
+                continue;
+            }
+            let char = self.数字转键.get(&k).unwrap(); // 从内部表示转换为字符，不需要检查
+            chars.push(*char);
+        }
+        chars
+    }
+
+    pub fn 预处理词列表(
+        &self,
+        原始词列表: Vec<原始可编码对象>,
+        最大码长: usize,
+    ) -> Result<Vec<可编码对象>, 错误> {
+        let mut 词列表 = Vec::new();
+        for (原始顺序, 原始可编码对象) in 原始词列表.into_iter().enumerate() {
+            let 原始可编码对象 {
+                name,
+                frequency,
+                sequence,
+                level,
+            } = 原始可编码对象;
+            let 原始元素序列: Vec<_> = sequence.split(' ').collect();
+            let mut 元素序列 = 元素序列::new();
+            let length = 原始元素序列.len();
+            if length > 最大码长 {
+                return Err(format!(
+                    "编码对象「{name}」包含的元素数量为 {length}，超过了最大码长 {最大码长}"
+                )
+                .into());
+            }
+            for 原始元素 in 原始元素序列 {
+                if let Some(元素) = self.元素转数字.get(原始元素) {
+                    元素序列.push(*元素);
+                } else {
+                    return Err(format!(
+                        "编码对象「{name}」包含的元素「{原始元素}」无法在键盘映射中找到"
+                    )
+                    .into());
+                }
+            }
+            词列表.push(可编码对象 {
+                名称: name.clone(),
+                词长: name.chars().count(),
+                频率: frequency,
+                简码等级: level,
+                元素序列,
+                原始顺序,
+            });
+        }
+        词列表.sort_by_key(|x| Reverse(x.频率));
+        Ok(词列表)
+    }
+
+    /// 根据编码字符和未归一化的键位分布，生成一个理想的键位分布
+    pub fn 预处理键位分布信息(
+        &self,
+        原始键位分布信息: &原始键位分布信息,
+    ) -> Vec<键位分布损失函数> {
+        let default_loss = 键位分布损失函数 {
+            ideal: 0.0,
+            lt_penalty: 0.0,
+            gt_penalty: 1.0,
+        };
+        let mut 键位分布信息: Vec<键位分布损失函数> = (0..self.进制)
+            .map(|键| {
+                // 0 只是为了占位，不需要统计
+                if 键 == 0 {
+                    default_loss.clone()
+                } else {
+                    let 键名称 = self.数字转键[&键];
+                    原始键位分布信息
+                        .get(&键名称)
+                        .unwrap_or(&default_loss)
+                        .clone()
+                }
+            })
+            .collect();
+        键位分布信息.iter_mut().for_each(|x| {
+            x.ideal /= 100.0;
+        });
+        键位分布信息
+    }
+
+    /// 将编码空间内所有的编码组合预先计算好速度当量
+    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
+    pub fn 预处理当量信息(
+        &self, 原始当量信息: &原始当量信息, space: usize
+    ) -> Vec<f64> {
+        let mut result: Vec<f64> = vec![0.0; space];
+        for (index, equivalence) in result.iter_mut().enumerate() {
+            let chars = self.数字转编码(index as u64);
+            for correlation_length in [2, 3, 4] {
+                if chars.len() < correlation_length {
+                    break;
+                }
+                // N 键当量
+                for i in 0..=(chars.len() - correlation_length) {
+                    let substr: String = chars[i..(i + correlation_length)].iter().collect();
+                    *equivalence += 原始当量信息.get(&substr).unwrap_or(&0.0);
+                }
+            }
+        }
+        result
+    }
+
+    /// 将编码空间内所有的编码组合预先计算好差指法标记
+    /// 标记压缩到一个 64 位整数中，每四位表示一个字符的差指法标记
+    /// 从低位到高位，依次是：同手、同指大跨排、同指小跨排、小指干扰、错手、三连击
+    /// 按照这个字符串所对应的整数为下标，存储到一个大数组中
+    pub fn 预处理指法标记(&self, 空间: usize) -> Vec<指法向量> {
+        let 指法标记 = 指法标记::new();
+        let mut result: Vec<指法向量> = Vec::with_capacity(空间);
+        for code in 0..空间 {
+            let chars = self.数字转编码(code as u64);
+            if chars.len() < 2 {
+                result.push(指法向量::default());
+                continue;
+            }
+            let mut 指法向量 = 指法向量::default();
+            for i in 0..(chars.len() - 1) {
+                let pair = (chars[i], chars[i + 1]);
+                if 指法标记.同手.contains(&pair) {
+                    指法向量[0] += 1;
+                }
+                if 指法标记.同指大跨排.contains(&pair) {
+                    指法向量[1] += 1;
+                }
+                if 指法标记.同指小跨排.contains(&pair) {
+                    指法向量[2] += 1;
+                }
+                if 指法标记.小指干扰.contains(&pair) {
+                    指法向量[3] += 1;
+                }
+                if 指法标记.错手.contains(&pair) {
+                    指法向量[4] += 1;
+                }
+            }
+            for i in 0..(chars.len() - 2) {
+                let triple = (chars[i], chars[i + 1], chars[i + 2]);
+                if triple.0 == triple.1 && triple.1 == triple.2 {
+                    指法向量[5] += 1;
+                }
+            }
+            result.push(指法向量);
+        }
+        result
+    }
+}
 
 /// 错误类型
 #[derive(Debug, Clone)]
@@ -75,485 +377,5 @@ impl From<serde_json::Error> for 错误 {
 impl From<错误> for JsError {
     fn from(value: 错误) -> Self {
         JsError::new(&value.message)
-    }
-}
-
-/// 图形界面参数的定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct 图形界面参数 {
-    pub 配置: 配置,
-    pub 词列表: Vec<原始可编码对象>,
-    pub 原始键位分布信息: 原始键位分布信息,
-    pub 原始当量信息: 原始当量信息,
-}
-
-impl Default for 图形界面参数 {
-    fn default() -> Self {
-        Self {
-            配置: 配置::default(),
-            词列表: vec![],
-            原始键位分布信息: HashMap::new(),
-            原始当量信息: HashMap::new(),
-        }
-    }
-}
-
-/// 向用户反馈的消息类型
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-#[skip_serializing_none]
-pub enum 消息 {
-    TrialMax {
-        temperature: f64,
-        accept_rate: f64,
-    },
-    TrialMin {
-        temperature: f64,
-        improve_rate: f64,
-    },
-    Parameters {
-        t_max: f64,
-        t_min: f64,
-    },
-    Progress {
-        steps: usize,
-        temperature: f64,
-        metric: String,
-    },
-    BetterSolution {
-        metric: String,
-        config: 配置,
-        save: bool,
-    },
-    Elapsed {
-        time: u64,
-    },
-}
-
-/// 定义了向用户报告消息的接口，用于统一命令行和图形界面的输出方式
-///
-/// 命令行界面、图形界面只需要各自实现 post 方法，就可向用户报告各种用户数据
-pub trait 界面 {
-    fn 发送(&self, 消息: 消息);
-}
-
-/// 通过图形界面来使用 libchai 的入口，实现了界面特征
-#[wasm_bindgen]
-pub struct Web {
-    回调: Function,
-    参数: 图形界面参数,
-}
-
-/// 用于在图形界面验证输入的配置是否正确
-#[wasm_bindgen]
-pub fn validate(js_config: JsValue) -> Result<JsValue, JsError> {
-    set_once();
-    let 配置: 配置 = from_value(js_config)?;
-    let 序列化 = Serializer::json_compatible();
-    Ok(配置.serialize(&序列化)?)
-}
-
-#[wasm_bindgen]
-impl Web {
-    pub fn new(回调: Function) -> Web {
-        set_once();
-        let 参数 = 图形界面参数::default();
-        Self { 回调, 参数 }
-    }
-
-    pub fn sync(&mut self, 前端参数: JsValue) -> Result<(), JsError> {
-        self.参数 = from_value(前端参数)?;
-        Ok(())
-    }
-
-    pub fn encode_evaluate(&self, 前端目标函数配置: JsValue) -> Result<JsValue, JsError> {
-        let 目标函数配置: ObjectiveConfig = from_value(前端目标函数配置)?;
-        let 图形界面参数 {
-            mut 配置,
-            原始键位分布信息,
-            原始当量信息,
-            词列表,
-        } = self.参数.clone();
-        配置.optimization = Some(OptimizationConfig {
-            objective: 目标函数配置,
-            constraints: None,
-            metaheuristic: None,
-        });
-        let 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
-        let mut 编码器 = 默认编码器::新建(&数据)?;
-        let mut 编码结果 = 编码器.编码(&数据.初始映射, &None).clone();
-        let 码表 = 数据.生成码表(&编码结果);
-        let mut 目标函数 = 默认目标函数::新建(&数据)?;
-        let (指标, _) = 目标函数.计算(&mut 编码结果, &数据.初始映射);
-        Ok(to_value(&(码表, 指标))?)
-    }
-
-    pub fn optimize(&self) -> Result<(), JsError> {
-        let 图形界面参数 {
-            配置,
-            原始键位分布信息,
-            原始当量信息,
-            词列表,
-        } = self.参数.clone();
-        let 优化方法配置 = 配置.clone().optimization.unwrap().metaheuristic.unwrap();
-        let 数据: 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
-        let 编码器 = 默认编码器::新建(&数据)?;
-        let 目标函数 = 默认目标函数::新建(&数据)?;
-        let 操作 = 默认操作::新建(&数据)?;
-        let mut 问题 = 优化问题::新建(数据, 编码器, 目标函数, 操作);
-        let SolverConfig::SimulatedAnnealing(退火) = 优化方法配置;
-        退火.优化(&mut 问题, self);
-        Ok(())
-    }
-}
-
-impl 界面 for Web {
-    fn 发送(&self, 消息: 消息) {
-        let 序列化 = Serializer::json_compatible();
-        let 前端消息 = 消息.serialize(&序列化).unwrap();
-        self.回调.call1(&JsValue::null(), &前端消息).unwrap();
-    }
-}
-
-/// 命令行参数的定义
-#[derive(Parser, Clone)]
-#[command(name = "汉字自动拆分系统")]
-#[command(author, version, about, long_about)]
-pub struct 命令行参数 {
-    #[command(subcommand)]
-    pub command: 命令,
-}
-
-/// 编码和优化共用的数据参数
-#[derive(Parser, Clone)]
-pub struct 数据参数 {
-    /// 方案文件，默认为 config.yaml
-    #[arg(short, long, value_name = "FILE")]
-    pub config: Option<PathBuf>,
-    /// 频率序列表，默认为 elements.txt
-    #[arg(short, long, value_name = "FILE")]
-    pub encodables: Option<PathBuf>,
-    /// 单键用指分布表，默认为 assets/key_distribution.txt
-    #[arg(short, long, value_name = "FILE")]
-    pub key_distribution: Option<PathBuf>,
-    /// 双键速度当量表，默认为 assets/pair_equivalence.txt
-    #[arg(short, long, value_name = "FILE")]
-    pub pair_equivalence: Option<PathBuf>,
-}
-
-/// 命令行中所有可用的子命令
-#[derive(Subcommand, Clone)]
-pub enum 命令 {
-    /// 生成编码并评测指标
-    #[command(about = "使用方案文件和拆分表计算出字词编码并统计各类评测指标")]
-    Encode {
-        #[command(flatten)]
-        data: 数据参数,
-    },
-    /// 优化元素布局
-    #[command(about = "基于配置文件使用退火算法优化元素布局")]
-    Optimize {
-        #[command(flatten)]
-        data: 数据参数,
-        /// 优化时使用的线程数
-        #[arg(short, long, default_value = "1")]
-        threads: usize,
-    },
-    /// 启动 Web API 服务器
-    #[command(about = "启动 HTTP API 服务器")]
-    Server {
-        /// 服务器端口号
-        #[arg(short, long, default_value = "3200")]
-        port: u16,
-    },
-}
-
-/// 通过命令行来使用 libchai 的入口，实现了界面特征
-pub struct 命令行 {
-    pub 参数: 命令行参数,
-    pub 输出目录: PathBuf,
-}
-
-impl 命令行 {
-    pub fn 新建(args: 命令行参数, maybe_output_dir: Option<PathBuf>) -> Self {
-        let output_dir = maybe_output_dir.unwrap_or_else(|| {
-            let time = Local::now().format("%m-%d+%H_%M_%S").to_string();
-            PathBuf::from(format!("output-{}", time))
-        });
-        create_dir_all(output_dir.clone()).unwrap();
-        Self {
-            参数: args,
-            输出目录: output_dir,
-        }
-    }
-
-    pub fn 读取(name: &str) -> 数据 {
-        let config = format!("examples/{}.yaml", name);
-        let elements = format!("examples/{}.txt", name);
-        let 参数 = 命令行参数 {
-            command: 命令::Optimize {
-                data: 数据参数 {
-                    config: Some(PathBuf::from(config)),
-                    encodables: Some(PathBuf::from(elements)),
-                    key_distribution: None,
-                    pair_equivalence: None,
-                },
-                threads: 1,
-            },
-        };
-        let cli: 命令行 = 命令行::新建(参数, None);
-        cli.准备数据()
-    }
-
-    fn read<I, T>(path: PathBuf) -> T
-    where
-        I: for<'de> Deserialize<'de>,
-        T: FromIterator<I>,
-    {
-        let mut reader = ReaderBuilder::new()
-            .delimiter(b'\t')
-            .has_headers(false)
-            .flexible(true)
-            .from_path(path)
-            .unwrap();
-        reader.deserialize().map(|x| x.unwrap()).collect()
-    }
-
-    pub fn 准备数据(&self) -> 数据 {
-        let (config, encodables, key_distribution, pair_equivalence) = match &self.参数.command {
-            命令::Encode { data } | 命令::Optimize { data, .. } => (
-                data.config.clone(),
-                data.encodables.clone(),
-                data.key_distribution.clone(),
-                data.pair_equivalence.clone(),
-            ),
-            命令::Server { .. } => {
-                panic!("Server 命令不需要数据准备");
-            }
-        };
-
-        let config_path = config.unwrap_or(PathBuf::from("config.yaml"));
-        let config_content = read_to_string(&config_path)
-            .unwrap_or_else(|_| panic!("文件 {} 不存在", config_path.display()));
-        let config: 配置 = serde_yaml::from_str(&config_content).unwrap();
-        let elements_path = encodables.unwrap_or(PathBuf::from("elements.txt"));
-        let encodables: Vec<原始可编码对象> = Self::read(elements_path);
-
-        let assets_dir = Path::new("assets");
-        let keq_path = key_distribution.unwrap_or(assets_dir.join("key_distribution.txt"));
-        let key_distribution: 原始键位分布信息 = Self::read(keq_path);
-        let peq_path = pair_equivalence.unwrap_or(assets_dir.join("pair_equivalence.txt"));
-        let pair_equivalence: 原始当量信息 = Self::read(peq_path);
-        数据::新建(config, encodables, key_distribution, pair_equivalence).unwrap()
-    }
-
-    pub fn 输出编码结果(&self, entries: Vec<码表项>) {
-        let path = self.输出目录.join("编码.txt");
-        let mut writer = WriterBuilder::new()
-            .delimiter(b'\t')
-            .has_headers(false)
-            .from_path(&path)
-            .unwrap();
-        for 码表项 {
-            name,
-            full,
-            full_rank,
-            short,
-            short_rank,
-        } in entries
-        {
-            writer
-                .serialize((&name, &full, &full_rank, &short, &short_rank))
-                .unwrap();
-        }
-        writer.flush().unwrap();
-        println!("已完成编码，结果保存在 {} 中", path.clone().display());
-    }
-
-    pub fn 输出评测指标<M: Display + Serialize>(&self, metric: M) {
-        let path = self.输出目录.join("评测指标.yaml");
-        print!("{}", metric);
-        let metric_str = serde_yaml::to_string(&metric).unwrap();
-        write(&path, metric_str).unwrap();
-    }
-
-    pub fn 生成子命令行(&self, index: usize) -> 命令行 {
-        let child_dir = self.输出目录.join(format!("{}", index));
-        命令行::新建(self.参数.clone(), Some(child_dir))
-    }
-}
-
-impl 界面 for 命令行 {
-    fn 发送(&self, message: 消息) {
-        let is_multithreaded = match &self.参数.command {
-            命令::Optimize { threads, .. } => *threads != 1,
-            _ => false,
-        };
-
-        let mut writer: Box<dyn Write> = if is_multithreaded {
-            let log_path = self.输出目录.join("log.txt");
-            let file = OpenOptions::new()
-                .create(true) // 如果文件不存在，则创建
-                .append(true) // 追加写入，不覆盖原有内容
-                .open(log_path)
-                .expect("Failed to open file");
-            Box::new(file)
-        } else {
-            Box::new(std::io::stdout())
-        };
-        let result = match message {
-            消息::TrialMax {
-                temperature,
-                accept_rate,
-            } => writeln!(
-                &mut writer,
-                "若温度为 {:.2e}，接受率为 {:.2}%",
-                temperature,
-                accept_rate * 100.0
-            ),
-            消息::TrialMin {
-                temperature,
-                improve_rate,
-            } => writeln!(
-                &mut writer,
-                "若温度为 {:.2e}，改进率为 {:.2}%",
-                temperature,
-                improve_rate * 100.0
-            ),
-            消息::Parameters { t_max, t_min } => writeln!(
-                &mut writer,
-                "参数寻找完成，从最高温 {} 降到最低温 {}……",
-                t_max, t_min
-            ),
-            消息::Elapsed { time } => writeln!(&mut writer, "计算一次评测用时：{} μs", time),
-            消息::Progress {
-                steps,
-                temperature,
-                metric,
-            } => writeln!(
-                &mut writer,
-                "已执行 {} 步，当前温度为 {:.2e}，当前评测指标如下：\n{}",
-                steps, temperature, metric
-            ),
-            消息::BetterSolution {
-                metric,
-                config,
-                save,
-            } => {
-                let 时刻 = Local::now();
-                let 时间戳 = 时刻.format("%m-%d+%H_%M_%S_%3f").to_string();
-                let 配置路径 = self.输出目录.join(format!("{}.yaml", 时间戳));
-                let 指标路径 = self.输出目录.join(format!("{}.txt", 时间戳));
-                if save {
-                    let mut 配置 = config.clone();
-                    if let Some(info) = 配置.info.as_mut() {
-                        info.version = Some(时间戳.clone());
-                    }
-                    let 序列化配置 = serde_yaml::to_string(&配置).unwrap();
-                    write(指标路径, metric.clone()).unwrap();
-                    write(配置路径, 序列化配置).unwrap();
-                    writeln!(
-                        &mut writer,
-                        "方案文件保存于 {}.yaml 中，评测指标保存于 {}.metric.yaml 中",
-                        时间戳, 时间戳
-                    )
-                    .unwrap();
-                }
-                writeln!(
-                    &mut writer,
-                    "{} 系统搜索到了一个更好的方案，评测指标如下：\n{}",
-                    时刻.format("%H:%M:%S"),
-                    metric
-                )
-            }
-        };
-        result.unwrap()
-    }
-}
-
-/// 纯 Rust 的 Web API 接口，与 wasm_bindgen Web 结构一一对应
-pub struct WebApi {
-    参数: 图形界面参数,
-    回调: Option<Box<dyn Fn(&消息) + Send + Sync>>,
-}
-
-impl WebApi {
-    /// 创建新的 WebApi 实例，与 Web::new 对应
-    pub fn new() -> Self {
-        set_once();
-        let 参数 = 图形界面参数::default();
-        Self {
-            参数, 回调: None
-        }
-    }
-
-    /// 设置消息回调函数
-    pub fn set_callback<F>(&mut self, callback: F)
-    where
-        F: Fn(&消息) + Send + Sync + 'static,
-    {
-        self.回调 = Some(Box::new(callback));
-    }
-
-    /// 同步前端参数，与 Web::sync 对应
-    pub fn sync(&mut self, 前端参数: 图形界面参数) -> Result<(), 错误> {
-        self.参数 = 前端参数;
-        Ok(())
-    }
-
-    /// 编码评估，与 Web::encode_evaluate 对应
-    pub fn encode_evaluate(
-        &self,
-        目标函数配置: ObjectiveConfig,
-    ) -> Result<(Vec<码表项>, 默认指标), 错误> {
-        let 图形界面参数 {
-            mut 配置,
-            原始键位分布信息,
-            原始当量信息,
-            词列表,
-        } = self.参数.clone();
-
-        配置.optimization = Some(OptimizationConfig {
-            objective: 目标函数配置,
-            constraints: None,
-            metaheuristic: None,
-        });
-
-        let 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
-        let mut 编码器 = 默认编码器::新建(&数据)?;
-        let mut 编码结果 = 编码器.编码(&数据.初始映射, &None).clone();
-        let 码表 = 数据.生成码表(&编码结果);
-        let mut 目标函数 = 默认目标函数::新建(&数据)?;
-        let (指标, _) = 目标函数.计算(&mut 编码结果, &数据.初始映射);
-
-        Ok((码表, 指标))
-    }
-
-    /// 优化，与 Web::optimize 对应  
-    pub fn optimize(&self) -> Result<(), 错误> {
-        let 图形界面参数 {
-            配置,
-            原始键位分布信息,
-            原始当量信息,
-            词列表,
-        } = self.参数.clone();
-
-        let 优化方法配置 = 配置.clone().optimization.unwrap().metaheuristic.unwrap();
-        let 数据 = 数据::新建(配置, 词列表, 原始键位分布信息, 原始当量信息)?;
-        let 编码器 = 默认编码器::新建(&数据)?;
-        let 目标函数 = 默认目标函数::新建(&数据)?;
-        let 操作 = 默认操作::新建(&数据)?;
-        let mut 问题 = 优化问题::新建(数据, 编码器, 目标函数, 操作);
-        let SolverConfig::SimulatedAnnealing(退火) = 优化方法配置;
-        退火.优化(&mut 问题, self);
-        Ok(())
-    }
-}
-
-impl 界面 for WebApi {
-    fn 发送(&self, 消息: 消息) {
-        if let Some(ref callback) = self.回调 {
-            callback(&消息);
-        }
     }
 }

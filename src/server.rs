@@ -9,6 +9,10 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chai::config::{ObjectiveConfig, 配置};
+use chai::interfaces::server::WebApi;
+use chai::interfaces::web::图形界面参数;
+use chai::interfaces::消息;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -58,7 +62,7 @@ pub async fn validate_config(Json(config): Json<serde_json::Value>) -> Json<ApiR
         Err(e) => {
             // 配置解析失败
             Json(ApiResponse::Error {
-                error: format!("配置解析错误: {}", e),
+                error: format!("配置解析错误: {e}"),
             })
         }
     }
@@ -85,7 +89,7 @@ pub async fn sync_params(
             }
         }
         Err(e) => Json(ApiResponse::Error {
-            error: format!("参数解析错误: {}", e),
+            error: format!("参数解析错误: {e}"),
         }),
     }
 }
@@ -113,7 +117,7 @@ pub async fn encode_evaluate(
             }
         }
         Err(e) => Json(ApiResponse::Error {
-            error: format!("目标函数配置解析错误: {}", e),
+            error: format!("目标函数配置解析错误: {e}"),
         }),
     }
 }
