@@ -1,6 +1,6 @@
 [package]
 name = "libchai"
-version = "0.2.7"
+version = "0.3.0"
 authors = ["Songchen Tan <i@tansongchen.com>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -52,11 +52,12 @@ axum = { version = "0.8", features = ["ws", "macros"] }
 tokio = { version = "1.0", features = ["full"] }
 tokio-tungstenite = "0.27"
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "fs","timeout"] }
+tower-http = { version = "0.6", features = ["cors", "fs", "timeout"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 futures-util = "0.3.31"
-uuid = { version =  "1.17.0", features = ["v4"] }
+uuid = { version = "1.17.0", features = ["v4"] }
+indexmap = { version = "2.10.0", features = ["serde"] }
 
 
 [dev-dependencies]

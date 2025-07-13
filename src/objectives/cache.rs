@@ -1,3 +1,5 @@
+use rustc_hash::FxHashMap;
+
 use super::default::默认目标函数参数;
 use super::metric::FingeringMetric;
 use super::metric::FingeringMetricUniform;
@@ -6,11 +8,9 @@ use super::metric::分组指标;
 use super::metric::层级指标;
 use super::metric::键长指标;
 use crate::config::PartialWeights;
-use crate::data::最大按键组合长度;
-use crate::data::编码;
-use crate::data::部分编码信息;
-use crate::data::键位分布损失函数;
-use std::collections::HashMap;
+use crate::{
+    最大按键组合长度, 编码, 部分编码信息, 键位分布损失函数
+};
 use std::iter::zip;
 
 // 用于缓存计算目标函数的中间结果，方便实现增量计算
@@ -89,7 +89,7 @@ impl 缓存 {
                 .map(|x| *x as f64 / 总频率 as f64)
                 .collect();
             let 距离 = 缓存::计算键位分布距离(&分布, 键位分布信息);
-            let mut 分布映射 = HashMap::new();
+            let mut 分布映射 = FxHashMap::default();
             for (i, x) in 分布.iter().enumerate() {
                 if let Some(键) = 参数.数字转键.get(&(i as u64)) {
                     分布映射.insert(*键, *x);

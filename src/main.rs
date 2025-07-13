@@ -1,6 +1,5 @@
 use chai::config::SolverConfig;
 use chai::encoders::default::默认编码器;
-use chai::encoders::编码器;
 use chai::objectives::{default::默认目标函数, 目标函数};
 use chai::operators::default::默认操作;
 use chai::optimizers::{优化方法, 优化问题};
@@ -61,7 +60,10 @@ async fn main() -> Result<(), 错误> {
                 let mut 问题 = 优化问题::新建(数据.clone(), 编码器, 目标函数, 操作);
                 let 优化方法 = 退火.clone();
                 let 子命令行 = 命令行.生成子命令行(线程序号);
-                let 线程 = spawn(move || 优化方法.优化(&mut 问题, &子命令行));
+                let _上下文 = 上下文.clone();
+                let 线程 = spawn(move || {
+                    优化方法.优化(&_上下文.初始映射, &mut 目标函数, &mut 操作, &_上下文, &子命令行)
+                });
                 线程池.push(线程);
             }
 
