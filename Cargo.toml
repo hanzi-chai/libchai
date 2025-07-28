@@ -64,7 +64,7 @@ uuid = { version =  "1.17.0", features = ["v4"] }
 
 
 [dev-dependencies]
-criterion = { version = "0.6", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports"] }
 
 [[bench]]
 name = "benchmark"
