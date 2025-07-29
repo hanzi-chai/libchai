@@ -49,7 +49,8 @@ jobs:
             README.md
             LICENSE
 
-      - name: Install Rust Toolchains
+      - uses: Swatinem/rust-cache@v2
+      - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Build documentation
         run: cargo doc --no-deps
@@ -64,6 +65,7 @@ jobs:
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -78,21 +80,20 @@ jobs:
           name: linux-gnu
           path: |
             target/x86_64-unknown-linux-gnu/release/chai
-            target/x86_64-unknown-linux-gnu/release/server
       - name: Upload musl
         uses: actions/upload-artifact@v4
         with:
           name: linux-musl
           path: |
             target/x86_64-unknown-linux-musl/release/chai
-            target/x86_64-unknown-linux-musl/release/server
 
   build-windows:
     runs-on: windows-latest
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
-      - name: Install Rust Toolchains
+      - uses: Swatinem/rust-cache@v2
+      - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: "x86_64-pc-windows-msvc"
@@ -104,18 +105,18 @@ jobs:
           name: windows
           path: |
             target/release/chai.exe
-            target/release/server.exe
 
   build-macos:
     runs-on: macos-latest
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Install Zig
         uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.13.0
-      - name: Install Rust Toolchains
+      - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: "x86_64-apple-darwin, aarch64-apple-darwin"
@@ -129,4 +130,3 @@ jobs:
           name: macos
           path: |
             target/universal2-apple-darwin/release/chai
-            target/universal2-apple-darwin/release/server

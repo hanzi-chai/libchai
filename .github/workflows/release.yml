@@ -11,23 +11,45 @@ jobs:
     outputs:
       changelog: ${{ steps.build_changelog.outputs.changelog }}
     steps:
-      - name: 拉取代码
-        uses: actions/checkout@v3
-      - name: 获取静态资源
+      # 拉取代码
+      - name: Checkout
+        uses: actions/checkout@v4
+      # 获取静态资源
+      - name: Fetch Static Resources
         run: |
           chmod +x fetch.sh
           ./fetch.sh
-      - name: 上传
+      # 拉取前端代码
+      - name: Checkout Website
+        uses: actions/checkout@v4
+        with:
+          repository: hanzi-chai/hanzi-chai.github.io
+          path: hanzi-chai
+      # 安装 Bun
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      # 编译前端
+      - name: Build Website
+        run: |
+          cd hanzi-chai
+          bun install
+          bun run fetch
+          bun run build:CLIENT
+          cd ..
+          cp -r hanzi-chai/dist/client client
+      # 上传
+      - name: Upload Static
         uses: actions/upload-artifact@v4
         with:
-          name: sample
+          name: static
           path: |
             assets
             examples
+            client
       - name: Build Changelog
         id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@v5          
-        with: 
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
           mode: "COMMIT"
           configurationJson: |
             {
@@ -47,7 +69,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 拉取代码
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: 获取静态资源
         uses: actions/download-artifact@v4
         with:
@@ -78,7 +101,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: 拉取代码
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: 获取静态资源
         uses: actions/download-artifact@v4
         with:
@@ -111,7 +135,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: 拉取代码
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: 获取静态资源
         uses: actions/download-artifact@v4
         with:
