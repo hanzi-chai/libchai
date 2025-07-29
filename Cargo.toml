@@ -14,10 +14,6 @@ readme = "README.md"
 name = "chai"
 path = "src/main.rs"
 
-[[bin]]
-name = "server"
-path = "src/bin/server.rs"
-
 [lib]
 name = "chai"
 crate-type = ["cdylib", "rlib"]

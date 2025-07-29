@@ -1,3 +1,6 @@
+use crate::config::{ObjectiveConfig, 配置};
+use crate::web_api::WebApi;
+use crate::图形界面参数;
 use axum::extract::DefaultBodyLimit;
 use axum::http::Method;
 use axum::{
@@ -6,9 +9,6 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use chai::config::{ObjectiveConfig, 配置};
-use chai::web_api::WebApi;
-use chai::图形界面参数;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -171,9 +171,7 @@ pub async fn start_optimize(State(state): State<AppState>) -> Json<ApiResponse<S
 }
 
 /// 获取优化状态（轮询端点）
-pub async fn get_optimization_status(
-    State(state): State<AppState>,
-) -> Json<OptimizationStatus> {
+pub async fn get_optimization_status(State(state): State<AppState>) -> Json<OptimizationStatus> {
     let status = state.optimization_status.lock().unwrap();
     Json(status.clone())
 }
@@ -380,16 +378,16 @@ pub fn create_app() -> Router {
         api.set_callback(move |消息| {
             // 只记录关键进度
             match 消息 {
-                chai::消息::Progress { steps, .. } => {
+                crate::消息::Progress { steps, .. } => {
                     if steps % 100 == 0 {
                         // 每100步记录一次
                         info!("优化进度: {} 步", steps);
                     }
                 }
-                chai::消息::BetterSolution { .. } => {
+                crate::消息::BetterSolution { .. } => {
                     info!("发现更优解");
                 }
-                chai::消息::Parameters { .. } => {
+                crate::消息::Parameters { .. } => {
                     info!("设置优化参数");
                 }
                 _ => {} // 其他消息不记录，避免日志过多
@@ -423,14 +421,86 @@ pub fn create_app() -> Router {
         .with_state(state)
 }
 
+/// 尝试绑定可用端口
+async fn bind_available_port(
+    preferred_port: u16,
+) -> Result<(tokio::net::TcpListener, u16), Box<dyn std::error::Error>> {
+    // 首先尝试首选端口
+    let addr = format!("0.0.0.0:{}", preferred_port);
+    match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => {
+            info!("成功绑定到首选端口: {}", preferred_port);
+            return Ok((listener, preferred_port));
+        }
+        Err(e) => {
+            info!("端口 {} 已被占用: {}", preferred_port, e);
+        }
+    }
+
+    // 如果首选端口被占用，尝试附近的端口
+    for offset in 1..=50 {
+        let port = preferred_port + offset;
+        if port < preferred_port {
+            break;
+        }
+
+        let addr = format!("0.0.0.0:{}", port);
+        match tokio::net::TcpListener::bind(&addr).await {
+            Ok(listener) => {
+                info!("成功绑定到替代端口: {}", port);
+                return Ok((listener, port));
+            }
+            Err(_) => {
+                // 继续尝试下一个端口
+            }
+        }
+    }
+
+    // 如果向上寻找失败，尝试向下寻找
+    for offset in 1..=50 {
+        if preferred_port < offset {
+            break;
+        }
+
+        let port = preferred_port - offset;
+        if port < 1024 {
+            // 避免使用系统保留端口
+            break;
+        }
+
+        let addr = format!("0.0.0.0:{}", port);
+        match tokio::net::TcpListener::bind(&addr).await {
+            Ok(listener) => {
+                info!("成功绑定到替代端口: {}", port);
+                return Ok((listener, port));
+            }
+            Err(_) => {
+                // 继续尝试下一个端口
+            }
+        }
+    }
+
+    // 最后尝试让系统自动分配端口
+    match tokio::net::TcpListener::bind("0.0.0.0:0").await {
+        Ok(listener) => {
+            let actual_port = listener.local_addr()?.port();
+            info!("使用系统自动分配的端口: {}", actual_port);
+            Ok((listener, actual_port))
+        }
+        Err(e) => Err(format!("无法绑定到任何端口: {}", e).into()),
+    }
+}
+
 /// 启动服务器
 pub async fn start_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let app = create_app();
-    let addr = format!("0.0.0.0:{}", port);
 
-    info!("Listening on: http://{}", addr);
+    // 尝试绑定端口，如果失败则尝试其他端口
+    let (listener, actual_port) = bind_available_port(port).await?;
+
+    info!("Listening on: http://127.0.0.1:{}", actual_port);
     info!("API Endpoints:");
     info!("   POST /api/validate    - 验证配置");
     info!("   POST /api/sync        - 同步参数");
@@ -438,13 +508,7 @@ pub async fn start_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
     info!("   POST /api/optimize    - 开始优化");
     info!("   GET  /api/status      - 获取优化状态");
 
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    start_server(3200).await
 }
