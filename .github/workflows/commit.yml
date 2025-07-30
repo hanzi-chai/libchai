@@ -49,9 +49,10 @@ jobs:
             README.md
             LICENSE
 
-      - uses: Swatinem/rust-cache@v2
       - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
       - name: Build documentation
         run: cargo doc --no-deps
       - name: Deploy to GitHub Pages
@@ -65,11 +66,12 @@ jobs:
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
       - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: "x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl"
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
       - name: 构建 chai
         run: |
           cargo build --target x86_64-unknown-linux-gnu --bins --release
@@ -92,11 +94,12 @@ jobs:
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
       - name: 安装 Rust 工具链
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: "x86_64-pc-windows-msvc"
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --bins --release
       - name: Upload
@@ -111,7 +114,6 @@ jobs:
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
       - name: Install Zig
         uses: goto-bus-stop/setup-zig@v2
         with:
@@ -120,6 +122,8 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: "x86_64-apple-darwin, aarch64-apple-darwin"
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
       - name: Install cargo-zigbuild
         run: cargo install cargo-zigbuild
       - name: Build
