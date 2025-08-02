@@ -7,7 +7,7 @@ use chai::optimizers::{优化方法, 优化问题};
 use chai::server;
 use chai::{命令, 命令行, 命令行参数, 错误};
 use clap::Parser;
-use std::{thread::spawn};
+use std::thread::spawn;
 
 #[tokio::main]
 async fn main() -> Result<(), 错误> {
