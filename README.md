@@ -16,18 +16,21 @@
 命令行程序基本的用法为：
 
 ```bash
-./chai [方案文件] -e [词信息文件] [命令]
+./chai [命令] -c [方案文件] -e [词信息文件]
 ```
 
-`chai` 支持两个不同的命令：`encode` 和 `optimize`：
+`chai` 支持三个不同的命令：`encode` 和 `optimize`：
 
 - `encode`：使用方案文件和拆分表计算出字词编码并统计各类评测指标
 - `optimize`：基于拆分表和方案文件中的配置优化元素布局
+- `server`: 启动 Web 服务
 
 例如，您可以运行
 
 ```bash
-./chai examples/米十五笔.yaml -e examples/米十五笔.txt encode
+./chai encode -c examples/米十五笔.yaml -e examples/米十五笔.txt
+./chai optimize -c examples/米十五笔.yaml -e examples/米十五笔.txt -t 4
+./chai server -p 12345
 ```
 
 完整的使用说明可用 `./chai --help` 查看。
