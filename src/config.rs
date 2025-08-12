@@ -125,6 +125,7 @@ pub struct Analysis {
     pub degenerator: Option<Degenerator>,
     pub selector: Option<Vec<String>>,
     pub customize: Option<IndexMap<String, Vec<String>>>,
+    pub dynamic_customize: Option<IndexMap<String, Vec<Vec<String>>>>,
     pub strong: Option<Vec<String>>,
     pub weak: Option<Vec<String>>,
     pub serializer: Option<String>,
@@ -156,21 +157,47 @@ pub struct FormConfig {
     pub alphabet: String,
     pub mapping_type: Option<usize>,
     pub mapping: IndexMap<String, Mapped>,
+    pub mapping_space: Option<IndexMap<String, Vec<ValueDescription>>>,
+    pub mapping_generator: Option<Vec<MappingGeneratorRule>>,
     pub grouping: Option<IndexMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MappingGeneratorRule {
+    pub score: f64,
+    pub position: usize,
+    pub elements: Vec<String>,
+    pub keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValueDescription {
+    pub value: Mapped,
+    pub score: f64,
+    pub condition: Option<Vec<Condition>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Condition {
+    pub element: String,
+    pub op: String,
+    pub value: Mapped
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum MappedKey {
     Ascii(char),
     Reference { element: String, index: usize },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum Mapped {
     Basic(String),
     Advanced(Vec<MappedKey>),
+    Grouped { element: String },
+    Unused(()),
 }
 // config.form end
 
@@ -434,6 +461,8 @@ impl Default for 配置 {
                 alphabet: "abcdefghijklmnopqrstuvwxyz".to_string(),
                 mapping_type: None,
                 mapping: IndexMap::new(),
+                mapping_space: None,
+                mapping_generator: None,
                 grouping: None,
             },
             encoder: EncoderConfig {

@@ -3,11 +3,12 @@
 use crate::config::{Mapped, MappedKey, Regularization, Scheme, ShortCodeConfig, 配置};
 use crate::contexts::上下文;
 use crate::encoders::default::简码配置;
-use crate::{
-    元素, 元素映射, 元素标准名称, 原始可编码对象, 原始当量信息, 原始键位分布信息, 可编码对象,
-    当量信息, 最大按键组合长度, 最大词长, 棱镜, 码表项, 编码, 编码信息, 键, 键位分布信息,
-};
+use crate::interfaces::默认输入;
 use crate::错误;
+use crate::{
+    元素, 元素映射, 元素标准名称, 可编码对象, 当量信息, 最大按键组合长度, 最大词长, 棱镜, 码表项,
+    编码, 编码信息, 键, 键位分布信息,
+};
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde_yaml::to_string;
@@ -57,6 +58,7 @@ impl 上下文 for 默认上下文 {
                         .collect();
                     Mapped::Advanced(all_codes)
                 }
+                x => x.clone()
             };
             new_config.form.mapping.insert(new_element, new_mapped);
         }
@@ -65,21 +67,16 @@ impl 上下文 for 默认上下文 {
 }
 
 impl 默认上下文 {
-    pub fn 新建(
-        配置: 配置,
-        原始词列表: Vec<原始可编码对象>,
-        原始键位分布信息: 原始键位分布信息,
-        原始当量信息: 原始当量信息,
-    ) -> Result<Self, 错误> {
-        let (初始映射, 选择键, 棱镜) = Self::构建棱镜(&配置)?;
-        let 最大码长 = 配置.encoder.max_length;
-        let 词列表 = 棱镜.预处理词列表(原始词列表, 最大码长)?;
+    pub fn 新建(输入: 默认输入) -> Result<Self, 错误> {
+        let (初始映射, 选择键, 棱镜) = Self::构建棱镜(&输入.配置)?;
+        let 最大码长 = 输入.配置.encoder.max_length;
+        let 词列表 = 棱镜.预处理词列表(输入.词列表, 最大码长)?;
         let 组合长度 = 最大码长.min(最大按键组合长度);
         let 编码空间大小 = 棱镜.进制.pow(组合长度 as u32) as usize;
-        let 键位分布信息 = 棱镜.预处理键位分布信息(&原始键位分布信息);
-        let 当量信息 = 棱镜.预处理当量信息(&原始当量信息, 编码空间大小);
+        let 键位分布信息 = 棱镜.预处理键位分布信息(&输入.原始键位分布信息);
+        let 当量信息 = 棱镜.预处理当量信息(&输入.原始当量信息, 编码空间大小);
         Ok(Self {
-            配置,
+            配置: 输入.配置,
             词列表,
             键位分布信息,
             当量信息,

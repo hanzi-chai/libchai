@@ -1,4 +1,5 @@
 use chai::config::SolverConfig;
+use chai::contexts::default::默认上下文;
 use chai::encoders::default::默认编码器;
 use chai::objectives::{default::默认目标函数, 目标函数};
 use chai::operators::default::默认操作;
@@ -10,7 +11,8 @@ use std::thread::spawn;
 fn main() -> Result<(), 错误> {
     let 参数 = 默认命令行参数::parse();
     let 命令行 = 命令行::新建(参数, None);
-    let 上下文 = 从命令行参数创建(&命令行.参数);
+    let 输入 = 从命令行参数创建(&命令行.参数);
+    let 上下文 = 默认上下文::新建(输入)?;
     let _config = 上下文.配置.clone();
     match 命令行.参数.command {
         命令::Encode => {
