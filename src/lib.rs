@@ -152,6 +152,7 @@ impl Mapped {
         match self {
             Mapped::Basic(s) => s.len(),
             Mapped::Advanced(v) => v.len(),
+            _ => 0
         }
     }
 
@@ -159,6 +160,7 @@ impl Mapped {
         match self {
             Mapped::Advanced(vector) => vector.clone(),
             Mapped::Basic(string) => string.chars().map(MappedKey::Ascii).collect(),
+            _ => vec![]
         }
     }
 }

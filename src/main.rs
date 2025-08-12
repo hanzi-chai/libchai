@@ -1,4 +1,5 @@
 use chai::config::SolverConfig;
+use chai::contexts::default::默认上下文;
 use chai::encoders::default::默认编码器;
 use chai::objectives::{default::默认目标函数, 目标函数};
 use chai::operators::default::默认操作;
