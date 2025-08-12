@@ -1,3 +1,2 @@
-var srcIndex = new Map(JSON.parse('[["chai",["",[["encoders",[],["default.rs","mod.rs"]],["objectives",[],["cache.rs","default.rs","metric.rs","mod.rs"]],["operators",[],["default.rs","mod.rs"]],["optimizers",[],["genetic.rs","mod.rs","simulated_annealing.rs"]]],["config.rs","data.rs","lib.rs","server.rs"]]]]'));
-createSrcSidebar();
-//{"start":36,"fragment_lengths":[273]}
+createSrcSidebar('[["chai",["",[["contexts",[],["default.rs","mod.rs"]],["encoders",[],["default.rs","mod.rs"]],["interfaces",[],["command_line.rs","mod.rs","server.rs","web.rs"]],["objectives",[],["cache.rs","default.rs","metric.rs","mod.rs"]],["operators",[],["default.rs","mod.rs"]],["optimizers",[],["genetic.rs","mod.rs","simulated_annealing.rs"]]],["config.rs","lib.rs"]]],["server",["",[],["server.rs"]]]]');
+//{"start":19,"fragment_lengths":[359,33]}

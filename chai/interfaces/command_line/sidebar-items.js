@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["命令"],"fn":["从命令行参数创建"],"struct":["命令行","默认命令行参数"],"trait":["命令行参数"]};
