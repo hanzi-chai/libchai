@@ -1,9 +1,6 @@
 use crate::config::配置;
-use crate::contexts::default::默认上下文;
-use crate::interfaces::{消息, 界面};
-use crate::{
-    原始可编码对象, 原始当量信息, 原始键位分布信息, 码表项
-};
+use crate::interfaces::{默认输入, 消息, 界面};
+use crate::{原始可编码对象, 原始当量信息, 原始键位分布信息, 码表项};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use csv::{ReaderBuilder, WriterBuilder};
@@ -63,6 +60,20 @@ pub struct 命令行<P: 命令行参数> {
     pub 输出目录: PathBuf,
 }
 
+pub fn 读取文本文件<I, T>(path: PathBuf) -> T
+where
+    I: for<'de> Deserialize<'de>,
+    T: FromIterator<I>,
+{
+    let mut reader = ReaderBuilder::new()
+        .delimiter(b'\t')
+        .has_headers(false)
+        .flexible(true)
+        .from_path(path)
+        .unwrap();
+    reader.deserialize().map(|x| x.unwrap()).collect()
+}
+
 impl<P: 命令行参数> 命令行<P> {
     pub fn 新建(args: P, maybe_output_dir: Option<PathBuf>) -> Self {
         let output_dir = maybe_output_dir.unwrap_or_else(|| {
@@ -74,20 +85,6 @@ impl<P: 命令行参数> 命令行<P> {
             参数: args,
             输出目录: output_dir,
         }
-    }
-
-    fn read<I, T>(path: PathBuf) -> T
-    where
-        I: for<'de> Deserialize<'de>,
-        T: FromIterator<I>,
-    {
-        let mut reader = ReaderBuilder::new()
-            .delimiter(b'\t')
-            .has_headers(false)
-            .flexible(true)
-            .from_path(path)
-            .unwrap();
-        reader.deserialize().map(|x| x.unwrap()).collect()
     }
 
     pub fn 输出编码结果(&self, entries: Vec<码表项>) {
@@ -126,7 +123,7 @@ impl<P: 命令行参数> 命令行<P> {
     }
 }
 
-pub fn 从命令行参数创建(参数: &默认命令行参数) -> 默认上下文 {
+pub fn 从命令行参数创建(参数: &默认命令行参数) -> 默认输入 {
     let 默认命令行参数 {
         config,
         encodables: elements,
@@ -139,13 +136,18 @@ pub fn 从命令行参数创建(参数: &默认命令行参数) -> 默认上下�
         .unwrap_or_else(|_| panic!("文件 {} 不存在", config_path.display()));
     let config: 配置 = serde_yaml::from_str(&config_content).unwrap();
     let elements_path = elements.unwrap_or(PathBuf::from("elements.txt"));
-    let encodables: Vec<原始可编码对象> = 命令行::<默认命令行参数>::read(elements_path);
+    let encodables: Vec<原始可编码对象> = 读取文本文件(elements_path);
     let assets_dir = Path::new("assets");
     let keq_path = key_distribution.unwrap_or(assets_dir.join("key_distribution.txt"));
-    let key_distribution: 原始键位分布信息 = 命令行::<默认命令行参数>::read(keq_path);
+    let key_distribution: 原始键位分布信息 = 读取文本文件(keq_path);
     let peq_path = pair_equivalence.unwrap_or(assets_dir.join("pair_equivalence.txt"));
-    let pair_equivalence: 原始当量信息 = 命令行::<默认命令行参数>::read(peq_path);
-    默认上下文::新建(config, encodables, key_distribution, pair_equivalence).unwrap()
+    let pair_equivalence: 原始当量信息 = 读取文本文件(peq_path);
+    默认输入 {
+        配置: config,
+        原始键位分布信息: key_distribution,
+        原始当量信息: pair_equivalence,
+        词列表: encodables,
+    }
 }
 
 impl<P: 命令行参数> 界面 for 命令行<P> {

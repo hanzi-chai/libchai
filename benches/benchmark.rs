@@ -19,7 +19,8 @@ pub fn 读取(name: &str) -> 默认上下文 {
         pair_equivalence: None,
         threads: None,
     };
-    从命令行参数创建(&参数)
+    let 输入 = 从命令行参数创建(&参数);
+    默认上下文::新建(输入).expect("Failed to create context")
 }
 
 fn 计时(上下文: 默认上下文, 名称: &str, b: &mut Criterion) -> Result<(), 错误> {

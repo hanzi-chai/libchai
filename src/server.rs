@@ -11,8 +11,7 @@ use axum::{
 };
 use chai::config::{ObjectiveConfig, 配置};
 use chai::interfaces::server::WebApi;
-use chai::interfaces::web::图形界面参数;
-use chai::interfaces::消息;
+use chai::interfaces::{默认输入, 消息};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -76,7 +75,7 @@ pub async fn sync_params(
     info!("POST /api/sync");
 
     // 直接转换为图形界面参数
-    match serde_json::from_value::<图形界面参数>(params) {
+    match serde_json::from_value::<默认输入>(params) {
         Ok(图形界面参数) => {
             let result = {
                 let mut api = state.api.lock().unwrap();
