@@ -285,8 +285,8 @@ mod tests {
     #[test]
     fn test_fingering_types() {
         let 测评系统同指大跨排 =
-            "br bt ce ec mu my nu ny p/ qz rb rv tb tv um un vr vt wx xw ym yn zq ,i /p";
-        let 测评系统同指小跨排 = "qa za fb gb vb dc cd ed de bf gf rf tf vf bg fg rg tg vg jh mh nh uh yh ki hj mj nj uj yj ik ol hm jm nm hn jn mn lo ;p aq fr gr tr ws xs ft gt rt hu ju yu bv fv gv sw sx hy jy uy az k, ;/ p; /;";
+            "br bt ce ec i, mu my nu ny o. p/ qz rb rv tb tv um un vr vt wx xw ym yn zq ,i .o /p";
+        let 测评系统同指小跨排 = "qa za fb gb vb dc cd ed de bf gf rf tf vf bg fg rg tg vg jh mh nh uh yh ki hj mj nj uj yj ik ol hm jm nm hn jn mn lo ;p aq fr gr tr ws xs ft gt rt hu ju yu bv fv gv sw sx hy jy uy az k, ,k ;/ p; /; l. .l ;/ /;";
         let 测评系统小指干扰 = "aa ac ad ae aq as aw ax az ca cq cz da dq dz ea eq ez ip i/ i; kp k/ k; lp l/ l; op o/ o; pi pk pl po pp p; qa qc qd qe qq qs qw qx sa sq sz wa wq wz xa xq xz za zc zd ze zs zw zx zz ,p ,/ ,; /i /k /l /o // /; ;i ;k ;l ;o ;p ;/ ;;";
         let 测评系统错手 = "ct ,y tc y, cr ,u rc u, cw ,o wc o, qc ,p cq p, qx p. xq .p xe .i ex i. xr .u rx u. xt .y tx y.";
         let 指法标记 {
