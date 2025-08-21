@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["最大按键组合长度","最大词长"],"fn":["元素标准名称"],"mod":["config","contexts","encoders","interfaces","objectives","operators","optimizers"],"struct":["原始可编码对象","可编码对象","棱镜","码表项","编码信息","部分编码信息","错误","键位分布损失函数"],"type":["元素","元素序列","元素映射","原始当量信息","原始键位分布信息","当量信息","指法向量","正则化","编码","自动上屏","键","键位分布信息"]};
+window.SIDEBAR_ITEMS = {"enum":["命令","消息"],"fn":["validate"],"mod":["config","data","encoders","objectives","operators","optimizers","server"],"struct":["Web","WebApi","命令行","命令行参数","图形界面参数","数据参数","错误"],"trait":["界面"]};

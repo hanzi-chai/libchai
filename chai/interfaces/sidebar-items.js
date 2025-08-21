@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["消息"],"mod":["command_line","server","web"],"struct":["默认输入"],"trait":["界面"]};
