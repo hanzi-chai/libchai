@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a>//!
 <a href=#3 id=3 data-nosnippet>3</a>//!
 <a href=#4 id=4 data-nosnippet>4</a>
-<a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">use </span><span class="kw">crate</span>::data::{元素映射, 编码信息};
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">use </span><span class="kw">crate</span>::optimizers::解特征;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>serde::Serialize;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>std::fmt::Display;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">pub mod </span>cache;
@@ -11,7 +11,12 @@
 <a href=#11 id=11 data-nosnippet>11</a>
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">pub trait </span>目标函数 {
 <a href=#13 id=13 data-nosnippet>13</a>    <span class="kw">type </span>目标值: Display + Clone + Serialize;
-<a href=#14 id=14 data-nosnippet>14</a>    <span class="kw">fn </span>计算(
-<a href=#15 id=15 data-nosnippet>15</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, 编码结果: <span class="kw-2">&amp;mut </span>[编码信息], 映射: <span class="kw-2">&amp;</span>元素映射
-<a href=#16 id=16 data-nosnippet>16</a>    ) -&gt; (<span class="self">Self</span>::目标值, f64);
-<a href=#17 id=17 data-nosnippet>17</a>}</code></pre></div></section></main></body></html>
+<a href=#14 id=14 data-nosnippet>14</a>    <span class="kw">type </span>解类型: 解特征;
+<a href=#15 id=15 data-nosnippet>15</a>    <span class="kw">fn </span>计算(
+<a href=#16 id=16 data-nosnippet>16</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#17 id=17 data-nosnippet>17</a>        解: <span class="kw-2">&amp;</span><span class="self">Self</span>::解类型,
+<a href=#18 id=18 data-nosnippet>18</a>        解变化: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;&lt;<span class="self">Self</span>::解类型 <span class="kw">as </span>解特征&gt;::变化&gt;,
+<a href=#19 id=19 data-nosnippet>19</a>    ) -&gt; (<span class="self">Self</span>::目标值, f64);
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="kw">fn </span>接受新解(<span class="kw-2">&amp;mut </span><span class="self">self</span>);
+<a href=#22 id=22 data-nosnippet>22</a>}</code></pre></div></section></main></body></html>
