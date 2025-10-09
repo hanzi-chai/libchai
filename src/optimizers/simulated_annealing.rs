@@ -2,9 +2,10 @@
 
 use super::优化结果;
 use crate::contexts::上下文;
+use crate::interfaces::{消息, 界面};
 use crate::objectives::目标函数;
 use crate::operators::{default::变异配置, 变异};
-use crate::interfaces::{消息, 界面};
+use crate::optimizers::解特征;
 use rand::random;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -63,6 +64,7 @@ impl 退火方法 {
         } = 降温时间表;
         let 开始时间 = Instant::now();
         let 更新频率 = self.update_interval.unwrap_or(1000);
+        let mut 上一个变化 = None;
 
         for 步骤 in 0..总步数 {
             // 等比级数降温：每一步的温度都是上一步的温度乘以一个固定倍数
@@ -83,13 +85,20 @@ impl 退火方法 {
             // 生成一个新解
             let mut 尝试解 = 当前解.clone();
             let 尝试解变化 = 操作.变异(&mut 尝试解);
-            let 尝试指标 = 目标函数.计算(&尝试解, &Some(尝试解变化));
+            let 变化 = if let Some(上一个变化) = 上一个变化 {
+                F::解类型::除法(&上一个变化, &尝试解变化)
+            } else {
+                尝试解变化.clone()
+            };
+            let 尝试指标 = 目标函数.计算(&尝试解, &Some(变化));
             // 如果满足退火条件，接受新解
             let 改进 = 尝试指标.1 - 当前指标.1;
             if 改进 < 0.0 || (random::<f64>() < (-改进 / 温度).exp()) {
                 当前解.clone_from(&尝试解);
                 当前指标 = 尝试指标;
-                目标函数.接受新解();
+                上一个变化 = None;
+            } else {
+                上一个变化 = Some(尝试解变化);
             }
             // 如果当前解优于目前的最优解，更新最优解
             if 当前指标.1 < 最优指标.1 {

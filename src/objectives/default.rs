@@ -16,9 +16,7 @@ pub struct 默认目标函数<E: 编码器> {
     pub 参数: 默认目标函数参数,
     pub 编码器: E,
     pub 编码结果: Vec<编码信息>,
-    pub 编码结果缓冲: Vec<编码信息>,
     pub 计数桶列表: Vec<[Option<缓存>; 2]>,
-    pub 计数桶列表缓冲: Vec<[Option<缓存>; 2]>,
 }
 
 #[derive(Clone)]
@@ -96,8 +94,6 @@ impl<E: 编码器<解类型 = 元素映射>> 默认目标函数<E> {
             编码器,
             编码结果: 编码结果.clone(),
             计数桶列表: 计数桶列表.clone(),
-            编码结果缓冲: 编码结果.clone(),
-            计数桶列表缓冲: 计数桶列表.clone(),
         })
     }
 }
@@ -109,15 +105,13 @@ impl<E: 编码器<解类型 = 元素映射>> 目标函数 for 默认目标函数
     /// 计算各个部分编码的指标，然后将它们合并成一个指标输出
     fn 计算(&mut self, 解: &元素映射, 变化: &Option<Vec<元素>>) -> (默认指标, f64) {
         let 参数 = &self.参数;
-        self.编码结果缓冲.clone_from(&self.编码结果);
-        self.编码器.编码(解, 变化, &mut self.编码结果缓冲);
-        self.计数桶列表缓冲.clone_from(&self.计数桶列表);
-        let mut 桶序号列表: Vec<_> = self.计数桶列表缓冲.iter().map(|_| 0).collect();
+        self.编码器.编码(解, 变化, &mut self.编码结果);
+        let mut 桶序号列表: Vec<_> = self.计数桶列表.iter().map(|_| 0).collect();
         // 开始计算指标
-        for 编码信息 in self.编码结果缓冲.iter_mut() {
+        for 编码信息 in self.编码结果.iter_mut() {
             let 频率 = 编码信息.频率;
             let 桶索引 = if 编码信息.词长 == 1 { 0 } else { 1 };
-            let 桶 = &mut self.计数桶列表缓冲[桶索引];
+            let 桶 = &mut self.计数桶列表[桶索引];
             let 桶序号 = 桶序号列表[桶索引];
             if let Some(缓存) = &mut 桶[0] {
                 缓存.处理(桶序号, 频率, &mut 编码信息.全码, 参数);
@@ -128,11 +122,6 @@ impl<E: 编码器<解类型 = 元素映射>> 目标函数 for 默认目标函数
             桶序号列表[桶索引] += 1;
         }
 
-        if 变化.is_none() {
-            self.编码结果.clone_from(&self.编码结果缓冲);
-            self.计数桶列表.clone_from(&self.计数桶列表缓冲);
-        }
-
         let mut 目标函数 = 0.0;
         let mut 指标 = 默认指标 {
             characters_full: None,
@@ -141,7 +130,7 @@ impl<E: 编码器<解类型 = 元素映射>> 目标函数 for 默认目标函数
             words_short: None,
             memory: None,
         };
-        for (桶索引, 桶) in self.计数桶列表缓冲.iter().enumerate() {
+        for (桶索引, 桶) in self.计数桶列表.iter().enumerate() {
             let _ = &桶[0].as_ref().map(|x| {
                 let (分组指标, 分组目标函数) = x.汇总(参数);
                 目标函数 += 分组目标函数;
@@ -184,10 +173,5 @@ impl<E: 编码器<解类型 = 元素映射>> 目标函数 for 默认目标函数
             目标函数 += 归一化记忆量 * 参数.正则化强度;
         }
         (指标, 目标函数)
-    }
-
-    fn 接受新解(&mut self) {
-        self.编码结果.clone_from(&self.编码结果缓冲);
-        self.计数桶列表.clone_from(&self.计数桶列表缓冲);
     }
 }

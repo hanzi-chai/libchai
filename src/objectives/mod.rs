@@ -17,6 +17,4 @@ pub trait 目标函数 {
         解: &Self::解类型,
         解变化: &Option<<Self::解类型 as 解特征>::变化>,
     ) -> (Self::目标值, f64);
-
-    fn 接受新解(&mut self);
 }

@@ -10,6 +10,7 @@ pub mod objectives;
 pub mod operators;
 pub mod optimizers;
 use config::{Mapped, MappedKey};
+use itertools::Itertools;
 use objectives::metric::指法标记;
 use optimizers::解特征;
 use rustc_hash::FxHashMap;
@@ -127,6 +128,19 @@ pub type 元素映射 = Vec<键>;
 
 impl 解特征 for 元素映射 {
     type 变化 = Vec<元素>;
+
+    fn 单位元() -> Self::变化 {
+        Vec::new()
+    }
+
+    fn 除法(旧变化: &Self::变化, 新变化: &Self::变化) -> Self::变化 {
+        旧变化
+            .iter()
+            .chain(新变化.iter())
+            .unique()
+            .cloned()
+            .collect()
+    }
 }
 
 /// 用指标记
@@ -152,7 +166,7 @@ impl Mapped {
         match self {
             Mapped::Basic(s) => s.len(),
             Mapped::Advanced(v) => v.len(),
-            _ => 0
+            _ => 0,
         }
     }
 
@@ -160,7 +174,7 @@ impl Mapped {
         match self {
             Mapped::Advanced(vector) => vector.clone(),
             Mapped::Basic(string) => string.chars().map(MappedKey::Ascii).collect(),
-            _ => vec![]
+            _ => vec![],
         }
     }
 }
@@ -252,7 +266,7 @@ impl 棱镜 {
         let default_loss = 键位分布损失函数 {
             ideal: 0.0,
             lt_penalty: 0.0,
-            gt_penalty: 1.0,
+            gt_penalty: 0.0,
         };
         let mut 键位分布信息: Vec<键位分布损失函数> = (0..self.进制)
             .map(|键| {
