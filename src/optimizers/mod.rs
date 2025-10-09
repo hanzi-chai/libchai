@@ -28,6 +28,11 @@ pub static mut 全局计时器: 计时器 = 计时器 {
 
 pub trait 解特征: Clone {
     type 变化: Clone;
+
+    // 返回 ba^{-1}
+    fn 除法(旧变化: &Self::变化, 新变化: &Self::变化) -> Self::变化;
+
+    fn 单位元() -> Self::变化;
 }
 
 pub struct 优化结果<O: 目标函数> {

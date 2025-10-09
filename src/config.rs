@@ -62,6 +62,14 @@ pub struct Block {
     pub strokes: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompoundParameters {
+    pub gap2: Option<f64>,
+    pub scale2: Option<f64>,
+    pub gap3: Option<f64>,
+    pub scale3: Option<f64>,
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -81,12 +89,14 @@ pub enum Glyph {
         operator: String,
         operandList: Vec<String>,
         order: Option<Vec<Block>>,
+        parameters: Option<CompoundParameters>,
     },
     Compound {
         tags: Option<Vec<String>>,
         operator: String,
         operandList: Vec<String>,
         order: Option<Vec<Block>>,
+        parameters: Option<CompoundParameters>,
     },
 }
 
@@ -181,7 +191,7 @@ pub struct ValueDescription {
 pub struct Condition {
     pub element: String,
     pub op: String,
-    pub value: Mapped
+    pub value: Mapped,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
