@@ -45,7 +45,6 @@ impl Web {
         let mut 输入 = self.参数.clone();
         输入.配置.optimization = Some(OptimizationConfig {
             objective: 目标函数配置,
-            constraints: None,
             metaheuristic: None,
         });
         let 上下文 = 默认上下文::新建(输入)?;

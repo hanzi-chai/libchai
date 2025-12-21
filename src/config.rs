@@ -169,14 +169,11 @@ pub struct FormConfig {
     pub mapping: IndexMap<String, Mapped>,
     pub mapping_space: Option<IndexMap<String, Vec<ValueDescription>>>,
     pub mapping_generator: Option<Vec<MappingGeneratorRule>>,
-    pub grouping: Option<IndexMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MappingGeneratorRule {
-    pub score: f64,
-    pub position: usize,
-    pub elements: Vec<String>,
+    pub name: String,
     pub keys: Vec<String>,
 }
 
@@ -199,6 +196,7 @@ pub struct Condition {
 pub enum MappedKey {
     Ascii(char),
     Reference { element: String, index: usize },
+    Generator { generator: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -399,7 +397,6 @@ pub enum SolverConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OptimizationConfig {
     pub objective: ObjectiveConfig,
-    pub constraints: Option<ConstraintsConfig>,
     pub metaheuristic: Option<SolverConfig>,
 }
 // config.optimization end
@@ -473,7 +470,6 @@ impl Default for 配置 {
                 mapping: IndexMap::new(),
                 mapping_space: None,
                 mapping_generator: None,
-                grouping: None,
             },
             encoder: EncoderConfig {
                 max_length: 1,
