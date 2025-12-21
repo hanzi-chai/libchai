@@ -89,16 +89,6 @@ impl 默认操作 {
             let element_number = representation.棱镜.元素转数字.get(&x);
             element_number.ok_or(format!("{x} 不存在于键盘映射中"))
         };
-        let optimization = representation
-            .配置
-            .optimization
-            .as_ref()
-            .ok_or("优化配置不存在")?;
-        if let Some(constraints) = &optimization.constraints {
-            values.append(&mut constraints.elements.clone().unwrap_or_default());
-            values.append(&mut constraints.indices.clone().unwrap_or_default());
-            values.append(&mut constraints.element_indices.clone().unwrap_or_default());
-        }
         let mapping = &representation.配置.form.mapping;
         for atomic_constraint in &values {
             let AtomicConstraint {
