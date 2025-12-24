@@ -1,14 +1,19 @@
 //! 数据结构的定义
 
-use crate::config::{Mapped, MappedKey, Regularization, Scheme, ShortCodeConfig, 配置};
-use crate::contexts::上下文;
+use crate::config::{Mapped, MappedKey, Scheme, ShortCodeConfig, ValueDescription, 配置};
+use crate::contexts::{
+    上下文, 合并初始决策, 展开变量, 应用生成器, 拓扑排序, 条件, 条件安排
+};
 use crate::encoders::default::简码配置;
 use crate::interfaces::默认输入;
-use crate::错误;
+use crate::optimizers::决策;
 use crate::{
-    元素, 元素映射, 元素标准名称, 可编码对象, 当量信息, 最大按键组合长度, 最大词长, 棱镜, 码表项,
-    编码, 编码信息, 键, 键位分布信息,
+    元素, 元素图, 可编码对象, 当量信息, 最大按键组合长度, 最大词长, 棱镜, 码表项, 编码, 编码信息,
+    键, 键位分布信息,
 };
+use crate::{最大元素编码长度, 错误};
+use indexmap::IndexMap;
+use itertools::Itertools;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde_yaml::to_string;
@@ -20,55 +25,148 @@ pub struct 默认上下文 {
     pub 词列表: Vec<可编码对象>,
     pub 键位分布信息: 键位分布信息,
     pub 当量信息: 当量信息,
-    pub 初始映射: 元素映射,
+    pub 初始决策: 默认决策,
+    pub 决策空间: 默认决策空间,
     pub 棱镜: 棱镜,
     pub 选择键: Vec<键>,
+    pub 元素图: 元素图,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum 默认安排 {
+    键位([(元素, usize); 最大元素编码长度]),
+    归并(元素),
+}
+
+impl 默认安排 {
+    pub fn from(原始安排: &Mapped, 棱镜: &棱镜, 元素: &String) -> Result<Self, 错误> {
+        if matches!(原始安排, Mapped::Basic(_) | Mapped::Advanced(_)) {
+            let 归一化映射值 = 原始安排.normalize();
+            let mut 安排 = [(0, 0); 最大元素编码长度];
+            for (序号, 映射键) in 归一化映射值.iter().enumerate() {
+                if let MappedKey::Ascii(x) = 映射键 {
+                    if let Some(键) = 棱镜.键转数字.get(x) {
+                        安排[序号] = (*键 as usize, 0);
+                    } else {
+                        return Err(format!("元素 {元素} 的编码中的字符 {x} 并不在字母表中").into());
+                    }
+                } else if let MappedKey::Reference { element, index } = 映射键 {
+                    if let Some(元素编号) = 棱镜.元素转数字.get(element) {
+                        安排[序号] = (*元素编号, *index);
+                    } else {
+                        return Err(
+                            format!("元素 {元素} 的编码中的引用元素 {element} 并不存在").into()
+                        );
+                    }
+                } else {
+                    return Err(format!("元素 {元素} 的编码格式不正确").into());
+                }
+            }
+            Ok(默认安排::键位(安排))
+        } else {
+            let Mapped::Grouped { element } = 原始安排 else {
+                return Err(format!("元素 {元素} 的编码格式不正确").into());
+            };
+            if let Some(元素编号) = 棱镜.元素转数字.get(element) {
+                Ok(默认安排::归并(*元素编号))
+            } else {
+                Err(format!("元素 {元素} 的编码中的引用元素 {element} 并不存在").into())
+            }
+        }
+    }
+
+    pub fn to(&self, 棱镜: &棱镜) -> Mapped {
+        match self {
+            默认安排::归并(引用元素) => Mapped::Grouped {
+                element: 棱镜.数字转元素[引用元素].clone(),
+            },
+            默认安排::键位(取值) => {
+                let mut 列表 = vec![];
+                for (元素, 位置) in 取值 {
+                    if *元素 == 0 {
+                        break;
+                    } else if 棱镜.数字转键.contains_key(&(*元素 as u64)) {
+                        let 键 = 棱镜.数字转键[&(*元素 as u64)];
+                        列表.push(MappedKey::Ascii(键));
+                    } else {
+                        let 元素名称 = 棱镜.数字转元素[元素].clone();
+                        列表.push(MappedKey::Reference {
+                            element: 元素名称,
+                            index: *位置,
+                        });
+                    }
+                }
+                if 列表.iter().all(|x| matches!(x, MappedKey::Ascii(_))) {
+                    Mapped::Basic(
+                        列表
+                            .iter()
+                            .map(|x| match x {
+                                MappedKey::Ascii(c) => *c,
+                                _ => unreachable!(),
+                            })
+                            .collect(),
+                    )
+                } else {
+                    Mapped::Advanced(列表)
+                }
+            }
+        }
+    }
+}
+
+type 默认条件安排 = 条件安排<默认安排>;
+
+#[derive(Debug, Clone)]
+pub struct 默认决策 {
+    pub 元素: Vec<默认安排>,
+}
+
+impl 默认决策 {
+    pub fn 允许(&self, 条件安排: &默认条件安排) -> bool {
+        for 条件 in &条件安排.条件 {
+            if 条件.谓词 != (self.元素[条件.元素] == 条件.值) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+impl 决策 for 默认决策 {
+    type 变化 = Vec<元素>;
+
+    fn 除法(旧变化: &Self::变化, 新变化: &Self::变化) -> Self::变化 {
+        旧变化
+            .iter()
+            .chain(新变化.iter())
+            .unique()
+            .cloned()
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct 默认决策空间 {
+    pub 元素: Vec<Vec<默认条件安排>>,
 }
 
 impl 上下文 for 默认上下文 {
-    type 解类型 = 元素映射;
-    fn 序列化(&self, 解: &Self::解类型) -> String {
-        let mut new_config = self.配置.clone();
-        let lookup = |element: &String| {
-            let number = *self.棱镜.元素转数字.get(element).unwrap(); // 输入的时候已经检查过一遍，不需要再次检查
-            let current_mapped = &解[number];
-            *self.棱镜.数字转键.get(current_mapped).unwrap() // 同上
-        };
-        for (element, mapped) in &self.配置.form.mapping {
-            let new_element = element.clone();
-            let new_mapped = match mapped {
-                Mapped::Basic(string) => {
-                    let mut all_codes = String::new();
-                    for index in 0..string.len() {
-                        let name = 元素标准名称(element, index);
-                        all_codes.push(lookup(&name));
-                    }
-                    Mapped::Basic(all_codes)
-                }
-                Mapped::Advanced(vector) => {
-                    let all_codes: Vec<MappedKey> = vector
-                        .iter()
-                        .enumerate()
-                        .map(|(index, mapped_key)| match mapped_key {
-                            MappedKey::Ascii(_) => {
-                                MappedKey::Ascii(lookup(&元素标准名称(element, index)))
-                            }
-                            other => other.clone(),
-                        })
-                        .collect();
-                    Mapped::Advanced(all_codes)
-                }
-                x => x.clone()
-            };
-            new_config.form.mapping.insert(new_element, new_mapped);
+    type 决策 = 默认决策;
+    fn 序列化(&self, 决策: &Self::决策) -> String {
+        let mut 新配置 = self.配置.clone();
+        for (元素名称, 安排) in 新配置.form.mapping.iter_mut() {
+            let 元素 = *self.棱镜.元素转数字.get(元素名称).unwrap();
+            let 新安排 = 决策.元素[元素].to(&self.棱镜);
+            *安排 = 新安排;
         }
-        to_string(&new_config).unwrap()
+        to_string(&新配置).unwrap()
     }
 }
 
 impl 默认上下文 {
     pub fn 新建(输入: 默认输入) -> Result<Self, 错误> {
-        let (初始映射, 选择键, 棱镜) = Self::构建棱镜(&输入.配置)?;
+        let (初始决策, 决策空间, 元素图, 选择键, 棱镜) =
+            Self::构建棱镜和初始决策(&输入.配置)?;
         let 最大码长 = 输入.配置.encoder.max_length;
         let 词列表 = 棱镜.预处理词列表(输入.词列表, 最大码长)?;
         let 组合长度 = 最大码长.min(最大按键组合长度);
@@ -80,64 +178,59 @@ impl 默认上下文 {
             词列表,
             键位分布信息,
             当量信息,
-            初始映射,
+            初始决策,
             棱镜,
             选择键,
+            决策空间,
+            元素图,
         })
     }
 
-    /// 读取字母表和选择键列表，然后分别对它们的每一个按键转换成无符号整数
-    /// 1, ... n = 所有常规编码键
-    /// n + 1, ..., m = 所有选择键
-    pub fn 构建棱镜(配置: &配置) -> Result<(元素映射, Vec<键>, 棱镜), 错误> {
+    pub fn 构建棱镜和初始决策(
+        配置: &配置,
+    ) -> Result<(默认决策, 默认决策空间, 元素图, Vec<键>, 棱镜), 错误> {
+        // 1. 构建初始决策和决策空间
+        let 原始决策 = 配置.form.mapping.clone();
+        let mut 原始决策空间 = 配置.form.mapping_space.clone().unwrap_or_default();
+        let 原始变量映射 = 配置.form.mapping_variables.clone().unwrap_or_default();
+        let 原始生成器列表 = 配置.form.mapping_generators.clone().unwrap_or_default();
+        // 合并初始决策
+        合并初始决策(&mut 原始决策空间, &原始决策);
+        // 应用生成器
+        应用生成器(&mut 原始决策空间, &原始生成器列表);
+        // 展开变量
+        展开变量(&mut 原始决策空间, &原始变量映射);
+        // 拓扑排序
+        let (排序后元素名称, 原始元素图) = 拓扑排序(&原始决策空间)?;
+
+        // 2. 构建棱镜
         let mut 键转数字: FxHashMap<char, 键> = FxHashMap::default();
         let mut 数字转键: FxHashMap<键, char> = FxHashMap::default();
-        let mut 数字 = 1;
-        for 键 in 配置.form.alphabet.chars() {
-            if 键转数字.contains_key(&键) {
-                return Err("编码键有重复！".into());
-            };
-            键转数字.insert(键, 数字);
-            数字转键.insert(数字, 键);
-            数字 += 1;
-        }
-        let 默认选择键 = vec!['_'];
-        let 原始选择键 = 配置.encoder.select_keys.as_ref().unwrap_or(&默认选择键);
+        let mut 元素转数字: FxHashMap<String, 元素> = FxHashMap::default();
+        let mut 数字转元素: FxHashMap<元素, String> = FxHashMap::default();
+        let 原始选择键 = 配置.encoder.select_keys.clone().unwrap_or(vec!['_']);
         if 原始选择键.is_empty() {
             return Err("选择键不能为空！".into());
         }
-        let mut 选择键: Vec<键> = vec![];
-        for 键 in 原始选择键 {
-            if 键转数字.contains_key(键) {
+        for 键 in 配置.form.alphabet.chars().chain(原始选择键.iter().cloned()) {
+            if 键转数字.contains_key(&键) {
                 return Err("编码键有重复！".into());
             };
-            键转数字.insert(*键, 数字);
-            数字转键.insert(数字, *键);
-            选择键.push(数字);
-            数字 += 1;
+            let 键编号 = 键转数字.len() + 1;
+            键转数字.insert(键, 键编号 as 键);
+            数字转键.insert(键编号 as 键, 键);
+            元素转数字.insert(键.to_string(), 键编号);
+            数字转元素.insert(键编号, 键.to_string());
         }
-        let 进制 = 数字;
-        let mut 元素映射: 元素映射 = (0..进制).collect();
-        let mut 元素转数字: FxHashMap<String, 元素> = FxHashMap::default();
-        let mut 数字转元素: FxHashMap<元素, String> = FxHashMap::default();
-        for (键字符, 键) in &键转数字 {
-            元素转数字.insert(键字符.to_string(), *键 as usize);
-            数字转元素.insert(*键 as usize, 键字符.to_string());
-        }
-        for (元素, 映射值) in &配置.form.mapping {
-            let 映射值 = 映射值.normalize();
-            for (序号, 映射键) in 映射值.iter().enumerate() {
-                if let MappedKey::Ascii(x) = 映射键 {
-                    if let Some(键) = 键转数字.get(x) {
-                        let 元素名 = 元素标准名称(元素, 序号);
-                        元素转数字.insert(元素名.clone(), 元素映射.len());
-                        数字转元素.insert(元素映射.len(), 元素名.clone());
-                        元素映射.push(*键);
-                    } else {
-                        return Err(format!("元素 {元素} 的编码中的字符 {x} 并不在字母表中").into());
-                    }
-                }
-            }
+        let 进制 = 键转数字.len() as 键 + 1;
+        let 选择键 = 原始选择键
+            .iter()
+            .map(|k| *键转数字.get(k).unwrap())
+            .collect();
+        for 元素名称 in &排序后元素名称 {
+            let 元素编号 = 元素转数字.len() + 1;
+            元素转数字.insert(元素名称.clone(), 元素编号);
+            数字转元素.insert(元素编号, 元素名称.clone());
         }
         let 棱镜 = 棱镜 {
             键转数字,
@@ -146,49 +239,68 @@ impl 默认上下文 {
             数字转元素,
             进制,
         };
-        Ok((元素映射, 选择键, 棱镜))
+
+        // 3. 使用棱镜构建初始决策和决策空间
+        let (初始决策, 决策空间, 元素图) = Self::构建初始决策和决策空间(
+            &棱镜,
+            &排序后元素名称,
+            &原始决策,
+            &原始决策空间,
+            &原始元素图,
+        )?;
+        Ok((初始决策, 决策空间, 元素图, 选择键, 棱镜))
     }
 
-    pub fn 预处理正则化(
-        正则化: &Regularization,
-        元素转数字: &FxHashMap<String, 元素>,
-    ) -> Result<FxHashMap<元素, Vec<(元素, f64)>>, 错误> {
-        let mut result = FxHashMap::default();
-        if let Some(列表) = &正则化.element_affinities {
-            for 规则 in 列表 {
-                let 元素名称 = 元素标准名称(&规则.from.element, 规则.from.index);
-                let 元素 = 元素转数字
-                    .get(&元素名称)
-                    .ok_or(format!("元素 {元素名称} 不存在"))?;
-                let mut 亲和度列表 = Vec::new();
-                for 目标 in 规则.to.iter() {
-                    let 目标元素名称 =
-                        元素标准名称(&目标.element.element, 目标.element.index);
-                    let 目标元素 = 元素转数字
-                        .get(&目标元素名称)
-                        .ok_or(format!("目标元素 {目标元素名称} 不存在"))?;
-                    亲和度列表.push((*目标元素, 目标.affinity));
-                }
-                result.insert(*元素, 亲和度列表);
-            }
+    pub fn 构建初始决策和决策空间(
+        棱镜: &棱镜,
+        排序后元素名称: &Vec<String>,
+        原始决策: &IndexMap<String, Mapped>,
+        原始决策空间: &IndexMap<String, Vec<ValueDescription>>,
+        原始元素图: &FxHashMap<String, Vec<String>>,
+    ) -> Result<(默认决策, 默认决策空间, 元素图), 错误> {
+        // 3. 使用棱镜构建初始决策和决策空间
+        let mut 初始决策 = 默认决策 { 元素: vec![] };
+        let mut 决策空间 = 默认决策空间 { 元素: vec![] };
+        let mut 元素图: FxHashMap<元素, Vec<_>> = FxHashMap::default();
+        for k in 0..棱镜.进制 {
+            let 安排 = 默认安排::键位([(k as usize, 0), (0, 0), (0, 0), (0, 0)]);
+            let 条件安排 = 默认条件安排 {
+                安排: 安排.clone(),
+                条件: vec![],
+                分数: 0.0,
+            };
+            初始决策.元素.push(安排);
+            决策空间.元素.push(vec![条件安排]);
         }
-        if let Some(列表) = &正则化.key_affinities {
-            for 规则 in 列表 {
-                let 元素名称 = 元素标准名称(&规则.from.element, 规则.from.index);
-                let 元素 = 元素转数字
-                    .get(&元素名称)
-                    .ok_or(format!("元素 {元素名称} 不存在"))?;
-                let mut 亲和度列表 = Vec::new();
-                for 目标 in 规则.to.iter() {
-                    let 目标键位 = 元素转数字
-                        .get(&目标.key.to_string())
-                        .ok_or("目标键位不存在")?;
-                    亲和度列表.push((*目标键位, 目标.affinity));
+        for 元素名称 in 排序后元素名称 {
+            let 原始安排 = &原始决策[元素名称];
+            let mut 安排列表 = vec![];
+            let 原始安排列表 = 原始决策空间[元素名称].clone();
+            let 编号 = 棱镜.元素转数字[元素名称];
+            let 安排 = 默认安排::from(原始安排, &棱镜, 元素名称)?;
+            for 其余原始安排 in &原始安排列表 {
+                let mut 条件列表 = vec![];
+                for c in 其余原始安排.condition.clone().unwrap_or_default() {
+                    条件列表.push(条件 {
+                        元素: 棱镜.元素转数字[&c.element],
+                        谓词: c.op == "是",
+                        值: 默认安排::from(&c.value, &棱镜, &c.element)?,
+                    });
                 }
-                result.insert(*元素, 亲和度列表);
+                let 条件字根安排 = 默认条件安排 {
+                    安排: 默认安排::from(&其余原始安排.value, &棱镜, 元素名称)?,
+                    条件: 条件列表,
+                    分数: 其余原始安排.score,
+                };
+                安排列表.push(条件字根安排);
             }
+            初始决策.元素.push(安排);
+            决策空间.元素.push(安排列表);
+            let 下游 = 原始元素图.get(元素名称).unwrap();
+            let 下游编号: Vec<_> = 下游.iter().map(|x| 棱镜.元素转数字[x]).collect();
+            元素图.insert(编号, 下游编号);
         }
-        Ok(result)
+        Ok((初始决策, 决策空间, 元素图))
     }
 
     pub fn 生成码表(&self, 编码结果: &[编码信息]) -> Vec<码表项> {

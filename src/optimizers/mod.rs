@@ -26,17 +26,15 @@ pub static mut 全局计时器: 计时器 = 计时器 {
     objective_accept: 0,
 };
 
-pub trait 解特征: Clone {
+pub trait 决策: Clone {
     type 变化: Clone;
 
     // 返回 ba^{-1}
     fn 除法(旧变化: &Self::变化, 新变化: &Self::变化) -> Self::变化;
-
-    fn 单位元() -> Self::变化;
 }
 
 pub struct 优化结果<O: 目标函数> {
-    pub 映射: O::解类型,
+    pub 映射: O::决策,
     pub 指标: O::目标值,
     pub 分数: f64,
 }

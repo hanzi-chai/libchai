@@ -168,13 +168,19 @@ pub struct FormConfig {
     pub mapping_type: Option<usize>,
     pub mapping: IndexMap<String, Mapped>,
     pub mapping_space: Option<IndexMap<String, Vec<ValueDescription>>>,
-    pub mapping_generator: Option<Vec<MappingGeneratorRule>>,
+    pub mapping_variables: Option<IndexMap<String, MappingVariableRule>>,
+    pub mapping_generators: Option<Vec<MappingGeneratorRule>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MappingVariableRule {
+    pub keys: Vec<char>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MappingGeneratorRule {
-    pub name: String,
-    pub keys: Vec<String>,
+    pub regex: String,
+    pub value: ValueDescription,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -196,7 +202,8 @@ pub struct Condition {
 pub enum MappedKey {
     Ascii(char),
     Reference { element: String, index: usize },
-    Generator { generator: String },
+    Variable { variable: String },
+    Placeholder(()),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -332,33 +339,6 @@ pub struct ElementWithIndex {
     pub element: String,
     pub index: usize,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ElementAffinityTarget {
-    pub element: ElementWithIndex,
-    pub affinity: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KeyAffinityTarget {
-    pub key: char,
-    pub affinity: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AffinityList<T> {
-    pub from: ElementWithIndex,
-    pub to: Vec<T>,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Regularization {
-    pub strength: Option<f64>,
-    pub element_affinities: Option<Vec<AffinityList<ElementAffinityTarget>>>,
-    pub key_affinities: Option<Vec<AffinityList<KeyAffinityTarget>>>,
-}
-
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectiveConfig {
@@ -366,23 +346,7 @@ pub struct ObjectiveConfig {
     pub words_full: Option<PartialWeights>,
     pub characters_short: Option<PartialWeights>,
     pub words_short: Option<PartialWeights>,
-    pub regularization: Option<Regularization>,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AtomicConstraint {
-    pub element: Option<String>,
-    pub index: Option<usize>,
-    pub keys: Option<Vec<char>>,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConstraintsConfig {
-    pub elements: Option<Vec<AtomicConstraint>>,
-    pub indices: Option<Vec<AtomicConstraint>>,
-    pub element_indices: Option<Vec<AtomicConstraint>>,
+    pub regularization_strength: Option<f64>,
 }
 
 #[skip_serializing_none]
@@ -469,7 +433,8 @@ impl Default for 配置 {
                 mapping_type: None,
                 mapping: IndexMap::new(),
                 mapping_space: None,
-                mapping_generator: None,
+                mapping_variables: None,
+                mapping_generators: None,
             },
             encoder: EncoderConfig {
                 max_length: 1,

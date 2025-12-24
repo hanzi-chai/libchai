@@ -1,9 +1,11 @@
 use super::编码器;
-use crate::{元素, 元素映射, 可编码对象, 最大词长, 编码, 编码信息, 自动上屏, 键};
-use crate::contexts::default::默认上下文;
-use crate::错误;
+use crate::contexts::default::{默认上下文, 默认决策, 默认安排};
+use crate::{元素, 可编码对象, 最大词长, 编码, 编码信息, 自动上屏, 键};
+use crate::{最大元素编码长度, 棱镜, 错误};
 use rustc_hash::FxHashMap;
 use std::iter::zip;
+
+pub type 线性化决策 = Vec<[键; 最大元素编码长度]>;
 
 #[derive(Clone)]
 pub struct 编码空间 {
@@ -68,7 +70,9 @@ impl 编码配置 {
             自动上屏查找表,
             最大码长,
             进制: 上下文.棱镜.进制,
-            乘数列表: (0..=最大码长).map(|x| 上下文.棱镜.进制.pow(x as u32)).collect(),
+            乘数列表: (0..=最大码长)
+                .map(|x| 上下文.棱镜.进制.pow(x as u32))
+                .collect(),
             选择键: 上下文.选择键.clone(),
             首选键: 上下文.选择键[0],
             简码配置列表,
@@ -97,6 +101,7 @@ impl 编码配置 {
 }
 
 pub struct 默认编码器 {
+    棱镜: 棱镜,
     编码配置: 编码配置,
     词信息: Vec<可编码对象>,
     全码空间: 编码空间,
@@ -127,7 +132,7 @@ impl 默认编码器 {
             包含元素的词.push(vec![]);
         }
         for (词序号, 词) in 词信息.iter().enumerate() {
-            for 元素 in &词.元素序列 {
+            for (元素, _) in &词.元素序列 {
                 包含元素的词[*元素].push(词序号);
             }
         }
@@ -138,6 +143,7 @@ impl 默认编码器 {
             全码空间,
             简码空间,
             包含元素的词,
+            棱镜: 上下文.棱镜.clone(),
         })
     }
 
@@ -154,7 +160,7 @@ impl 默认编码器 {
 
     fn 输出全码(
         &mut self,
-        映射: &元素映射,
+        映射: &线性化决策,
         移动的元素: &Option<Vec<元素>>,
         编码结果: &mut [编码信息],
     ) {
@@ -166,8 +172,9 @@ impl 默认编码器 {
                     let 词 = &self.词信息[*索引];
                     let 全码信息 = &mut 编码结果[*索引].全码;
                     let mut 原始编码 = 0;
-                    for (元素, 乘数) in zip(&词.元素序列, &编码配置.乘数列表) {
-                        原始编码 += 映射[*元素] * 乘数;
+                    for ((元素, 位置), 乘数) in zip(&词.元素序列, &编码配置.乘数列表)
+                    {
+                        原始编码 += 映射[*元素][*位置] * 乘数;
                     }
                     全码信息.原始编码 = 原始编码;
                 }
@@ -176,8 +183,9 @@ impl 默认编码器 {
             for (词, 编码信息) in zip(&self.词信息, 编码结果.iter_mut()) {
                 let 全码信息 = &mut 编码信息.全码;
                 let mut 原始编码 = 0;
-                for (元素, 乘数) in zip(&词.元素序列, &编码配置.乘数列表) {
-                    原始编码 += 映射[*元素] * 乘数;
+                for ((元素, 位置), 乘数) in zip(&词.元素序列, &编码配置.乘数列表)
+                {
+                    原始编码 += 映射[*元素][*位置] * 乘数;
                 }
                 全码信息.原始编码 = 原始编码;
             }
@@ -257,18 +265,38 @@ impl 默认编码器 {
             }
         }
     }
+
+    pub fn 线性化(&self, 决策: &默认决策, 棱镜: &棱镜) -> 线性化决策 {
+        let mut result: 线性化决策 = vec![Default::default(); 决策.元素.len()];
+        for (序号, 安排) in 决策.元素.iter().enumerate() {
+            if 序号 < 棱镜.进制 as usize {
+                result[序号] = [序号 as 键, 0, 0, 0];
+                continue;
+            }
+            match 安排 {
+                默认安排::归并(元素) => {
+                    result[序号] = result[*元素];
+                    continue;
+                }
+                默认安排::键位(列表) => {
+                    for (i, (元素, 位置)) in 列表.iter().enumerate() {
+                        result[序号][i] = result[*元素][*位置];
+                    }
+                }
+            }
+        }
+        result
+    }
 }
 
 impl 编码器 for 默认编码器 {
-    type 解类型 = 元素映射;
+    type 决策 = 默认决策;
     fn 编码(
-        &mut self,
-        映射: &元素映射,
-        移动的元素: &Option<Vec<元素>>,
-        输出: &mut [编码信息],
+        &mut self, 映射: &Self::决策, 移动的元素: &Option<Vec<元素>>, 输出: &mut [编码信息]
     ) {
         self.重置();
-        self.输出全码(映射, 移动的元素, 输出);
+        let 线性化决策 = self.线性化(映射, &self.棱镜);
+        self.输出全码(&线性化决策, 移动的元素, 输出);
         if self.编码配置.简码配置列表.is_none()
             || self.编码配置.简码配置列表.as_ref().unwrap().is_empty()
         {
