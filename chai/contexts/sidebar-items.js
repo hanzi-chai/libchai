@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["default"],"trait":["上下文"]};
+window.SIDEBAR_ITEMS = {"fn":["合并初始决策","展开变量","应用生成器","拓扑排序"],"mod":["default"],"struct":["条件","条件安排"],"trait":["上下文"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["genetic","simulated_annealing"],"static":["全局计时器"],"struct":["优化结果","计时器"],"trait":["解特征"]};
+window.SIDEBAR_ITEMS = {"mod":["genetic","simulated_annealing"],"static":["全局计时器"],"struct":["优化结果","计时器"],"trait":["决策"]};
