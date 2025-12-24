@@ -5,8 +5,7 @@ use crate::contexts::上下文;
 use crate::interfaces::{消息, 界面};
 use crate::objectives::目标函数;
 use crate::operators::{default::变异配置, 变异};
-use crate::optimizers::解特征;
-use rand::random;
+use crate::optimizers::决策;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use web_time::Instant;
@@ -29,9 +28,9 @@ pub struct 退火方法 {
 }
 
 impl 退火方法 {
-    pub fn 优化<O: 目标函数, F: 变异<解类型 = O::解类型>, C: 上下文<解类型 = O::解类型>>(
+    pub fn 优化<O: 目标函数, F: 变异<决策 = O::决策>, C: 上下文<决策 = O::决策>>(
         &self,
-        初始解: &O::解类型,
+        初始决策: &O::决策,
         目标函数: &mut O,
         操作: &mut F,
         上下文: &C,
@@ -39,23 +38,23 @@ impl 退火方法 {
     ) -> 优化结果<O> {
         let 降温时间表 = self
             .parameters
-            .unwrap_or_else(|| self.调参(初始解, 目标函数, 操作, 界面));
-        self.solve_with(初始解, 目标函数, 操作, 上下文, 降温时间表, 界面)
+            .unwrap_or_else(|| self.调参(初始决策, 目标函数, 操作, 界面));
+        self.solve_with(初始决策, 目标函数, 操作, 上下文, 降温时间表, 界面)
     }
 
-    /// 退火算法求解的主函数
-    fn solve_with<O: 目标函数, F: 变异<解类型 = O::解类型>, C: 上下文<解类型 = O::解类型>>(
+    /// 退火算法求决策的主函数
+    fn solve_with<O: 目标函数, F: 变异<决策 = O::决策>, C: 上下文<决策 = O::决策>>(
         &self,
-        初始解: &O::解类型,
+        初始决策: &O::决策,
         目标函数: &mut O,
         操作: &mut F,
         上下文: &C,
         降温时间表: 降温时间表,
         界面: &dyn 界面,
     ) -> 优化结果<O> {
-        let mut 最优解 = 初始解.clone();
-        let mut 最优指标 = 目标函数.计算(&最优解, &None);
-        let mut 当前解 = 最优解.clone();
+        let mut 最优决策 = 初始决策.clone();
+        let mut 最优指标 = 目标函数.计算(&最优决策, &None);
+        let mut 当前决策 = 最优决策.clone();
         let mut 当前指标 = 最优指标.clone();
         let 降温时间表 {
             t_max: 最高温,
@@ -82,56 +81,56 @@ impl 退火方法 {
                     界面.发送(消息::Elapsed { time: elapsed });
                 }
             }
-            // 生成一个新解
-            let mut 尝试解 = 当前解.clone();
-            let 尝试解变化 = 操作.变异(&mut 尝试解);
+            // 生成一个新决策
+            let mut 尝试决策 = 当前决策.clone();
+            let 决策变化 = 操作.变异(&mut 尝试决策);
             let 变化 = if let Some(上一个变化) = 上一个变化 {
-                F::解类型::除法(&上一个变化, &尝试解变化)
+                F::决策::除法(&上一个变化, &决策变化)
             } else {
-                尝试解变化.clone()
+                决策变化.clone()
             };
-            let 尝试指标 = 目标函数.计算(&尝试解, &Some(变化));
-            // 如果满足退火条件，接受新解
+            let 尝试指标 = 目标函数.计算(&尝试决策, &Some(变化));
+            // 如果满足退火条件，接受新决策
             let 改进 = 尝试指标.1 - 当前指标.1;
-            if 改进 < 0.0 || (random::<f64>() < (-改进 / 温度).exp()) {
-                当前解.clone_from(&尝试解);
+            if 改进 < 0.0 || (rand::random::<f64>() < (-改进 / 温度).exp()) {
+                当前决策.clone_from(&尝试决策);
                 当前指标 = 尝试指标;
                 上一个变化 = None;
             } else {
-                上一个变化 = Some(尝试解变化);
+                上一个变化 = Some(决策变化);
             }
-            // 如果当前解优于目前的最优解，更新最优解
+            // 如果当前决策优于目前的最优决策，更新最优决策
             if 当前指标.1 < 最优指标.1 {
                 最优指标 = 当前指标.clone();
-                最优解.clone_from(&当前解);
+                最优决策.clone_from(&当前决策);
                 let 是否保存 = 进度 > self.report_after.unwrap_or(0.9);
                 界面.发送(消息::BetterSolution {
                     metric: format!("{}", 最优指标.0),
-                    config: 上下文.序列化(&最优解),
+                    config: 上下文.序列化(&最优决策),
                     save: 是否保存,
                 })
             }
         }
         界面.发送(消息::BetterSolution {
             metric: format!("{}", 最优指标.0),
-            config: 上下文.序列化(&最优解),
+            config: 上下文.序列化(&最优决策),
             save: true,
         });
         优化结果 {
-            映射: 最优解,
+            映射: 最优决策,
             指标: 最优指标.0.clone(),
             分数: 最优指标.1,
         }
     }
 
-    fn trial_run<O: 目标函数, F: 变异<解类型 = O::解类型>>(
+    fn trial_run<O: 目标函数, F: 变异<决策 = O::决策>>(
         &self,
         目标函数: &mut O,
         操作: &mut F,
-        from: O::解类型,
+        from: O::决策,
         temperature: f64,
         steps: usize,
-    ) -> (O::解类型, f64, f64) {
+    ) -> (O::决策, f64, f64) {
         let mut candidate = from.clone();
         let (_, mut energy) = 目标函数.计算(&candidate, &None);
         let mut accepts = 0;
@@ -142,7 +141,7 @@ impl 退火方法 {
             let moved_elements = 操作.变异(&mut next_candidate);
             let (_, next_energy) = 目标函数.计算(&next_candidate, &Some(moved_elements));
             let energy_delta = next_energy - energy;
-            if energy_delta < 0.0 || (-energy_delta / temperature).exp() > random::<f64>() {
+            if energy_delta < 0.0 || (-energy_delta / temperature).exp() > rand::random::<f64>() {
                 accepts += 1;
                 if energy_delta < 0.0 {
                     improves += 1;
@@ -157,9 +156,9 @@ impl 退火方法 {
     }
 
     // 不提供参数，通过试验来获得一组参数的办法
-    pub fn 调参<O: 目标函数, F: 变异<解类型 = O::解类型>>(
+    pub fn 调参<O: 目标函数, F: 变异<决策 = O::决策>>(
         &self,
-        初始解: &O::解类型,
+        初始决策: &O::决策,
         目标函数: &mut O,
         操作: &mut F,
         界面: &dyn 界面,
@@ -172,7 +171,7 @@ impl 退火方法 {
         const MULTIPLIER: f64 = 2.0;
 
         let batch = 1000;
-        let mut candidate = 初始解.clone();
+        let mut candidate = 初始决策.clone();
         let (_, energy) = 目标函数.计算(&candidate, &None);
         let mut sum_delta = 0.0;
         for _ in 0..batch {
@@ -206,7 +205,7 @@ impl 退火方法 {
             });
         }
         let t_max = temperature;
-        candidate = 初始解.clone();
+        candidate = 初始决策.clone();
         temperature = initial_guess;
         while improve_rate > LOW_IMPROVEMENT {
             temperature /= MULTIPLIER;

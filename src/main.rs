@@ -63,18 +63,18 @@ async fn main() -> Result<(), 错误> {
                 let 子命令行 = 命令行.生成子命令行(线程序号);
                 let _上下文 = 上下文.clone();
                 let 线程 = spawn(move || {
-                    优化方法.优化(&_上下文.初始映射, &mut 目标函数, &mut 操作, &_上下文, &子命令行)
+                    优化方法.优化(&_上下文.初始决策, &mut 目标函数, &mut 操作, &_上下文, &子命令行)
                 });
-                线程池.push(线程);
+                线程池.push((线程序号, 线程));
             }
 
             let mut 优化结果列表 = vec![];
-            for 线程 in 线程池 {
-                优化结果列表.push(线程.join().unwrap());
+            for (线程序号, 线程) in 线程池 {
+                优化结果列表.push((线程序号, 线程.join().unwrap()));
             }
-            优化结果列表.sort_by(|a, b| a.分数.partial_cmp(&b.分数).unwrap());
-            for 优化结果 in 优化结果列表 {
-                print!("{}", 优化结果.指标);
+            优化结果列表.sort_by(|a, b| a.1.分数.partial_cmp(&b.1.分数).unwrap());
+            for (线程序号, 优化结果) in 优化结果列表 {
+                print!("线程{}：{}", 线程序号, 优化结果.指标);
             }
         }
     }

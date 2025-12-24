@@ -246,13 +246,13 @@ pub struct 默认指标 {
     pub characters_short: Option<分组指标>,
     pub words_full: Option<分组指标>,
     pub words_short: Option<分组指标>,
-    pub memory: Option<f64>,
+    pub complexity: Option<f64>,
 }
 
 impl Display for 默认指标 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(记忆量) = &self.memory {
-            f.write_str(&format!("记忆量：{记忆量:.2}；\n"))?;
+        if let Some(复杂度) = &self.complexity {
+            f.write_str(&format!("复杂度：{复杂度:.2}；\n"))?;
         }
         if let Some(characters) = &self.characters_full {
             f.write_str(&format!("一字全码［{characters}］\n"))?;

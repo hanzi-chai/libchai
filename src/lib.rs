@@ -10,9 +10,7 @@ pub mod objectives;
 pub mod operators;
 pub mod optimizers;
 use config::{Mapped, MappedKey};
-use itertools::Itertools;
 use objectives::metric::指法标记;
-use optimizers::解特征;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
@@ -58,7 +56,13 @@ pub struct 键位分布损失函数 {
 pub type 元素 = usize;
 
 /// 可编码对象的序列
-pub type 元素序列 = Vec<元素>;
+pub type 元素序列 = Vec<(元素, usize)>;
+
+/// 元素关系图
+pub type 元素图 = FxHashMap<元素, Vec<元素>>;
+
+/// 最大元素编码长度
+pub const 最大元素编码长度: usize = 4;
 
 /// 编码用无符号整数表示
 pub type 编码 = u64;
@@ -123,26 +127,6 @@ impl 编码信息 {
 /// 按键用无符号整数表示
 pub type 键 = u64;
 
-/// 元素映射用一个数组表示，下标是元素
-pub type 元素映射 = Vec<键>;
-
-impl 解特征 for 元素映射 {
-    type 变化 = Vec<元素>;
-
-    fn 单位元() -> Self::变化 {
-        Vec::new()
-    }
-
-    fn 除法(旧变化: &Self::变化, 新变化: &Self::变化) -> Self::变化 {
-        旧变化
-            .iter()
-            .chain(新变化.iter())
-            .unique()
-            .cloned()
-            .collect()
-    }
-}
-
 /// 用指标记
 pub type 指法向量 = [u8; 8];
 
@@ -159,22 +143,12 @@ pub struct 码表项 {
     pub short_rank: u8,
 }
 
-pub type 正则化 = FxHashMap<元素, Vec<(元素, f64)>>;
-
 impl Mapped {
-    pub fn length(&self) -> usize {
-        match self {
-            Mapped::Basic(s) => s.len(),
-            Mapped::Advanced(v) => v.len(),
-            _ => 0,
-        }
-    }
-
     pub fn normalize(&self) -> Vec<MappedKey> {
         match self {
             Mapped::Advanced(vector) => vector.clone(),
             Mapped::Basic(string) => string.chars().map(MappedKey::Ascii).collect(),
-            _ => vec![],
+            _ => panic!("无法把归并或禁用表示成列表形式"),
         }
     }
 }
@@ -236,14 +210,45 @@ impl 棱镜 {
                 .into());
             }
             for 原始元素 in 原始元素序列 {
-                if let Some(元素) = self.元素转数字.get(原始元素) {
-                    元素序列.push(*元素);
+                let (元素, 位置) = if 原始元素.contains(".") {
+                    let parts: Vec<&str> = 原始元素.split('.').collect();
+                    if parts.len() != 2 {
+                        return Err(format!(
+                            "编码对象「{name}」包含的元素「{原始元素}」格式不正确"
+                        )
+                        .into());
+                    }
+                    let 元素名称 = parts[0];
+                    let index: usize = match parts[1].parse() {
+                        Ok(v) => v,
+                        Err(_) => {
+                            return Err(format!(
+                                "编码对象「{name}」包含的元素「{原始元素}」格式不正确"
+                            )
+                            .into());
+                        }
+                    };
+                    if let Some(元素) = self.元素转数字.get(元素名称) {
+                        元素序列.push((*元素, index));
+                    } else {
+                        return Err(format!(
+                            "编码对象「{name}」包含的元素「{原始元素}」无法在键盘映射中找到"
+                        )
+                        .into());
+                    }
+                    continue;
                 } else {
-                    return Err(format!(
-                        "编码对象「{name}」包含的元素「{原始元素}」无法在键盘映射中找到"
-                    )
-                    .into());
-                }
+                    let 元素名称 = 原始元素;
+                    if let Some(元素) = self.元素转数字.get(元素名称) {
+                        (*元素, 0)
+                    } else {
+                        return Err(format!(
+                            "编码对象「{name}」包含的元素「{原始元素}」无法在键盘映射中找到"
+                        )
+                        .into());
+                    }
+                };
+                元素序列.push((元素, 位置));
             }
             词列表.push(可编码对象 {
                 名称: name.clone(),
