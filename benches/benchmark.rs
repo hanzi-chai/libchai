@@ -1,6 +1,8 @@
 use chai::contexts::default::默认上下文;
 use chai::encoders::default::默认编码器;
-use chai::interfaces::command_line::{从命令行参数创建, 命令, 默认命令行参数};
+use chai::interfaces::command_line::{
+    从命令行参数创建, 命令, 数据参数, 默认命令行参数
+};
 use chai::objectives::default::默认目标函数;
 use chai::objectives::目标函数;
 use chai::operators::default::默认操作;
@@ -12,12 +14,15 @@ pub fn 读取(name: &str) -> 默认上下文 {
     let config = format!("examples/{}.yaml", name);
     let elements = format!("examples/{}.txt", name);
     let 参数 = 默认命令行参数 {
-        command: 命令::Optimize,
-        config: Some(PathBuf::from(config)),
-        encodables: Some(PathBuf::from(elements)),
-        key_distribution: None,
-        pair_equivalence: None,
-        threads: None,
+        command: 命令::Optimize {
+            data: 数据参数 {
+                config: Some(PathBuf::from(config)),
+                encodables: Some(PathBuf::from(elements)),
+                key_distribution: None,
+                pair_equivalence: None,
+            },
+            threads: 1,
+        },
     };
     let 输入 = 从命令行参数创建(&参数);
     默认上下文::新建(输入).expect("Failed to create context")

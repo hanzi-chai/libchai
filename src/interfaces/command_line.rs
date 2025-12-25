@@ -1,5 +1,5 @@
 use crate::config::配置;
-use crate::interfaces::{默认输入, 消息, 界面};
+use crate::interfaces::{消息, 界面, 默认输入};
 use crate::{原始可编码对象, 原始当量信息, 原始键位分布信息, 码表项};
 use chrono::Local;
 use clap::{Parser, Subcommand};
@@ -23,6 +23,20 @@ pub trait 命令行参数: Clone {
 pub struct 默认命令行参数 {
     #[command(subcommand)]
     pub command: 命令,
+}
+
+impl 命令行参数 for 默认命令行参数 {
+    fn 是否为多线程(&self) -> bool {
+        match &self.command {
+            命令::Optimize { threads, .. } => *threads != 1,
+            _ => false,
+        }
+    }
+}
+
+/// 编码和优化共用的数据参数
+#[derive(Parser, Clone)]
+pub struct 数据参数 {
     /// 方案文件，默认为 config.yaml
     pub config: Option<PathBuf>,
     /// 频率序列表，默认为 elements.txt
@@ -34,24 +48,31 @@ pub struct 默认命令行参数 {
     /// 双键速度当量表，默认为 assets 目录下的 pair_equivalence.txt
     #[arg(short, long, value_name = "FILE")]
     pub pair_equivalence: Option<PathBuf>,
-    /// 线程数，默认为 1
-    #[arg(short, long)]
-    pub threads: Option<usize>,
-}
-
-impl 命令行参数 for 默认命令行参数 {
-    fn 是否为多线程(&self) -> bool {
-        self.threads.is_some()
-    }
 }
 
 /// 命令行中所有可用的子命令
 #[derive(Subcommand, Clone)]
 pub enum 命令 {
-    /// 使用方案文件和拆分表计算出字词编码并统计各类评测指标
-    Encode,
-    /// 基于拆分表和方案文件中的配置优化元素布局
-    Optimize,
+    #[command(about = "使用方案文件和拆分表计算出字词编码并统计各类评测指标")]
+    Encode {
+        #[command(flatten)]
+        data: 数据参数,
+    },
+    #[command(about = "基于配置文件优化决策")]
+    Optimize {
+        #[command(flatten)]
+        data: 数据参数,
+        /// 优化时使用的线程数
+        #[arg(short, long, default_value = "1")]
+        threads: usize,
+    },
+    /// 启动 Web API 服务器
+    #[command(about = "启动 HTTP API 服务器")]
+    Server {
+        /// 服务器端口号
+        #[arg(short, long, default_value = "3200")]
+        port: u16,
+    },
 }
 
 /// 通过命令行来使用 libchai 的入口，实现了界面特征
@@ -124,18 +145,22 @@ impl<P: 命令行参数> 命令行<P> {
 }
 
 pub fn 从命令行参数创建(参数: &默认命令行参数) -> 默认输入 {
-    let 默认命令行参数 {
-        config,
-        encodables: elements,
-        key_distribution,
-        pair_equivalence,
-        ..
-    } = 参数.clone();
+    let (config, encodables, key_distribution, pair_equivalence) = match &参数.command {
+        命令::Encode { data } | 命令::Optimize { data, .. } => (
+            data.config.clone(),
+            data.encodables.clone(),
+            data.key_distribution.clone(),
+            data.pair_equivalence.clone(),
+        ),
+        命令::Server { .. } => {
+            panic!("Server 命令不需要数据准备");
+        }
+    };
     let config_path = config.unwrap_or(PathBuf::from("config.yaml"));
     let config_content = read_to_string(&config_path)
         .unwrap_or_else(|_| panic!("文件 {} 不存在", config_path.display()));
     let config: 配置 = serde_yaml::from_str(&config_content).unwrap();
-    let elements_path = elements.unwrap_or(PathBuf::from("elements.txt"));
+    let elements_path = encodables.unwrap_or(PathBuf::from("elements.txt"));
     let encodables: Vec<原始可编码对象> = 读取文本文件(elements_path);
     let assets_dir = Path::new("assets");
     let keq_path = key_distribution.unwrap_or(assets_dir.join("key_distribution.txt"));

@@ -9,6 +9,7 @@ pub mod interfaces;
 pub mod objectives;
 pub mod operators;
 pub mod optimizers;
+pub mod server;
 use config::{Mapped, MappedKey};
 use objectives::metric::指法标记;
 use rustc_hash::FxHashMap;

@@ -1,6 +1,5 @@
 use crate::config::{ObjectiveConfig, 配置};
-use crate::WebApi;
-use crate::图形界面参数;
+use crate::interfaces::server::WebApi;
 use axum::extract::DefaultBodyLimit;
 use axum::http::Method;
 use axum::{
@@ -9,9 +8,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use chai::config::{ObjectiveConfig, 配置};
-use chai::interfaces::server::WebApi;
-use chai::interfaces::{默认输入, 消息};
+use crate::interfaces::{默认输入};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -381,16 +378,16 @@ pub fn create_app() -> Router {
         api.set_callback(move |消息| {
             // 只记录关键进度
             match 消息 {
-                crate::消息::Progress { steps, .. } => {
+                crate::interfaces::消息::Progress { steps, .. } => {
                     if steps % 100 == 0 {
                         // 每100步记录一次
                         info!("优化进度: {} 步", steps);
                     }
                 }
-                crate::消息::BetterSolution { .. } => {
+                crate::interfaces::消息::BetterSolution { .. } => {
                     info!("发现更优解");
                 }
-                crate::消息::Parameters { .. } => {
+                crate::interfaces::消息::Parameters { .. } => {
                     info!("设置优化参数");
                 }
                 _ => {} // 其他消息不记录，避免日志过多
