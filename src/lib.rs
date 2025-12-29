@@ -135,7 +135,7 @@ pub type 指法向量 = [u8; 8];
 pub type 自动上屏 = Vec<bool>;
 
 /// 用于输出为文本码表，包含了名称、全码、简码、全码排名和简码排名
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct 码表项 {
     pub name: String,
     pub full: String,
