@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["LevelMetricUniform","分组指标","层级指标","指法标记","键长指标","默认指标"],"type":["FingeringMetric","FingeringMetricUniform"]};
+window.SIDEBAR_ITEMS = {"constant":["键盘布局"],"struct":["LevelMetricUniform","分组指标","层级指标","指法标记","键长指标","默认指标"],"type":["FingeringMetric","FingeringMetricUniform"]};
