@@ -3,8 +3,8 @@ use crate::contexts::default::{默认上下文, 默认决策, 默认决策空间
 use crate::optimizers::决策;
 use crate::错误;
 use crate::{元素, 元素图};
-use rand::rng;
 use rand::seq::{IndexedRandom, IteratorRandom};
+use rand::{random_range, rng};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::VecDeque;
@@ -47,7 +47,16 @@ impl 默认操作 {
     }
 
     fn 传播(&self, 变化: &mut <默认决策 as 决策>::变化, 决策: &mut 默认决策) {
-        let mut 队列 = VecDeque::from(变化.clone());
+        // 初始化队列
+        let mut 队列 = VecDeque::new();
+        for 元素 in 变化.iter() {
+            for 下游元素 in self.元素图.get(元素).unwrap_or(&vec![]) {
+                if !队列.contains(下游元素) {
+                    队列.push_back(下游元素.clone());
+                }
+            }
+        }
+        // 传播直到队列为空
         let mut iters = 0;
         while !队列.is_empty() {
             iters += 1;
@@ -85,24 +94,25 @@ impl 默认操作 {
 
     pub fn 随机移动(&self, 决策: &mut 默认决策) -> Vec<元素> {
         let mut rng = rng();
-        let mut 备选列表 = vec![];
-        for (元素, 空间) in self.决策空间.元素.iter().enumerate() {
-            let 安排 = 决策.元素[元素].clone();
-            let mut 可行安排 = vec![];
-            for 条件安排 in 空间 {
-                if 条件安排.安排 == 安排 {
-                    continue;
-                }
-                if 决策.允许(条件安排) {
-                    可行安排.push(条件安排.安排.clone());
+        const MAX_TRIES: usize = 100;
+        for _ in 0..MAX_TRIES {
+            let 元素 = (0..决策.元素.len()).choose(&mut rng).unwrap();
+            // 蓄水池抽样
+            let mut 下一个安排 = None;
+            let mut count = 0;
+            for 条件安排 in &self.决策空间.元素[元素] {
+                if &条件安排.安排 != &决策.元素[元素] && 决策.允许(条件安排) {
+                    count += 1;
+                    if random_range(0..count) == 0 {
+                        下一个安排 = Some(&条件安排.安排);
+                    }
                 }
             }
-            if !可行安排.is_empty() {
-                备选列表.push((元素, 可行安排.into_iter().choose(&mut rng).unwrap()));
+            if let Some(下一个安排) = 下一个安排 {
+                决策.元素[元素] = 下一个安排.clone();
+                return vec![元素];
             }
         }
-        let (元素, 安排) = 备选列表.into_iter().choose(&mut rng).unwrap();
-        决策.元素[元素] = 安排;
-        vec![元素]
+        vec![]
     }
 }
