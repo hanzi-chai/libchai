@@ -283,6 +283,7 @@ impl 默认编码器 {
                         result[序号][i] = result[*元素][*位置];
                     }
                 }
+                _ => {}
             }
         }
         result

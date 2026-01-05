@@ -31,7 +31,7 @@ pub struct 条件安排<T> {
 
 pub fn 合并初始决策(
     原始决策空间: &mut IndexMap<String, Vec<ValueDescription>>,
-    原始决策: &IndexMap<String, Mapped>,
+    原始决策: &mut IndexMap<String, Mapped>,
 ) {
     for 元素名称 in 原始决策.keys() {
         if !原始决策空间.contains_key(元素名称) {
@@ -41,7 +41,7 @@ pub fn 合并初始决策(
     // 移除多余元素
     for 元素名称 in 原始决策空间.keys().cloned().collect::<Vec<_>>() {
         if !原始决策.contains_key(&元素名称) {
-            原始决策空间.shift_remove(&元素名称);
+            原始决策.insert(元素名称.clone(), Mapped::Unused(()));
         }
     }
     // 确保每个元素的当前决策都在决策空间中
@@ -127,8 +127,10 @@ pub fn 拓扑排序(
             }
         }
         for 依赖元素 in &依赖 {
-            *入度.get_mut(元素名称).unwrap() += 1;
-            元素图.get_mut(依赖元素).unwrap().push(元素名称.clone());
+            元素图.get_mut(依赖元素).map(|v| {
+                v.push(元素名称.clone());
+                *入度.get_mut(元素名称).unwrap() += 1;
+            });
         }
     }
 

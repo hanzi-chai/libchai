@@ -36,42 +36,47 @@ pub struct 默认上下文 {
 pub enum 默认安排 {
     键位([(元素, usize); 最大元素编码长度]),
     归并(元素),
+    未选取,
 }
 
 impl 默认安排 {
     pub fn from(原始安排: &Mapped, 棱镜: &棱镜, 元素: &String) -> Result<Self, 错误> {
-        if matches!(原始安排, Mapped::Basic(_) | Mapped::Advanced(_)) {
-            let 归一化映射值 = 原始安排.normalize();
-            let mut 安排 = [(0, 0); 最大元素编码长度];
-            for (序号, 映射键) in 归一化映射值.iter().enumerate() {
-                if let MappedKey::Ascii(x) = 映射键 {
-                    if let Some(键) = 棱镜.键转数字.get(x) {
-                        安排[序号] = (*键 as usize, 0);
+        match 原始安排 {
+            Mapped::Basic(_) | Mapped::Advanced(_) => {
+                let 归一化映射值 = 原始安排.normalize();
+                let mut 安排 = [(0, 0); 最大元素编码长度];
+                for (序号, 映射键) in 归一化映射值.iter().enumerate() {
+                    if let MappedKey::Ascii(x) = 映射键 {
+                        if let Some(键) = 棱镜.键转数字.get(x) {
+                            安排[序号] = (*键 as usize, 0);
+                        } else {
+                            return Err(
+                                format!("元素 {元素} 的编码中的字符 {x} 并不在字母表中").into()
+                            );
+                        }
+                    } else if let MappedKey::Reference { element, index } = 映射键 {
+                        if let Some(元素编号) = 棱镜.元素转数字.get(element) {
+                            安排[序号] = (*元素编号, *index);
+                        } else {
+                            return Err(format!(
+                                "元素 {元素} 的编码中的引用元素 {element} 并不存在"
+                            )
+                            .into());
+                        }
                     } else {
-                        return Err(format!("元素 {元素} 的编码中的字符 {x} 并不在字母表中").into());
+                        return Err(format!("元素 {元素} 的编码格式不正确").into());
                     }
-                } else if let MappedKey::Reference { element, index } = 映射键 {
-                    if let Some(元素编号) = 棱镜.元素转数字.get(element) {
-                        安排[序号] = (*元素编号, *index);
-                    } else {
-                        return Err(
-                            format!("元素 {元素} 的编码中的引用元素 {element} 并不存在").into()
-                        );
-                    }
+                }
+                Ok(默认安排::键位(安排))
+            }
+            Mapped::Grouped { element } => {
+                if let Some(元素编号) = 棱镜.元素转数字.get(element) {
+                    Ok(默认安排::归并(*元素编号))
                 } else {
-                    return Err(format!("元素 {元素} 的编码格式不正确").into());
+                    Err(format!("元素 {元素} 的编码中的引用元素 {element} 并不存在").into())
                 }
             }
-            Ok(默认安排::键位(安排))
-        } else {
-            let Mapped::Grouped { element } = 原始安排 else {
-                return Err(format!("元素 {元素} 的编码格式不正确").into());
-            };
-            if let Some(元素编号) = 棱镜.元素转数字.get(element) {
-                Ok(默认安排::归并(*元素编号))
-            } else {
-                Err(format!("元素 {元素} 的编码中的引用元素 {element} 并不存在").into())
-            }
+            Mapped::Unused(_) => Ok(默认安排::未选取),
         }
     }
 
@@ -110,6 +115,7 @@ impl 默认安排 {
                     Mapped::Advanced(列表)
                 }
             }
+            默认安排::未选取 => Mapped::Unused(()),
         }
     }
 }
@@ -155,7 +161,7 @@ impl 上下文 for 默认上下文 {
     fn 序列化(&self, 决策: &Self::决策) -> String {
         let mut 新配置 = self.配置.clone();
         for (元素名称, 安排) in 新配置.form.mapping.iter_mut() {
-            let 元素 = *self.棱镜.元素转数字.get(元素名称).unwrap();
+            let 元素 = self.棱镜.元素转数字[元素名称];
             let 新安排 = 决策.元素[元素].to(&self.棱镜);
             *安排 = 新安排;
         }
@@ -190,12 +196,12 @@ impl 默认上下文 {
         配置: &配置,
     ) -> Result<(默认决策, 默认决策空间, 元素图, Vec<键>, 棱镜), 错误> {
         // 1. 构建初始决策和决策空间
-        let 原始决策 = 配置.form.mapping.clone();
+        let mut 原始决策 = 配置.form.mapping.clone();
         let mut 原始决策空间 = 配置.form.mapping_space.clone().unwrap_or_default();
         let 原始变量映射 = 配置.form.mapping_variables.clone().unwrap_or_default();
         let 原始生成器列表 = 配置.form.mapping_generators.clone().unwrap_or_default();
         // 合并初始决策
-        合并初始决策(&mut 原始决策空间, &原始决策);
+        合并初始决策(&mut 原始决策空间, &mut 原始决策);
         // 应用生成器
         应用生成器(&mut 原始决策空间, &原始生成器列表);
         // 展开变量
@@ -223,10 +229,7 @@ impl 默认上下文 {
             数字转元素.insert(键编号, 键.to_string());
         }
         let 进制 = 键转数字.len() as 键 + 1;
-        let 选择键 = 原始选择键
-            .iter()
-            .map(|k| *键转数字.get(k).unwrap())
-            .collect();
+        let 选择键 = 原始选择键.iter().map(|k| 键转数字[k]).collect();
         for 元素名称 in &排序后元素名称 {
             let 元素编号 = 元素转数字.len() + 1;
             元素转数字.insert(元素名称.clone(), 元素编号);
@@ -281,11 +284,13 @@ impl 默认上下文 {
             for 其余原始安排 in &原始安排列表 {
                 let mut 条件列表 = vec![];
                 for c in 其余原始安排.condition.clone().unwrap_or_default() {
-                    条件列表.push(条件 {
-                        元素: 棱镜.元素转数字[&c.element],
-                        谓词: c.op == "是",
-                        值: 默认安排::from(&c.value, &棱镜, &c.element)?,
-                    });
+                    if let Some(条件元素) = 棱镜.元素转数字.get(&c.element) {
+                        条件列表.push(条件 {
+                            元素: *条件元素,
+                            谓词: c.op == "是",
+                            值: 默认安排::from(&c.value, &棱镜, &c.element)?,
+                        });
+                    }
                 }
                 let 条件字根安排 = 默认条件安排 {
                     安排: 默认安排::from(&其余原始安排.value, &棱镜, 元素名称)?,
