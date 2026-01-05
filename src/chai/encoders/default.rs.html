@@ -283,25 +283,26 @@
 <a href=#283 id=283 data-nosnippet>283</a>                        result[序号][i] = result[<span class="kw-2">*</span>元素][<span class="kw-2">*</span>位置];
 <a href=#284 id=284 data-nosnippet>284</a>                    }
 <a href=#285 id=285 data-nosnippet>285</a>                }
-<a href=#286 id=286 data-nosnippet>286</a>            }
-<a href=#287 id=287 data-nosnippet>287</a>        }
-<a href=#288 id=288 data-nosnippet>288</a>        result
-<a href=#289 id=289 data-nosnippet>289</a>    }
-<a href=#290 id=290 data-nosnippet>290</a>}
-<a href=#291 id=291 data-nosnippet>291</a>
-<a href=#292 id=292 data-nosnippet>292</a><span class="kw">impl </span>编码器 <span class="kw">for </span>默认编码器 {
-<a href=#293 id=293 data-nosnippet>293</a>    <span class="kw">type </span>决策 = 默认决策;
-<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">fn </span>编码(
-<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, 映射: <span class="kw-2">&amp;</span><span class="self">Self</span>::决策, 移动的元素: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Vec&lt;元素&gt;&gt;, 输出: <span class="kw-2">&amp;mut </span>[编码信息]
-<a href=#296 id=296 data-nosnippet>296</a>    ) {
-<a href=#297 id=297 data-nosnippet>297</a>        <span class="self">self</span>.重置();
-<a href=#298 id=298 data-nosnippet>298</a>        <span class="kw">let </span>线性化决策 = <span class="self">self</span>.线性化(映射, <span class="kw-2">&amp;</span><span class="self">self</span>.棱镜);
-<a href=#299 id=299 data-nosnippet>299</a>        <span class="self">self</span>.输出全码(<span class="kw-2">&amp;</span>线性化决策, 移动的元素, 输出);
-<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">if </span><span class="self">self</span>.编码配置.简码配置列表.is_none()
-<a href=#301 id=301 data-nosnippet>301</a>            || <span class="self">self</span>.编码配置.简码配置列表.as_ref().unwrap().is_empty()
-<a href=#302 id=302 data-nosnippet>302</a>        {
-<a href=#303 id=303 data-nosnippet>303</a>            <span class="kw">return</span>;
-<a href=#304 id=304 data-nosnippet>304</a>        }
-<a href=#305 id=305 data-nosnippet>305</a>        <span class="self">self</span>.输出简码(输出);
-<a href=#306 id=306 data-nosnippet>306</a>    }
-<a href=#307 id=307 data-nosnippet>307</a>}</code></pre></div></section></main></body></html>
+<a href=#286 id=286 data-nosnippet>286</a>                <span class="kw">_ </span>=&gt; {}
+<a href=#287 id=287 data-nosnippet>287</a>            }
+<a href=#288 id=288 data-nosnippet>288</a>        }
+<a href=#289 id=289 data-nosnippet>289</a>        result
+<a href=#290 id=290 data-nosnippet>290</a>    }
+<a href=#291 id=291 data-nosnippet>291</a>}
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a><span class="kw">impl </span>编码器 <span class="kw">for </span>默认编码器 {
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">type </span>决策 = 默认决策;
+<a href=#295 id=295 data-nosnippet>295</a>    <span class="kw">fn </span>编码(
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, 映射: <span class="kw-2">&amp;</span><span class="self">Self</span>::决策, 移动的元素: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Vec&lt;元素&gt;&gt;, 输出: <span class="kw-2">&amp;mut </span>[编码信息]
+<a href=#297 id=297 data-nosnippet>297</a>    ) {
+<a href=#298 id=298 data-nosnippet>298</a>        <span class="self">self</span>.重置();
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="kw">let </span>线性化决策 = <span class="self">self</span>.线性化(映射, <span class="kw-2">&amp;</span><span class="self">self</span>.棱镜);
+<a href=#300 id=300 data-nosnippet>300</a>        <span class="self">self</span>.输出全码(<span class="kw-2">&amp;</span>线性化决策, 移动的元素, 输出);
+<a href=#301 id=301 data-nosnippet>301</a>        <span class="kw">if </span><span class="self">self</span>.编码配置.简码配置列表.is_none()
+<a href=#302 id=302 data-nosnippet>302</a>            || <span class="self">self</span>.编码配置.简码配置列表.as_ref().unwrap().is_empty()
+<a href=#303 id=303 data-nosnippet>303</a>        {
+<a href=#304 id=304 data-nosnippet>304</a>            <span class="kw">return</span>;
+<a href=#305 id=305 data-nosnippet>305</a>        }
+<a href=#306 id=306 data-nosnippet>306</a>        <span class="self">self</span>.输出简码(输出);
+<a href=#307 id=307 data-nosnippet>307</a>    }
+<a href=#308 id=308 data-nosnippet>308</a>}</code></pre></div></section></main></body></html>
