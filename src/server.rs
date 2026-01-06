@@ -2,6 +2,7 @@ use crate::config::{ObjectiveConfig, 配置};
 use crate::interfaces::server::WebApi;
 use axum::extract::DefaultBodyLimit;
 use axum::http::Method;
+use axum::http::StatusCode;
 use axum::{
     extract::State,
     response::Html,
@@ -417,7 +418,7 @@ pub fn create_app() -> Router {
         .fallback_service(ServeDir::new("client"))
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100MB 请求体限制
         .layer(cors)
-        .layer(TimeoutLayer::new(Duration::from_secs(600))) // 10分钟超时，与编码任务一致
+        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(600))) // 10分钟超时，与编码任务一致
         .with_state(state)
 }
 
