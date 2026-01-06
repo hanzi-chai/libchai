@@ -2,16 +2,19 @@ use crate::config::{ObjectiveConfig, 配置};
 use crate::interfaces::server::WebApi;
 use axum::extract::DefaultBodyLimit;
 use axum::http::Method;
+use axum::http::StatusCode;
 use axum::{
     extract::State,
-    response::Html,
+    response::{Html, sse::{Event, KeepAlive, Sse}},
     routing::{get, post},
     Json, Router,
 };
 use crate::interfaces::{默认输入};
+use futures_util::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::{broadcast, mpsc};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::timeout::TimeoutLayer;
@@ -34,14 +37,30 @@ pub struct AppState {
     pub api: Arc<Mutex<WebApi>>,
     /// 优化状态
     pub optimization_status: Arc<Mutex<OptimizationStatus>>,
+    /// WebSocket 广播发送器
+    pub status_broadcast: broadcast::Sender<OptimizationStatus>,
+    /// MPSC 发送器（用于从同步回调发送）
+    pub status_mpsc: mpsc::UnboundedSender<OptimizationStatus>,
 }
 
 /// 优化状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OptimizationStatus {
-    pub is_running: bool,
-    pub progress: Option<serde_json::Value>,
-    pub error: Option<String>,
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum OptimizationStatus {
+    /// 空闲状态
+    Idle,
+    /// 运行中
+    Running {
+        message: serde_json::Value,
+    },
+    /// 已完成
+    Completed {
+        final_message: Option<serde_json::Value>,
+    },
+    /// 失败
+    Failed {
+        error: String,
+    },
 }
 
 /// HTTP API: 验证配置
@@ -125,55 +144,115 @@ pub async fn start_optimize(State(state): State<AppState>) -> Json<ApiResponse<S
     // 检查是否已经在运行
     {
         let status = state.optimization_status.lock().unwrap();
-        if status.is_running {
+        if matches!(*status, OptimizationStatus::Running { .. }) {
             return Json(ApiResponse::Error {
                 error: "优化已在进行中".to_string(),
             });
         }
     }
 
-    // 设置开始状态
+    // 设置运行状态
     {
         let mut status = state.optimization_status.lock().unwrap();
-        status.is_running = true;
-        status.progress = None;
-        status.error = None;
+        *status = OptimizationStatus::Running {
+            message: serde_json::json!({"info": "优化已启动"}),
+        };
+        match state.status_broadcast.send(status.clone()) {
+            Ok(count) => info!("[OPTIMIZE] 初始状态广播成功，{} 个接收者", count),
+            Err(_) => info!("[OPTIMIZE] 初始状态广播失败：没有接收者"),
+        }
     }
 
     let api = state.api.clone();
     let status = state.optimization_status.clone();
+    let broadcast = state.status_broadcast.clone();
 
     // 在后台启动优化任务
     tokio::spawn(async move {
-        let result = {
+        // 使用 spawn_blocking 运行同步阻塞的优化任务
+        let result = tokio::task::spawn_blocking(move || {
             let api_guard = api.lock().unwrap();
             api_guard.optimize()
-        }; // 锁在这里被释放
+        }).await;
 
-        // 更新最终状态
-        let mut status_guard = status.lock().unwrap();
-        status_guard.is_running = false;
-
-        match result {
-            Ok(_) => {
+        // 处理结果
+        let final_status = match result {
+            Ok(Ok(_)) => {
                 info!("优化完成");
+                OptimizationStatus::Completed {
+                    final_message: None,
+                }
+            }
+            Ok(Err(e)) => {
+                info!("优化失败: {}", e.message);
+                OptimizationStatus::Failed {
+                    error: e.message,
+                }
             }
             Err(e) => {
-                info!("优化失败: {}", e.message);
-                status_guard.error = Some(e.message);
+                info!("优化任务崩溃: {:?}", e);
+                OptimizationStatus::Failed {
+                    error: format!("任务崩溃: {:?}", e),
+                }
             }
         };
+
+        {
+            let mut status_guard = status.lock().unwrap();
+            *status_guard = final_status.clone();
+        }
+
+        // 广播最终状态
+        match broadcast.send(final_status) {
+            Ok(count) => info!("[OPTIMIZE] 最终状态广播成功，{} 个接收者", count),
+            Err(_) => info!("[OPTIMIZE] 最终状态广播失败：没有接收者"),
+        }
     });
 
     Json(ApiResponse::Success {
-        result: "优化已开始，请通过轮询获取进度".to_string(),
+        result: "优化已启动".to_string(),
     })
 }
 
-/// 获取优化状态（轮询端点）
-pub async fn get_optimization_status(State(state): State<AppState>) -> Json<OptimizationStatus> {
-    let status = state.optimization_status.lock().unwrap();
-    Json(status.clone())
+/// SSE 处理函数
+pub async fn sse_handler(
+    State(state): State<AppState>,
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    // 获取当前状态
+    let initial_status = {
+        let status = state.optimization_status.lock().unwrap();
+        status.clone()
+    };
+    
+    // 订阅广播通道
+    let mut broadcast_rx = state.status_broadcast.subscribe();
+    
+    let stream = async_stream::stream! {
+        // 发送初始状态
+        if let Ok(json) = serde_json::to_string(&initial_status) {
+            info!("[SSE] 连接建立，发送初始状态");
+            yield Ok(Event::default().data(json));
+        }
+        
+        // 持续接收广播消息
+        let mut msg_count = 0;
+        loop {
+            match broadcast_rx.recv().await {
+                Ok(status) => {
+                    msg_count += 1;
+                    if let Ok(json) = serde_json::to_string(&status) {
+                        yield Ok(Event::default().data(json));
+                    }
+                }
+                Err(_) => {
+                    info!("[SSE] 连接关闭，共发送 {} 条消息", msg_count);
+                    break;
+                }
+            }
+        }
+    };
+    
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
 /// 主页面
@@ -205,7 +284,7 @@ pub async fn index() -> Html<&'static str> {
         <li><code>POST /api/sync</code> - 同步参数</li>
         <li><code>POST /api/encode</code> - 编码评估</li>
         <li><code>POST /api/optimize</code> - 开始优化</li>
-        <li><code>GET /api/status</code> - 获取优化状态（轮询）</li>
+        <li><code>GET /sse/status</code> - SSE 实时状态推送</li>
     </ul>
     
     <h2>静态文件服务</h2>
@@ -216,8 +295,7 @@ pub async fn index() -> Html<&'static str> {
     <button onclick="testSync()">测试同步</button>
     <button onclick="testEncode()">测试编码</button>
     <button onclick="testOptimize()">开始优化</button>
-    <button onclick="startPolling()">开始轮询状态</button>
-    <button onclick="stopPolling()">停止轮询</button>
+    <button onclick="reconnectWebSocket()">重新连接 SSE</button>
     
     <div class="status-panel">
         <h3>优化状态：</h3>
@@ -228,7 +306,7 @@ pub async fn index() -> Html<&'static str> {
     <div id="output"></div>
 
     <script>
-        let pollingInterval = null;
+        let eventSource = null;
         
         function log(message) {
             const now = new Date().toLocaleTimeString();
@@ -270,6 +348,89 @@ pub async fn index() -> Html<&'static str> {
             }
         }
         
+        function connectSSE() {
+            // 关闭现有连接
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            const sseUrl = '/sse/status';
+            log(`🔌 连接 SSE: ${sseUrl}`);
+            
+            eventSource = new EventSource(sseUrl);
+            
+            eventSource.onopen = () => {
+                log('✅ SSE 已连接');
+            };
+            
+            eventSource.onmessage = (event) => {
+                try {
+                    log(`📨 收到 SSE 消息: ${event.data.substring(0, 100)}...`);
+                    const status = JSON.parse(event.data);
+                    updateStatusDisplay(status);
+                } catch (error) {
+                    console.error('解析 SSE 消息失败:', error);
+                    log(`❌ 消息解析失败: ${error.message}`);
+                }
+            };
+            
+            eventSource.onerror = (error) => {
+                log('❌ SSE 错误，将自动重连...');
+                console.error('SSE error:', error);
+                // EventSource 会自动重连，不需要手动处理
+            };
+        }
+        
+        function reconnectWebSocket() {
+            log('🔄 手动重新连接 SSE...');
+            connectSSE();
+        }
+        
+        function updateStatusDisplay(status) {
+            const statusDiv = document.getElementById('status');
+            
+            switch (status.status) {
+                case 'idle':
+                    statusDiv.innerHTML = '⏸️ 空闲状态';
+                    break;
+                    
+                case 'running':
+                    statusDiv.innerHTML = '<span class="progress">🔄 优化进行中...</span>';
+                    if (status.message) {
+                        const msg = status.message;
+                        let details = '';
+                        
+                        if (msg.type === 'progress') {
+                            details = `<br>步数: ${msg.steps}, 温度: ${msg.temperature.toFixed(4)}, 指标: ${msg.metric}`;
+                        } else if (msg.type === 'better_solution') {
+                            details = `<br>✨ 发现更优解！指标: ${msg.metric}`;
+                        } else if (msg.type === 'parameters') {
+                            details = `<br>参数: T_max=${msg.t_max.toFixed(2)}, T_min=${msg.t_min.toFixed(6)}`;
+                        } else {
+                            details = `<br>${JSON.stringify(msg)}`;
+                        }
+                        
+                        statusDiv.innerHTML += details;
+                    }
+                    break;
+                    
+                case 'completed':
+                    statusDiv.innerHTML = '<span class="success">✅ 优化完成</span>';
+                    if (status.final_message) {
+                        statusDiv.innerHTML += `<br>结果: ${JSON.stringify(status.final_message)}`;
+                    }
+                    break;
+                    
+                case 'failed':
+                    statusDiv.innerHTML = `<span class="error">❌ 优化失败</span><br>错误: ${status.error}`;
+                    break;
+                    
+                default:
+                    statusDiv.innerHTML = `未知状态: ${JSON.stringify(status)}`;
+            }
+        }
+        
         async function testValidate() {
             await apiCall('validate', {"version": "1.0"});
         }
@@ -293,65 +454,19 @@ pub async fn index() -> Html<&'static str> {
         }
         
         async function testOptimize() {
-            const result = await apiCall('optimize', null);
-            // 自动开始轮询状态
-            if (!pollingInterval) {
-                startPolling();
-            }
+            await apiCall('optimize', null);
         }
         
-        async function pollStatus() {
-            try {
-                const status = await apiCall('status', undefined);
-                updateStatusDisplay(status);
-                
-                // 如果优化完成或出错，停止轮询
-                if (!status.is_running && (status.progress?.type === 'optimize_success' || status.error)) {
-                    stopPolling();
-                }
-            } catch (error) {
-                console.error('轮询状态失败:', error);
-            }
-        }
-        
-        function updateStatusDisplay(status) {
-            const statusDiv = document.getElementById('status');
-            
-            if (status.is_running) {
-                statusDiv.innerHTML = '<span class="progress">🔄 优化进行中...</span>';
-                if (status.progress) {
-                    statusDiv.innerHTML += `<br>进度: ${JSON.stringify(status.progress)}`;
-                }
-            } else if (status.progress?.type === 'optimize_success') {
-                statusDiv.innerHTML = `<span class="success">✅ 优化完成</span><br>结果: ${JSON.stringify(status.progress)}`;
-            } else if (status.error) {
-                statusDiv.innerHTML = `<span class="error">❌ 优化失败</span><br>错误: ${status.error}`;
-            } else {
-                statusDiv.innerHTML = '⏸️ 空闲状态';
-            }
-        }
-        
-        function startPolling() {
-            if (pollingInterval) {
-                clearInterval(pollingInterval);
-            }
-            
-            log('🔄 开始轮询优化状态...');
-            pollingInterval = setInterval(pollStatus, 1000); // 每秒轮询一次
-            pollStatus(); // 立即执行一次
-        }
-        
-        function stopPolling() {
-            if (pollingInterval) {
-                clearInterval(pollingInterval);
-                pollingInterval = null;
-                log('⏹️ 停止轮询状态');
-            }
-        }
-        
-        // 页面加载时检查一次状态
+        // 页面加载时连接 SSE
         window.onload = () => {
-            pollStatus();
+            connectSSE();
+        };
+        
+        // 页面卸载时关闭 SSE
+        window.onbeforeunload = () => {
+            if (eventSource) {
+                eventSource.close();
+            }
         };
     </script>
 </body>
@@ -362,41 +477,66 @@ pub async fn index() -> Html<&'static str> {
 
 /// 创建应用路由
 pub fn create_app() -> Router {
+    // 创建广播通道（容量设置为 100）
+    let (tx, _rx) = broadcast::channel(100);
+    
+    // 创建 MPSC 通道用于从同步回调发送
+    let (mpsc_tx, mut mpsc_rx) = mpsc::unbounded_channel::<OptimizationStatus>();
+    
     let state = AppState {
         api: Arc::new(Mutex::new(WebApi::new())),
-        optimization_status: Arc::new(Mutex::new(OptimizationStatus {
-            is_running: false,
-            progress: None,
-            error: None,
-        })),
+        optimization_status: Arc::new(Mutex::new(OptimizationStatus::Idle)),
+        status_broadcast: tx.clone(),
+        status_mpsc: mpsc_tx.clone(),
     };
+    
+    // 启动转发任务：从 MPSC 转发到 broadcast
+    let broadcast_clone = tx.clone();
+    tokio::spawn(async move {
+        while let Some(status) = mpsc_rx.recv().await {
+            let _ = broadcast_clone.send(status);
+        }
+    });
 
     // 设置全局回调函数
     {
         let mut api = state.api.lock().unwrap();
         let status = state.optimization_status.clone();
+        let mpsc_sender = mpsc_tx.clone();
+        
         api.set_callback(move |消息| {
-            // 只记录关键进度
+            // 将消息转换为 JSON
+            let progress_msg = serde_json::json!(消息);
+            
+            // 更新状态
+            let new_status = OptimizationStatus::Running {
+                message: progress_msg,
+            };
+            
+            // 只在重要进度时记录
             match 消息 {
                 crate::interfaces::消息::Progress { steps, .. } => {
                     if steps % 100 == 0 {
-                        // 每100步记录一次
-                        info!("优化进度: {} 步", steps);
+                        info!("[CALLBACK] 优化进度: {} 步", steps);
                     }
                 }
                 crate::interfaces::消息::BetterSolution { .. } => {
-                    info!("发现更优解");
+                    info!("[CALLBACK] 发现更优解");
                 }
                 crate::interfaces::消息::Parameters { .. } => {
-                    info!("设置优化参数");
+                    info!("[CALLBACK] 设置优化参数");
                 }
-                _ => {} // 其他消息不记录，避免日志过多
+                _ => {}
             }
-
-            // 更新状态
-            let mut status_guard = status.lock().unwrap();
-            let progress_msg = serde_json::json!(消息);
-            status_guard.progress = Some(progress_msg);
+            
+            // 更新共享状态
+            {
+                let mut status_guard = status.lock().unwrap();
+                *status_guard = new_status.clone();
+            }
+            
+            // 通过 MPSC 发送（可以从任何线程调用）
+            let _ = mpsc_sender.send(new_status);
         });
     }
     // 配置更详细的 CORS 设置
@@ -413,11 +553,11 @@ pub fn create_app() -> Router {
         .route("/api/sync", post(sync_params))
         .route("/api/encode", post(encode_evaluate))
         .route("/api/optimize", post(start_optimize))
-        .route("/api/status", get(get_optimization_status))
+        .route("/sse/status", get(sse_handler))
         .fallback_service(ServeDir::new("client"))
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100MB 请求体限制
         .layer(cors)
-        .layer(TimeoutLayer::new(Duration::from_secs(600))) // 10分钟超时，与编码任务一致
+        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(600))) // 10分钟超时，与编码任务一致
         .with_state(state)
 }
 
@@ -506,7 +646,7 @@ pub async fn start_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
     info!("   POST /api/sync        - 同步参数");
     info!("   POST /api/encode      - 编码评估");
     info!("   POST /api/optimize    - 开始优化");
-    info!("   GET  /api/status      - 获取优化状态");
+    info!("   GET  /sse/status      - SSE 实时状态推送");
 
     axum::serve(listener, app).await?;
 
