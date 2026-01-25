@@ -39,7 +39,7 @@ impl 编码空间 {
 }
 
 #[derive(Debug)]
-pub struct 简码配置 {
+pub struct 简码数量 {
     pub prefix: usize,
     pub select_keys: Vec<键>,
 }
@@ -51,7 +51,7 @@ pub struct 编码配置 {
     pub 自动上屏查找表: 自动上屏,
     pub 选择键: Vec<键>,
     pub 首选键: 键,
-    pub 简码配置列表: Option<[Vec<简码配置>; 最大词长]>,
+    pub 简码配置列表: Option<[Vec<简码数量>; 最大词长]>,
 }
 
 impl 编码配置 {
@@ -211,20 +211,20 @@ impl 默认编码器 {
         let 简码配置列表 = 编码配置.简码配置列表.as_ref().unwrap();
         // 优先简码
         for (词, 编码结果) in zip(&self.词信息, 编码结果.iter_mut()) {
-            if 词.简码等级 == u64::MAX {
+            if 词.简码长度 == u64::MAX {
                 continue;
             }
-            let 原始编码 = 编码结果.全码.原始编码 % 编码配置.乘数列表[词.简码等级 as usize];
+            let 原始编码 = 编码结果.全码.原始编码 % 编码配置.乘数列表[词.简码长度 as usize];
             编码结果.简码.原始编码 = 原始编码;
             let 序号 = self.简码空间.查找数量(原始编码);
-            let 乘数 = 编码配置.乘数列表[词.简码等级 as usize];
+            let 乘数 = 编码配置.乘数列表[词.简码长度 as usize];
             let 编码 = 编码配置.生成编码(原始编码, 序号, 乘数);
             编码结果.简码.更新(编码, 序号 > 0);
             self.简码空间.添加(原始编码);
         }
         // 常规简码
         for (词, 编码结果) in zip(&self.词信息, 编码结果.iter_mut()) {
-            if 词.简码等级 != u64::MAX {
+            if 词.简码长度 != u64::MAX {
                 continue;
             }
             let 简码配置 = &简码配置列表[词.词长 - 1];
@@ -232,7 +232,7 @@ impl 默认编码器 {
             let 全码信息 = &编码结果.全码;
             let 简码信息 = &mut 编码结果.简码;
             for 出简方式 in 简码配置 {
-                let 简码配置 {
+                let 简码数量 {
                     prefix,
                     select_keys,
                 } = 出简方式;

@@ -1,4 +1,4 @@
-use crate::config::{ObjectiveConfig, 配置};
+use crate::config::{目标配置, 配置};
 use crate::interfaces::server::WebApi;
 use axum::extract::DefaultBodyLimit;
 use axum::http::Method;
@@ -117,7 +117,7 @@ pub async fn encode_evaluate(
     info!("POST /api/encode");
 
     // 直接转换为目标函数配置
-    match serde_json::from_value::<ObjectiveConfig>(objective) {
+    match serde_json::from_value::<目标配置>(objective) {
         Ok(目标函数配置) => {
             let result = {
                 let api = state.api.lock().unwrap();

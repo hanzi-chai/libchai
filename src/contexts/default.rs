@@ -1,10 +1,10 @@
 //! 数据结构的定义
 
-use crate::config::{Mapped, MappedKey, Scheme, ShortCodeConfig, ValueDescription, 配置};
+use crate::config::{安排, 广义码位, 简码模式, 简码规则, 安排描述, 配置};
 use crate::contexts::{
     上下文, 合并初始决策, 展开变量, 应用生成器, 拓扑排序, 条件, 条件安排
 };
-use crate::encoders::default::简码配置;
+use crate::encoders::default::简码数量;
 use crate::interfaces::默认输入;
 use crate::optimizers::决策;
 use crate::{
@@ -40,13 +40,13 @@ pub enum 默认安排 {
 }
 
 impl 默认安排 {
-    pub fn from(原始安排: &Mapped, 棱镜: &棱镜, 元素: &String) -> Result<Self, 错误> {
+    pub fn from(原始安排: &安排, 棱镜: &棱镜, 元素: &String) -> Result<Self, 错误> {
         match 原始安排 {
-            Mapped::Basic(_) | Mapped::Advanced(_) => {
+            安排::Basic(_) | 安排::Advanced(_) => {
                 let 归一化映射值 = 原始安排.normalize();
                 let mut 安排 = [(0, 0); 最大元素编码长度];
                 for (序号, 映射键) in 归一化映射值.iter().enumerate() {
-                    if let MappedKey::Ascii(x) = 映射键 {
+                    if let 广义码位::Ascii(x) = 映射键 {
                         if let Some(键) = 棱镜.键转数字.get(x) {
                             安排[序号] = (*键 as usize, 0);
                         } else {
@@ -54,7 +54,7 @@ impl 默认安排 {
                                 format!("元素 {元素} 的编码中的字符 {x} 并不在字母表中").into()
                             );
                         }
-                    } else if let MappedKey::Reference { element, index } = 映射键 {
+                    } else if let 广义码位::Reference { element, index } = 映射键 {
                         if let Some(元素编号) = 棱镜.元素转数字.get(element) {
                             安排[序号] = (*元素编号, *index);
                         } else {
@@ -69,20 +69,20 @@ impl 默认安排 {
                 }
                 Ok(默认安排::键位(安排))
             }
-            Mapped::Grouped { element } => {
+            安排::Grouped { element } => {
                 if let Some(元素编号) = 棱镜.元素转数字.get(element) {
                     Ok(默认安排::归并(*元素编号))
                 } else {
                     Err(format!("元素 {元素} 的编码中的引用元素 {element} 并不存在").into())
                 }
             }
-            Mapped::Unused(_) => Ok(默认安排::未选取),
+            安排::Unused(_) => Ok(默认安排::未选取),
         }
     }
 
-    pub fn to(&self, 棱镜: &棱镜) -> Mapped {
+    pub fn to(&self, 棱镜: &棱镜) -> 安排 {
         match self {
-            默认安排::归并(引用元素) => Mapped::Grouped {
+            默认安排::归并(引用元素) => 安排::Grouped {
                 element: 棱镜.数字转元素[引用元素].clone(),
             },
             默认安排::键位(取值) => {
@@ -92,30 +92,30 @@ impl 默认安排 {
                         break;
                     } else if 棱镜.数字转键.contains_key(&(*元素 as u64)) {
                         let 键 = 棱镜.数字转键[&(*元素 as u64)];
-                        列表.push(MappedKey::Ascii(键));
+                        列表.push(广义码位::Ascii(键));
                     } else {
                         let 元素名称 = 棱镜.数字转元素[元素].clone();
-                        列表.push(MappedKey::Reference {
+                        列表.push(广义码位::Reference {
                             element: 元素名称,
                             index: *位置,
                         });
                     }
                 }
-                if 列表.iter().all(|x| matches!(x, MappedKey::Ascii(_))) {
-                    Mapped::Basic(
+                if 列表.iter().all(|x| matches!(x, 广义码位::Ascii(_))) {
+                    安排::Basic(
                         列表
                             .iter()
                             .map(|x| match x {
-                                MappedKey::Ascii(c) => *c,
+                                广义码位::Ascii(c) => *c,
                                 _ => unreachable!(),
                             })
                             .collect(),
                     )
                 } else {
-                    Mapped::Advanced(列表)
+                    安排::Advanced(列表)
                 }
             }
-            默认安排::未选取 => Mapped::Unused(()),
+            默认安排::未选取 => 安排::Unused(()),
         }
     }
 }
@@ -257,8 +257,8 @@ impl 默认上下文 {
     pub fn 构建初始决策和决策空间(
         棱镜: &棱镜,
         排序后元素名称: &Vec<String>,
-        原始决策: &IndexMap<String, Mapped>,
-        原始决策空间: &IndexMap<String, Vec<ValueDescription>>,
+        原始决策: &IndexMap<String, 安排>,
+        原始决策空间: &IndexMap<String, Vec<安排描述>>,
         原始元素图: &FxHashMap<String, Vec<String>>,
     ) -> Result<(默认决策, 默认决策空间, 元素图), 错误> {
         // 3. 使用棱镜构建初始决策和决策空间
@@ -313,11 +313,11 @@ impl 默认上下文 {
         let 转编码 = |code: 编码| self.棱镜.数字转编码(code).iter().collect();
         for (序号, 可编码对象) in self.词列表.iter().enumerate() {
             let 码表项 = 码表项 {
-                name: 可编码对象.名称.clone(),
-                full: 转编码(编码结果[序号].全码.原始编码),
-                full_rank: 编码结果[序号].全码.原始编码候选位置,
-                short: 转编码(编码结果[序号].简码.原始编码),
-                short_rank: 编码结果[序号].简码.原始编码候选位置,
+                词: 可编码对象.词.clone(),
+                全码: 转编码(编码结果[序号].全码.原始编码),
+                全码排名: 编码结果[序号].全码.原始编码候选位置,
+                简码: 转编码(编码结果[序号].简码.原始编码),
+                简码排名: 编码结果[序号].简码.原始编码候选位置,
             };
             码表.push((可编码对象.原始顺序, 码表项));
         }
@@ -357,8 +357,8 @@ impl 默认上下文 {
 
     pub fn 预处理简码规则(
         &self,
-        schemes: &Vec<Scheme>,
-    ) -> Result<Vec<简码配置>, 错误> {
+        schemes: &Vec<简码模式>,
+    ) -> Result<Vec<简码数量>, 错误> {
         let mut compiled_schemes = Vec::new();
         for scheme in schemes {
             let prefix = scheme.prefix;
@@ -380,7 +380,7 @@ impl 默认上下文 {
             if count > select_keys.len() {
                 return Err("选重数量不能高于选择键数量".into());
             }
-            compiled_schemes.push(简码配置 {
+            compiled_schemes.push(简码数量 {
                 prefix,
                 select_keys: select_keys[..count].to_vec(),
             });
@@ -390,18 +390,18 @@ impl 默认上下文 {
 
     pub fn 预处理简码配置(
         &self,
-        原始简码配置列表: Vec<ShortCodeConfig>,
-    ) -> Result<[Vec<简码配置>; 最大词长], 错误> {
-        let mut short_code: [Vec<简码配置>; 最大词长] = Default::default();
+        原始简码配置列表: Vec<简码规则>,
+    ) -> Result<[Vec<简码数量>; 最大词长], 错误> {
+        let mut short_code: [Vec<简码数量>; 最大词长] = Default::default();
         for config in 原始简码配置列表 {
             match config {
-                ShortCodeConfig::Equal {
+                简码规则::Equal {
                     length_equal,
                     schemes,
                 } => {
                     short_code[length_equal - 1].extend(self.预处理简码规则(&schemes)?);
                 }
-                ShortCodeConfig::Range {
+                简码规则::Range {
                     length_in_range: (from, to),
                     schemes,
                 } => {

@@ -7,7 +7,7 @@ use super::metric::LevelMetricUniform;
 use super::metric::分组指标;
 use super::metric::层级指标;
 use super::metric::键长指标;
-use crate::config::PartialWeights;
+use crate::config::部分权重;
 use crate::{
     最大按键组合长度, 编码, 部分编码信息, 键位分布损失函数
 };
@@ -16,7 +16,7 @@ use std::iter::zip;
 // 用于缓存计算目标函数的中间结果，方便实现增量计算
 #[derive(Debug, Clone)]
 pub struct 缓存 {
-    partial_weights: PartialWeights,
+    partial_weights: 部分权重,
     total_count: usize,
     total_frequency: i64,
     total_pairs: i64,
@@ -199,7 +199,7 @@ impl 缓存 {
 
 impl 缓存 {
     pub fn new(
-        partial_weights: &PartialWeights,
+        partial_weights: &部分权重,
         radix: u64,
         total_count: usize,
         max_index: u64,
@@ -261,11 +261,11 @@ impl 缓存 {
     ) -> f64 {
         let mut distance = 0.0;
         for (frequency, loss) in zip(distribution, ideal_distribution) {
-            let diff = frequency - loss.ideal;
+            let diff = frequency - loss.理想值;
             if diff > 0.0 {
-                distance += loss.gt_penalty * diff;
+                distance += loss.高于惩罚 * diff;
             } else {
-                distance -= loss.lt_penalty * diff;
+                distance -= loss.低于惩罚 * diff;
             }
         }
         distance

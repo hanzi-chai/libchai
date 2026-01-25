@@ -1,4 +1,4 @@
-use crate::config::{ObjectiveConfig, OptimizationConfig, SolverConfig, 配置};
+use crate::config::{目标配置, 优化配置, 求解器配置, 配置};
 use crate::contexts::default::默认上下文;
 use crate::encoders::default::默认编码器;
 use crate::interfaces::{默认输入, 消息, 界面};
@@ -41,9 +41,9 @@ impl Web {
     }
 
     pub fn encode_evaluate(&self, 前端目标函数配置: JsValue) -> Result<JsValue, JsError> {
-        let 目标函数配置: ObjectiveConfig = from_value(前端目标函数配置)?;
+        let 目标函数配置: 目标配置 = from_value(前端目标函数配置)?;
         let mut 输入 = self.参数.clone();
-        输入.配置.optimization = Some(OptimizationConfig {
+        输入.配置.optimization = Some(优化配置 {
             objective: 目标函数配置,
             metaheuristic: None,
         });
@@ -61,7 +61,7 @@ impl Web {
         let 编码器 = 默认编码器::新建(&上下文)?;
         let mut 目标函数 = 默认目标函数::新建(&上下文, 编码器)?;
         let mut 操作 = 默认操作::新建(&上下文)?;
-        let SolverConfig::SimulatedAnnealing(退火) = 优化方法配置;
+        let 求解器配置::SimulatedAnnealing(退火) = 优化方法配置;
         退火.优化(&上下文.初始决策, &mut 目标函数, &mut 操作, &上下文, self);
         Ok(())
     }

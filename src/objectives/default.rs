@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 use super::cache::缓存;
 use super::metric::默认指标;
 use super::目标函数;
-use crate::config::PartialWeights;
+use crate::config::部分权重;
 use crate::contexts::default::{默认上下文, 默认决策, 默认决策空间};
 use crate::encoders::编码器;
 use crate::错误;
@@ -58,7 +58,7 @@ impl<E: 编码器<决策 = 默认决策>> 默认目标函数<E> {
             .clone();
         let 最大编码 = 当量信息.len() as u64;
         let 构造缓存 =
-            |x: &PartialWeights| 缓存::new(x, 上下文.棱镜.进制, 上下文.词列表.len(), 最大编码);
+            |x: &部分权重| 缓存::new(x, 上下文.棱镜.进制, 上下文.词列表.len(), 最大编码);
         let 一字全码 = config.characters_full.as_ref().map(构造缓存);
         let 一字简码 = config.characters_short.as_ref().map(构造缓存);
         let 多字全码 = config.words_full.as_ref().map(构造缓存);

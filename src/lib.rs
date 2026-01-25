@@ -10,7 +10,8 @@ pub mod objectives;
 pub mod operators;
 pub mod optimizers;
 pub mod server;
-use config::{Mapped, MappedKey};
+
+use config::{安排, 广义码位};
 use objectives::metric::指法标记;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -27,11 +28,11 @@ pub const 最大按键组合长度: usize = 4;
 /// 从配置文件中读取的原始可编码对象
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct 原始可编码对象 {
-    pub name: String,
-    pub sequence: String,
-    pub frequency: u64,
+    pub 词: String,
+    pub 元素序列: String,
+    pub 频率: u64,
     #[serde(default = "原始可编码对象::默认级别")]
-    pub level: u64,
+    pub 简码长度: u64,
 }
 
 impl 原始可编码对象 {
@@ -48,9 +49,9 @@ pub type 当量信息 = Vec<f64>;
 /// 键位分布的理想值和惩罚值
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct 键位分布损失函数 {
-    pub ideal: f64,
-    pub lt_penalty: f64,
-    pub gt_penalty: f64,
+    pub 理想值: f64,
+    pub 低于惩罚: f64,
+    pub 高于惩罚: f64,
 }
 
 /// 元素用一个无符号整数表示
@@ -71,11 +72,11 @@ pub type 编码 = u64;
 /// 包含词、词长、元素序列、频率等信息
 #[derive(Debug, Clone)]
 pub struct 可编码对象 {
-    pub 名称: String,
+    pub 词: String,
     pub 词长: usize,
     pub 元素序列: 元素序列,
     pub 频率: u64,
-    pub 简码等级: u64,
+    pub 简码长度: u64,
     pub 原始顺序: usize,
 }
 
@@ -137,18 +138,18 @@ pub type 自动上屏 = Vec<bool>;
 /// 用于输出为文本码表，包含了名称、全码、简码、全码排名和简码排名
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct 码表项 {
-    pub name: String,
-    pub full: String,
-    pub full_rank: u8,
-    pub short: String,
-    pub short_rank: u8,
+    pub 词: String,
+    pub 全码: String,
+    pub 全码排名: u8,
+    pub 简码: String,
+    pub 简码排名: u8,
 }
 
-impl Mapped {
-    pub fn normalize(&self) -> Vec<MappedKey> {
+impl 安排 {
+    pub fn normalize(&self) -> Vec<广义码位> {
         match self {
-            Mapped::Advanced(vector) => vector.clone(),
-            Mapped::Basic(string) => string.chars().map(MappedKey::Ascii).collect(),
+            安排::Advanced(vector) => vector.clone(),
+            安排::Basic(string) => string.chars().map(广义码位::Ascii).collect(),
             _ => panic!("无法把归并或禁用表示成列表形式"),
         }
     }
@@ -196,10 +197,10 @@ impl 棱镜 {
         let mut 词列表 = Vec::new();
         for (原始顺序, 原始可编码对象) in 原始词列表.into_iter().enumerate() {
             let 原始可编码对象 {
-                name,
-                frequency,
-                sequence,
-                level,
+                词: name,
+                频率: frequency,
+                元素序列: sequence,
+                简码长度: level,
             } = 原始可编码对象;
             let 原始元素序列: Vec<_> = sequence.split(' ').collect();
             let mut 元素序列 = 元素序列::new();
@@ -252,10 +253,10 @@ impl 棱镜 {
                 元素序列.push((元素, 位置));
             }
             词列表.push(可编码对象 {
-                名称: name.clone(),
+                词: name.clone(),
                 词长: name.chars().count(),
                 频率: frequency,
-                简码等级: level,
+                简码长度: level,
                 元素序列,
                 原始顺序,
             });
@@ -270,9 +271,9 @@ impl 棱镜 {
         原始键位分布信息: &原始键位分布信息,
     ) -> Vec<键位分布损失函数> {
         let default_loss = 键位分布损失函数 {
-            ideal: 0.0,
-            lt_penalty: 0.0,
-            gt_penalty: 0.0,
+            理想值: 0.0,
+            低于惩罚: 0.0,
+            高于惩罚: 0.0,
         };
         let mut 键位分布信息: Vec<键位分布损失函数> = (0..self.进制)
             .map(|键| {
@@ -289,7 +290,7 @@ impl 棱镜 {
             })
             .collect();
         键位分布信息.iter_mut().for_each(|x| {
-            x.ideal /= 100.0;
+            x.理想值 /= 100.0;
         });
         键位分布信息
     }

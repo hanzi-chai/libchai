@@ -1,5 +1,5 @@
 use crate::{
-    config::{Mapped, MappedKey, MappingGeneratorRule, MappingVariableRule, ValueDescription},
+    config::{安排, 广义码位, 决策生成器规则, 变量规则, 安排描述},
     optimizers::决策,
     元素, 错误,
 };
@@ -30,8 +30,8 @@ pub struct 条件安排<T> {
 }
 
 pub fn 合并初始决策(
-    原始决策空间: &mut IndexMap<String, Vec<ValueDescription>>,
-    原始决策: &mut IndexMap<String, Mapped>,
+    原始决策空间: &mut IndexMap<String, Vec<安排描述>>,
+    原始决策: &mut IndexMap<String, 安排>,
 ) {
     for 元素名称 in 原始决策.keys() {
         if !原始决策空间.contains_key(元素名称) {
@@ -39,9 +39,9 @@ pub fn 合并初始决策(
         }
     }
     // 移除多余元素
-    for 元素名称 in 原始决策空间.keys().cloned().collect::<Vec<_>>() {
-        if !原始决策.contains_key(&元素名称) {
-            原始决策.insert(元素名称.clone(), Mapped::Unused(()));
+    for 元素名称 in 原始决策空间.keys() {
+        if !原始决策.contains_key(元素名称) {
+            原始决策.insert(元素名称.clone(), 安排::Unused(()));
         }
     }
     // 确保每个元素的当前决策都在决策空间中
@@ -50,7 +50,7 @@ pub fn 合并初始决策(
         if !原始安排列表.iter().any(|x| &x.value == &原始安排) {
             原始安排列表.insert(
                 0,
-                ValueDescription {
+                安排描述 {
                     value: 原始安排,
                     score: 0.0,
                     condition: None,
@@ -61,26 +61,26 @@ pub fn 合并初始决策(
 }
 
 pub fn 展开变量(
-    原始决策空间: &mut IndexMap<String, Vec<ValueDescription>>,
-    原始变量映射: &IndexMap<String, MappingVariableRule>,
+    原始决策空间: &mut IndexMap<String, Vec<安排描述>>,
+    原始变量映射: &IndexMap<String, 变量规则>,
 ) {
     for (_, 原始安排列表) in 原始决策空间.iter_mut() {
         let mut 队列 = VecDeque::from(原始安排列表.clone());
         原始安排列表.clear();
         while let Some(原始安排) = 队列.pop_front() {
             let mut 是否展开 = false;
-            if let Mapped::Advanced(keys) = &原始安排.value {
+            if let 安排::Advanced(keys) = &原始安排.value {
                 for (序号, 映射键) in keys.iter().enumerate() {
-                    if let MappedKey::Variable {
+                    if let 广义码位::Variable {
                         variable: generator,
                     } = 映射键
                     {
                         let 变量取值列表 = 原始变量映射.get(generator).unwrap();
                         for 变量取值 in &变量取值列表.keys {
                             let mut 新映射键列表 = keys.clone();
-                            新映射键列表[序号] = MappedKey::Ascii(*变量取值);
-                            let 新原始安排 = ValueDescription {
-                                value: Mapped::Advanced(新映射键列表),
+                            新映射键列表[序号] = 广义码位::Ascii(*变量取值);
+                            let 新原始安排 = 安排描述 {
+                                value: 安排::Advanced(新映射键列表),
                                 score: 原始安排.score,
                                 condition: 原始安排.condition.clone(),
                             };
@@ -99,7 +99,7 @@ pub fn 展开变量(
 }
 
 pub fn 拓扑排序(
-    原始决策空间: &IndexMap<String, Vec<ValueDescription>>,
+    原始决策空间: &IndexMap<String, Vec<安排描述>>,
 ) -> Result<(Vec<String>, FxHashMap<String, Vec<String>>), 错误> {
     // 构造入度表
     let mut 入度 = FxHashMap::default();
@@ -111,13 +111,13 @@ pub fn 拓扑排序(
     for (元素名称, 原始安排列表) in 原始决策空间 {
         let mut 依赖 = FxHashSet::default();
         for 原始安排 in 原始安排列表 {
-            if let Mapped::Advanced(keys) = &原始安排.value {
+            if let 安排::Advanced(keys) = &原始安排.value {
                 for k in keys {
-                    if let MappedKey::Reference { element, .. } = k {
+                    if let 广义码位::Reference { element, .. } = k {
                         依赖.insert(element.clone());
                     }
                 }
-            } else if let Mapped::Grouped { element } = &原始安排.value {
+            } else if let 安排::Grouped { element } = &原始安排.value {
                 依赖.insert(element.clone());
             }
             if let Some(条件列表) = &原始安排.condition {
@@ -168,8 +168,8 @@ pub fn 拓扑排序(
 }
 
 pub fn 应用生成器(
-    原始决策空间: &mut IndexMap<String, Vec<ValueDescription>>,
-    原始生成器列表: &Vec<MappingGeneratorRule>,
+    原始决策空间: &mut IndexMap<String, Vec<安排描述>>,
+    原始生成器列表: &Vec<决策生成器规则>,
 ) {
     for 生成器 in 原始生成器列表 {
         let regex = Regex::new(&生成器.regex).unwrap();
@@ -177,28 +177,39 @@ pub fn 应用生成器(
             if !regex.is_match(元素名称) {
                 continue;
             }
-            if let Mapped::Advanced(keys) = &生成器.value.value {
+            if let 安排::Advanced(keys) = &生成器.value.value {
                 let mut values = FxHashSet::default();
                 for 现有安排 in 原始安排列表.iter() {
-                    if matches!(&现有安排.value, Mapped::Basic(_) | Mapped::Advanced(_)) {
+                    if matches!(&现有安排.value, 安排::Basic(_) | 安排::Advanced(_)) {
                         let 现有键 = &现有安排.value.normalize();
+                        let mut valid = true;
                         let 合成 = keys
                             .iter()
                             .enumerate()
                             .map(|(i, x)| {
-                                if let MappedKey::Placeholder(_) = x {
-                                    现有键[i].clone()
+                                let k = &现有键[i];
+                                // 引用不能被替换为变量
+                                if matches!(k, 广义码位::Reference { .. }) {
+                                    if matches!(x, 广义码位::Variable { .. }) {
+                                        valid = false;
+                                    }
+                                }
+                                if let 广义码位::Placeholder(_) = x {
+                                    k.clone()
                                 } else {
                                     x.clone()
                                 }
                             })
                             .collect();
+                        if !valid {
+                            continue;
+                        }
                         values.insert(合成);
                     }
                 }
                 for value in values {
-                    let 新原始安排 = ValueDescription {
-                        value: Mapped::Advanced(value),
+                    let 新原始安排 = 安排描述 {
+                        value: 安排::Advanced(value),
                         score: 生成器.value.score,
                         condition: 生成器.value.condition.clone(),
                     };

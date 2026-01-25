@@ -116,11 +116,11 @@ impl<P: 命令行参数> 命令行<P> {
             .from_path(&path)
             .unwrap();
         for 码表项 {
-            name,
-            full,
-            full_rank,
-            short,
-            short_rank,
+            词: name,
+            全码: full,
+            全码排名: full_rank,
+            简码: short,
+            简码排名: short_rank,
         } in entries
         {
             writer

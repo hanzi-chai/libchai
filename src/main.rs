@@ -1,4 +1,4 @@
-use chai::config::SolverConfig;
+use chai::config::求解器配置;
 use chai::contexts::default::默认上下文;
 use chai::encoders::default::默认编码器;
 use chai::interfaces::command_line::{
@@ -45,7 +45,7 @@ async fn main() -> Result<(), 错误> {
             let _config = 输入.配置.clone();
             let 退火 = match _config.optimization {
                 Some(opt) => match opt.metaheuristic {
-                    Some(SolverConfig::SimulatedAnnealing(sa)) => sa,
+                    Some(求解器配置::SimulatedAnnealing(sa)) => sa,
                     _ => return Err("配置文件中缺少模拟退火算法配置".into()),
                 },
                 None => return Err("配置文件中缺少优化配置".into()),

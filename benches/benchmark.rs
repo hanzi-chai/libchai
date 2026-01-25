@@ -53,7 +53,7 @@ fn 四码定长单字(b: &mut Criterion) {
     上下文.词列表 = 上下文
         .词列表
         .into_iter()
-        .filter(|x| x.名称.chars().count() == 1)
+        .filter(|x| x.词.chars().count() == 1)
         .collect();
     上下文
         .配置
