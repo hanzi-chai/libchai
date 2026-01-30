@@ -1,5 +1,5 @@
 use crate::{
-    config::{安排, 广义码位, 决策生成器规则, 变量规则, 安排描述},
+    config::{决策生成器规则, 变量规则, 安排, 安排描述, 广义码位},
     optimizers::决策,
     元素, 错误,
 };
@@ -177,30 +177,33 @@ pub fn 应用生成器(
             if !regex.is_match(元素名称) {
                 continue;
             }
-            if let 安排::Advanced(keys) = &生成器.value.value {
+            if let 安排::Advanced(码位列表) = &生成器.value.value {
                 let mut values = FxHashSet::default();
                 for 现有安排 in 原始安排列表.iter() {
                     if matches!(&现有安排.value, 安排::Basic(_) | 安排::Advanced(_)) {
                         let 现有键 = &现有安排.value.normalize();
                         let mut valid = true;
-                        let 合成 = keys
-                            .iter()
-                            .enumerate()
-                            .map(|(i, x)| {
-                                let k = &现有键[i];
+                        let mut 合成 = vec![];
+                        for (i, 码位) in 码位列表.iter().enumerate() {
+                            if let Some(现有码位) = 现有键.get(i) {
                                 // 引用不能被替换为变量
-                                if matches!(k, 广义码位::Reference { .. }) {
-                                    if matches!(x, 广义码位::Variable { .. }) {
-                                        valid = false;
-                                    }
+                                if matches!(现有码位, 广义码位::Reference { .. })
+                                    && matches!(码位, 广义码位::Variable { .. })
+                                {
+                                    valid = false;
+                                    break;
                                 }
-                                if let 广义码位::Placeholder(_) = x {
-                                    k.clone()
+                                let 替换后 = if let 广义码位::Placeholder(_) = 码位 {
+                                    现有码位.clone()
                                 } else {
-                                    x.clone()
-                                }
-                            })
-                            .collect();
+                                    码位.clone()
+                                };
+                                合成.push(替换后);
+                            } else {
+                                valid = false;
+                                break;
+                            }
+                        }
                         if !valid {
                             continue;
                         }

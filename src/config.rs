@@ -246,11 +246,12 @@ pub struct 编码配置 {
     pub rules: Option<Vec<构词规则>>,
     // 简码
     pub short_code: Option<Vec<简码规则>>,
-    pub short_code_list: Option<Vec<(String, String, usize)>>,
+    pub short_code_list: Option<Vec<优先简码>>,
     // 组装器
     pub assembler: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct 优先简码 {
     pub word: String,
     pub sources: Vec<Vec<String>>,
