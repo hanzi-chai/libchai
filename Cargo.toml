@@ -14,13 +14,15 @@ default-run = "chai"
 [[bin]]
 name = "chai"
 path = "src/main.rs"
+required-features = ["server"]
 
 [lib]
 name = "chai"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["console_error_panic_hook"]
+default = ["console_error_panic_hook", "server"]
+server = ["dep:axum", "dep:tokio", "dep:tower", "dep:tower-http", "dep:tracing", "dep:tracing-subscriber", "dep:futures-util", "dep:async-stream", "dep:uuid"]
 
 [profile.release]
 strip = true
@@ -52,15 +54,15 @@ itertools = "0.14.0"
 indexmap = { version = "2.10.0", features = ["serde"] }
 
 # server dependencies
-axum = { version = "^0.8.8", features = ["macros"] }
-tokio = { version = "^1.0", features = ["full"] }
-tower = "^0.5"
-tower-http = { version = "^0.6.8", features = ["cors", "fs", "timeout"] }
-tracing = "^0.1"
-tracing-subscriber = "^0.3"
-futures-util = "^0.3.31"
-async-stream = "^0.3"
-uuid = { version = "^1.17.0", features = ["v4"] }
+axum = { version = "^0.8.8", features = ["macros"], optional = true }
+tokio = { version = "^1.0", features = ["full"], optional = true }
+tower = { version = "^0.5", optional = true }
+tower-http = { version = "^0.6.8", features = ["cors", "fs", "timeout"], optional = true }
+tracing = { version = "^0.1", optional = true }
+tracing-subscriber = { version = "^0.3", optional = true }
+futures-util = { version = "^0.3.31", optional = true }
+async-stream = { version = "^0.3", optional = true }
+uuid = { version = "^1.17.0", features = ["v4"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

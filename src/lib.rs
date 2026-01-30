@@ -9,6 +9,7 @@ pub mod interfaces;
 pub mod objectives;
 pub mod operators;
 pub mod optimizers;
+#[cfg(feature = "server")]
 pub mod server;
 
 use config::{安排, 广义码位};
