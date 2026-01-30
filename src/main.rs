@@ -10,13 +10,17 @@ use chai::错误;
 use clap::Parser;
 use std::thread::spawn;
 
-#[tokio::main]
-async fn main() -> Result<(), 错误> {
+fn main() -> Result<(), 错误> {
     let 参数 = 默认命令行参数::parse();
 
     match 参数.command {
         命令::Server { port } => {
-            chai::server::start_server(port).await.unwrap();
+            // 只在 Server 模式下使用异步运行时
+            tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(async {
+                    chai::server::start_server(port).await.unwrap();
+                });
         }
         命令::Encode { data } => {
             // 重构参数结构，以便复用现有的数据加载逻辑

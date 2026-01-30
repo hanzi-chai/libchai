@@ -12,9 +12,9 @@ use axum::{
 use crate::interfaces::{默认输入};
 use futures_util::stream::Stream;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::timeout::TimeoutLayer;
@@ -33,10 +33,10 @@ pub enum ApiResponse<T> {
 /// 应用状态
 #[derive(Clone)]
 pub struct AppState {
-    /// 全局 WebApi 实例
-    pub api: Arc<Mutex<WebApi>>,
-    /// 优化状态
-    pub optimization_status: Arc<Mutex<OptimizationStatus>>,
+    /// 全局 WebApi 实例（使用 RwLock 支持异步并发）
+    pub api: Arc<RwLock<WebApi>>,
+    /// 优化状态（使用 RwLock 支持异步并发）
+    pub optimization_status: Arc<RwLock<OptimizationStatus>>,
     /// WebSocket 广播发送器
     pub status_broadcast: broadcast::Sender<OptimizationStatus>,
     /// MPSC 发送器（用于从同步回调发送）
@@ -93,10 +93,10 @@ pub async fn sync_params(
     // 直接转换为图形界面参数
     match serde_json::from_value::<默认输入>(params) {
         Ok(图形界面参数) => {
-            let result = {
-                let mut api = state.api.lock().unwrap();
-                api.sync(图形界面参数)
-            }; // 锁在这里被释放
+            // 使用写锁，异步等待
+            let mut api = state.api.write().await;
+            let result = api.sync(图形界面参数);
+            drop(api); // 显式释放锁
 
             match result {
                 Ok(_) => Json(ApiResponse::Success { result: () }),
@@ -119,10 +119,10 @@ pub async fn encode_evaluate(
     // 直接转换为目标函数配置
     match serde_json::from_value::<目标配置>(objective) {
         Ok(目标函数配置) => {
-            let result = {
-                let api = state.api.lock().unwrap();
-                api.encode_evaluate(目标函数配置)
-            }; // 锁在这里被释放
+            // 使用读锁，允许多个并发读取
+            let api = state.api.read().await;
+            let result = api.encode_evaluate(目标函数配置);
+            drop(api); // 显式释放锁
 
             match result {
                 Ok(result) => Json(ApiResponse::Success {
@@ -143,7 +143,7 @@ pub async fn start_optimize(State(state): State<AppState>) -> Json<ApiResponse<S
 
     // 检查是否已经在运行
     {
-        let status = state.optimization_status.lock().unwrap();
+        let status = state.optimization_status.read().await;
         if matches!(*status, OptimizationStatus::Running { .. }) {
             return Json(ApiResponse::Error {
                 error: "优化已在进行中".to_string(),
@@ -153,7 +153,7 @@ pub async fn start_optimize(State(state): State<AppState>) -> Json<ApiResponse<S
 
     // 设置运行状态
     {
-        let mut status = state.optimization_status.lock().unwrap();
+        let mut status = state.optimization_status.write().await;
         *status = OptimizationStatus::Running {
             message: serde_json::json!({"info": "优化已启动"}),
         };
@@ -170,8 +170,10 @@ pub async fn start_optimize(State(state): State<AppState>) -> Json<ApiResponse<S
     // 在后台启动优化任务
     tokio::spawn(async move {
         // 使用 spawn_blocking 运行同步阻塞的优化任务
+        let api_clone = api.clone();
         let result = tokio::task::spawn_blocking(move || {
-            let api_guard = api.lock().unwrap();
+            // 在阻塞任务中使用 blocking 方式获取锁
+            let api_guard = api_clone.blocking_read();
             api_guard.optimize()
         }).await;
 
@@ -198,7 +200,7 @@ pub async fn start_optimize(State(state): State<AppState>) -> Json<ApiResponse<S
         };
 
         {
-            let mut status_guard = status.lock().unwrap();
+            let mut status_guard = status.write().await;
             *status_guard = final_status.clone();
         }
 
@@ -220,7 +222,7 @@ pub async fn sse_handler(
 ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
     // 获取当前状态
     let initial_status = {
-        let status = state.optimization_status.lock().unwrap();
+        let status = state.optimization_status.read().await;
         status.clone()
     };
     
@@ -484,8 +486,8 @@ pub fn create_app() -> Router {
     let (mpsc_tx, mut mpsc_rx) = mpsc::unbounded_channel::<OptimizationStatus>();
     
     let state = AppState {
-        api: Arc::new(Mutex::new(WebApi::new())),
-        optimization_status: Arc::new(Mutex::new(OptimizationStatus::Idle)),
+        api: Arc::new(RwLock::new(WebApi::new())),
+        optimization_status: Arc::new(RwLock::new(OptimizationStatus::Idle)),
         status_broadcast: tx.clone(),
         status_mpsc: mpsc_tx.clone(),
     };
@@ -500,7 +502,9 @@ pub fn create_app() -> Router {
 
     // 设置全局回调函数
     {
-        let mut api = state.api.lock().unwrap();
+        // 使用 try_write 因为在异步上下文中不能使用 blocking_write
+        // 这里是初始化阶段，不会有其他线程竞争，所以 unwrap 是安全的
+        let mut api = state.api.try_write().expect("初始化时获取 API 写锁失败");
         let status = state.optimization_status.clone();
         let mpsc_sender = mpsc_tx.clone();
         
@@ -529,9 +533,9 @@ pub fn create_app() -> Router {
                 _ => {}
             }
             
-            // 更新共享状态
+            // 更新共享状态（使用 blocking_write 因为回调在同步上下文中）
             {
-                let mut status_guard = status.lock().unwrap();
+                let mut status_guard = status.blocking_write();
                 *status_guard = new_status.clone();
             }
             
