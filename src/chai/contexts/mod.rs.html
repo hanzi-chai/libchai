@@ -1,5 +1,5 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/contexts/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/contexts/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use crate</span>::{
-<a href=#2 id=2 data-nosnippet>2</a>    config::{Mapped, MappedKey, MappingGeneratorRule, MappingVariableRule, ValueDescription},
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/contexts/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/contexts/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use crate</span>::{
+<a href=#2 id=2 data-nosnippet>2</a>    config::{决策生成器规则, 变量规则, 安排, 安排描述, 广义码位},
 <a href=#3 id=3 data-nosnippet>3</a>    optimizers::决策,
 <a href=#4 id=4 data-nosnippet>4</a>    元素, 错误,
 <a href=#5 id=5 data-nosnippet>5</a>};
@@ -30,8 +30,8 @@
 <a href=#30 id=30 data-nosnippet>30</a>}
 <a href=#31 id=31 data-nosnippet>31</a>
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">pub fn </span>合并初始决策(
-<a href=#33 id=33 data-nosnippet>33</a>    原始决策空间: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, Vec&lt;ValueDescription&gt;&gt;,
-<a href=#34 id=34 data-nosnippet>34</a>    原始决策: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, Mapped&gt;,
+<a href=#33 id=33 data-nosnippet>33</a>    原始决策空间: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, Vec&lt;安排描述&gt;&gt;,
+<a href=#34 id=34 data-nosnippet>34</a>    原始决策: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, 安排&gt;,
 <a href=#35 id=35 data-nosnippet>35</a>) {
 <a href=#36 id=36 data-nosnippet>36</a>    <span class="kw">for </span>元素名称 <span class="kw">in </span>原始决策.keys() {
 <a href=#37 id=37 data-nosnippet>37</a>        <span class="kw">if </span>!原始决策空间.contains_key(元素名称) {
@@ -39,9 +39,9 @@
 <a href=#39 id=39 data-nosnippet>39</a>        }
 <a href=#40 id=40 data-nosnippet>40</a>    }
 <a href=#41 id=41 data-nosnippet>41</a>    <span class="comment">// 移除多余元素
-<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">for </span>元素名称 <span class="kw">in </span>原始决策空间.keys().cloned().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;() {
-<a href=#43 id=43 data-nosnippet>43</a>        <span class="kw">if </span>!原始决策.contains_key(<span class="kw-2">&amp;</span>元素名称) {
-<a href=#44 id=44 data-nosnippet>44</a>            原始决策.insert(元素名称.clone(), Mapped::Unused(()));
+<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">for </span>元素名称 <span class="kw">in </span>原始决策空间.keys() {
+<a href=#43 id=43 data-nosnippet>43</a>        <span class="kw">if </span>!原始决策.contains_key(元素名称) {
+<a href=#44 id=44 data-nosnippet>44</a>            原始决策.insert(元素名称.clone(), 安排::Unused(()));
 <a href=#45 id=45 data-nosnippet>45</a>        }
 <a href=#46 id=46 data-nosnippet>46</a>    }
 <a href=#47 id=47 data-nosnippet>47</a>    <span class="comment">// 确保每个元素的当前决策都在决策空间中
@@ -50,7 +50,7 @@
 <a href=#50 id=50 data-nosnippet>50</a>        <span class="kw">if </span>!原始安排列表.iter().any(|x| <span class="kw-2">&amp;</span>x.value == <span class="kw-2">&amp;</span>原始安排) {
 <a href=#51 id=51 data-nosnippet>51</a>            原始安排列表.insert(
 <a href=#52 id=52 data-nosnippet>52</a>                <span class="number">0</span>,
-<a href=#53 id=53 data-nosnippet>53</a>                ValueDescription {
+<a href=#53 id=53 data-nosnippet>53</a>                安排描述 {
 <a href=#54 id=54 data-nosnippet>54</a>                    value: 原始安排,
 <a href=#55 id=55 data-nosnippet>55</a>                    score: <span class="number">0.0</span>,
 <a href=#56 id=56 data-nosnippet>56</a>                    condition: <span class="prelude-val">None</span>,
@@ -61,26 +61,26 @@
 <a href=#61 id=61 data-nosnippet>61</a>}
 <a href=#62 id=62 data-nosnippet>62</a>
 <a href=#63 id=63 data-nosnippet>63</a><span class="kw">pub fn </span>展开变量(
-<a href=#64 id=64 data-nosnippet>64</a>    原始决策空间: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, Vec&lt;ValueDescription&gt;&gt;,
-<a href=#65 id=65 data-nosnippet>65</a>    原始变量映射: <span class="kw-2">&amp;</span>IndexMap&lt;String, MappingVariableRule&gt;,
+<a href=#64 id=64 data-nosnippet>64</a>    原始决策空间: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, Vec&lt;安排描述&gt;&gt;,
+<a href=#65 id=65 data-nosnippet>65</a>    原始变量映射: <span class="kw-2">&amp;</span>IndexMap&lt;String, 变量规则&gt;,
 <a href=#66 id=66 data-nosnippet>66</a>) {
 <a href=#67 id=67 data-nosnippet>67</a>    <span class="kw">for </span>(<span class="kw">_</span>, 原始安排列表) <span class="kw">in </span>原始决策空间.iter_mut() {
 <a href=#68 id=68 data-nosnippet>68</a>        <span class="kw">let </span><span class="kw-2">mut </span>队列 = VecDeque::from(原始安排列表.clone());
 <a href=#69 id=69 data-nosnippet>69</a>        原始安排列表.clear();
 <a href=#70 id=70 data-nosnippet>70</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(原始安排) = 队列.pop_front() {
 <a href=#71 id=71 data-nosnippet>71</a>            <span class="kw">let </span><span class="kw-2">mut </span>是否展开 = <span class="bool-val">false</span>;
-<a href=#72 id=72 data-nosnippet>72</a>            <span class="kw">if let </span>Mapped::Advanced(keys) = <span class="kw-2">&amp;</span>原始安排.value {
+<a href=#72 id=72 data-nosnippet>72</a>            <span class="kw">if let </span>安排::Advanced(keys) = <span class="kw-2">&amp;</span>原始安排.value {
 <a href=#73 id=73 data-nosnippet>73</a>                <span class="kw">for </span>(序号, 映射键) <span class="kw">in </span>keys.iter().enumerate() {
-<a href=#74 id=74 data-nosnippet>74</a>                    <span class="kw">if let </span>MappedKey::Variable {
+<a href=#74 id=74 data-nosnippet>74</a>                    <span class="kw">if let </span>广义码位::Variable {
 <a href=#75 id=75 data-nosnippet>75</a>                        variable: generator,
 <a href=#76 id=76 data-nosnippet>76</a>                    } = 映射键
 <a href=#77 id=77 data-nosnippet>77</a>                    {
 <a href=#78 id=78 data-nosnippet>78</a>                        <span class="kw">let </span>变量取值列表 = 原始变量映射.get(generator).unwrap();
 <a href=#79 id=79 data-nosnippet>79</a>                        <span class="kw">for </span>变量取值 <span class="kw">in </span><span class="kw-2">&amp;</span>变量取值列表.keys {
 <a href=#80 id=80 data-nosnippet>80</a>                            <span class="kw">let </span><span class="kw-2">mut </span>新映射键列表 = keys.clone();
-<a href=#81 id=81 data-nosnippet>81</a>                            新映射键列表[序号] = MappedKey::Ascii(<span class="kw-2">*</span>变量取值);
-<a href=#82 id=82 data-nosnippet>82</a>                            <span class="kw">let </span>新原始安排 = ValueDescription {
-<a href=#83 id=83 data-nosnippet>83</a>                                value: Mapped::Advanced(新映射键列表),
+<a href=#81 id=81 data-nosnippet>81</a>                            新映射键列表[序号] = 广义码位::Ascii(<span class="kw-2">*</span>变量取值);
+<a href=#82 id=82 data-nosnippet>82</a>                            <span class="kw">let </span>新原始安排 = 安排描述 {
+<a href=#83 id=83 data-nosnippet>83</a>                                value: 安排::Advanced(新映射键列表),
 <a href=#84 id=84 data-nosnippet>84</a>                                score: 原始安排.score,
 <a href=#85 id=85 data-nosnippet>85</a>                                condition: 原始安排.condition.clone(),
 <a href=#86 id=86 data-nosnippet>86</a>                            };
@@ -99,7 +99,7 @@
 <a href=#99 id=99 data-nosnippet>99</a>}
 <a href=#100 id=100 data-nosnippet>100</a>
 <a href=#101 id=101 data-nosnippet>101</a><span class="kw">pub fn </span>拓扑排序(
-<a href=#102 id=102 data-nosnippet>102</a>    原始决策空间: <span class="kw-2">&amp;</span>IndexMap&lt;String, Vec&lt;ValueDescription&gt;&gt;,
+<a href=#102 id=102 data-nosnippet>102</a>    原始决策空间: <span class="kw-2">&amp;</span>IndexMap&lt;String, Vec&lt;安排描述&gt;&gt;,
 <a href=#103 id=103 data-nosnippet>103</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;String&gt;, FxHashMap&lt;String, Vec&lt;String&gt;&gt;), 错误&gt; {
 <a href=#104 id=104 data-nosnippet>104</a>    <span class="comment">// 构造入度表
 <a href=#105 id=105 data-nosnippet>105</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>入度 = FxHashMap::default();
@@ -111,13 +111,13 @@
 <a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">for </span>(元素名称, 原始安排列表) <span class="kw">in </span>原始决策空间 {
 <a href=#112 id=112 data-nosnippet>112</a>        <span class="kw">let </span><span class="kw-2">mut </span>依赖 = FxHashSet::default();
 <a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">for </span>原始安排 <span class="kw">in </span>原始安排列表 {
-<a href=#114 id=114 data-nosnippet>114</a>            <span class="kw">if let </span>Mapped::Advanced(keys) = <span class="kw-2">&amp;</span>原始安排.value {
+<a href=#114 id=114 data-nosnippet>114</a>            <span class="kw">if let </span>安排::Advanced(keys) = <span class="kw-2">&amp;</span>原始安排.value {
 <a href=#115 id=115 data-nosnippet>115</a>                <span class="kw">for </span>k <span class="kw">in </span>keys {
-<a href=#116 id=116 data-nosnippet>116</a>                    <span class="kw">if let </span>MappedKey::Reference { element, .. } = k {
+<a href=#116 id=116 data-nosnippet>116</a>                    <span class="kw">if let </span>广义码位::Reference { element, .. } = k {
 <a href=#117 id=117 data-nosnippet>117</a>                        依赖.insert(element.clone());
 <a href=#118 id=118 data-nosnippet>118</a>                    }
 <a href=#119 id=119 data-nosnippet>119</a>                }
-<a href=#120 id=120 data-nosnippet>120</a>            } <span class="kw">else if let </span>Mapped::Grouped { element } = <span class="kw-2">&amp;</span>原始安排.value {
+<a href=#120 id=120 data-nosnippet>120</a>            } <span class="kw">else if let </span>安排::Grouped { element } = <span class="kw-2">&amp;</span>原始安排.value {
 <a href=#121 id=121 data-nosnippet>121</a>                依赖.insert(element.clone());
 <a href=#122 id=122 data-nosnippet>122</a>            }
 <a href=#123 id=123 data-nosnippet>123</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(条件列表) = <span class="kw-2">&amp;</span>原始安排.condition {
@@ -168,8 +168,8 @@
 <a href=#168 id=168 data-nosnippet>168</a>}
 <a href=#169 id=169 data-nosnippet>169</a>
 <a href=#170 id=170 data-nosnippet>170</a><span class="kw">pub fn </span>应用生成器(
-<a href=#171 id=171 data-nosnippet>171</a>    原始决策空间: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, Vec&lt;ValueDescription&gt;&gt;,
-<a href=#172 id=172 data-nosnippet>172</a>    原始生成器列表: <span class="kw-2">&amp;</span>Vec&lt;MappingGeneratorRule&gt;,
+<a href=#171 id=171 data-nosnippet>171</a>    原始决策空间: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, Vec&lt;安排描述&gt;&gt;,
+<a href=#172 id=172 data-nosnippet>172</a>    原始生成器列表: <span class="kw-2">&amp;</span>Vec&lt;决策生成器规则&gt;,
 <a href=#173 id=173 data-nosnippet>173</a>) {
 <a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">for </span>生成器 <span class="kw">in </span>原始生成器列表 {
 <a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">let </span>regex = Regex::new(<span class="kw-2">&amp;</span>生成器.regex).unwrap();
@@ -177,36 +177,51 @@
 <a href=#177 id=177 data-nosnippet>177</a>            <span class="kw">if </span>!regex.is_match(元素名称) {
 <a href=#178 id=178 data-nosnippet>178</a>                <span class="kw">continue</span>;
 <a href=#179 id=179 data-nosnippet>179</a>            }
-<a href=#180 id=180 data-nosnippet>180</a>            <span class="kw">if let </span>Mapped::Advanced(keys) = <span class="kw-2">&amp;</span>生成器.value.value {
+<a href=#180 id=180 data-nosnippet>180</a>            <span class="kw">if let </span>安排::Advanced(码位列表) = <span class="kw-2">&amp;</span>生成器.value.value {
 <a href=#181 id=181 data-nosnippet>181</a>                <span class="kw">let </span><span class="kw-2">mut </span>values = FxHashSet::default();
 <a href=#182 id=182 data-nosnippet>182</a>                <span class="kw">for </span>现有安排 <span class="kw">in </span>原始安排列表.iter() {
-<a href=#183 id=183 data-nosnippet>183</a>                    <span class="kw">if </span><span class="macro">matches!</span>(<span class="kw-2">&amp;</span>现有安排.value, Mapped::Basic(<span class="kw">_</span>) | Mapped::Advanced(<span class="kw">_</span>)) {
+<a href=#183 id=183 data-nosnippet>183</a>                    <span class="kw">if </span><span class="macro">matches!</span>(<span class="kw-2">&amp;</span>现有安排.value, 安排::Basic(<span class="kw">_</span>) | 安排::Advanced(<span class="kw">_</span>)) {
 <a href=#184 id=184 data-nosnippet>184</a>                        <span class="kw">let </span>现有键 = <span class="kw-2">&amp;</span>现有安排.value.normalize();
-<a href=#185 id=185 data-nosnippet>185</a>                        <span class="kw">let </span>合成 = keys
-<a href=#186 id=186 data-nosnippet>186</a>                            .iter()
-<a href=#187 id=187 data-nosnippet>187</a>                            .enumerate()
-<a href=#188 id=188 data-nosnippet>188</a>                            .map(|(i, x)| {
-<a href=#189 id=189 data-nosnippet>189</a>                                <span class="kw">if let </span>MappedKey::Placeholder(<span class="kw">_</span>) = x {
-<a href=#190 id=190 data-nosnippet>190</a>                                    现有键[i].clone()
-<a href=#191 id=191 data-nosnippet>191</a>                                } <span class="kw">else </span>{
-<a href=#192 id=192 data-nosnippet>192</a>                                    x.clone()
-<a href=#193 id=193 data-nosnippet>193</a>                                }
-<a href=#194 id=194 data-nosnippet>194</a>                            })
-<a href=#195 id=195 data-nosnippet>195</a>                            .collect();
-<a href=#196 id=196 data-nosnippet>196</a>                        values.insert(合成);
-<a href=#197 id=197 data-nosnippet>197</a>                    }
-<a href=#198 id=198 data-nosnippet>198</a>                }
-<a href=#199 id=199 data-nosnippet>199</a>                <span class="kw">for </span>value <span class="kw">in </span>values {
-<a href=#200 id=200 data-nosnippet>200</a>                    <span class="kw">let </span>新原始安排 = ValueDescription {
-<a href=#201 id=201 data-nosnippet>201</a>                        value: Mapped::Advanced(value),
-<a href=#202 id=202 data-nosnippet>202</a>                        score: 生成器.value.score,
-<a href=#203 id=203 data-nosnippet>203</a>                        condition: 生成器.value.condition.clone(),
-<a href=#204 id=204 data-nosnippet>204</a>                    };
-<a href=#205 id=205 data-nosnippet>205</a>                    原始安排列表.push(新原始安排);
-<a href=#206 id=206 data-nosnippet>206</a>                }
-<a href=#207 id=207 data-nosnippet>207</a>            } <span class="kw">else </span>{
-<a href=#208 id=208 data-nosnippet>208</a>                原始安排列表.push(生成器.value.clone());
-<a href=#209 id=209 data-nosnippet>209</a>            }
-<a href=#210 id=210 data-nosnippet>210</a>        }
-<a href=#211 id=211 data-nosnippet>211</a>    }
-<a href=#212 id=212 data-nosnippet>212</a>}</code></pre></div></section></main></body></html>
+<a href=#185 id=185 data-nosnippet>185</a>                        <span class="kw">let </span><span class="kw-2">mut </span>valid = <span class="bool-val">true</span>;
+<a href=#186 id=186 data-nosnippet>186</a>                        <span class="kw">let </span><span class="kw-2">mut </span>合成 = <span class="macro">vec!</span>[];
+<a href=#187 id=187 data-nosnippet>187</a>                        <span class="kw">for </span>(i, 码位) <span class="kw">in </span>码位列表.iter().enumerate() {
+<a href=#188 id=188 data-nosnippet>188</a>                            <span class="kw">if let </span><span class="prelude-val">Some</span>(现有码位) = 现有键.get(i) {
+<a href=#189 id=189 data-nosnippet>189</a>                                <span class="comment">// 引用不能被替换为变量
+<a href=#190 id=190 data-nosnippet>190</a>                                </span><span class="kw">if </span><span class="macro">matches!</span>(现有码位, 广义码位::Reference { .. })
+<a href=#191 id=191 data-nosnippet>191</a>                                    &amp;&amp; <span class="macro">matches!</span>(码位, 广义码位::Variable { .. })
+<a href=#192 id=192 data-nosnippet>192</a>                                {
+<a href=#193 id=193 data-nosnippet>193</a>                                    valid = <span class="bool-val">false</span>;
+<a href=#194 id=194 data-nosnippet>194</a>                                    <span class="kw">break</span>;
+<a href=#195 id=195 data-nosnippet>195</a>                                }
+<a href=#196 id=196 data-nosnippet>196</a>                                <span class="kw">let </span>替换后 = <span class="kw">if let </span>广义码位::Placeholder(<span class="kw">_</span>) = 码位 {
+<a href=#197 id=197 data-nosnippet>197</a>                                    现有码位.clone()
+<a href=#198 id=198 data-nosnippet>198</a>                                } <span class="kw">else </span>{
+<a href=#199 id=199 data-nosnippet>199</a>                                    码位.clone()
+<a href=#200 id=200 data-nosnippet>200</a>                                };
+<a href=#201 id=201 data-nosnippet>201</a>                                合成.push(替换后);
+<a href=#202 id=202 data-nosnippet>202</a>                            } <span class="kw">else </span>{
+<a href=#203 id=203 data-nosnippet>203</a>                                valid = <span class="bool-val">false</span>;
+<a href=#204 id=204 data-nosnippet>204</a>                                <span class="kw">break</span>;
+<a href=#205 id=205 data-nosnippet>205</a>                            }
+<a href=#206 id=206 data-nosnippet>206</a>                        }
+<a href=#207 id=207 data-nosnippet>207</a>                        <span class="kw">if </span>!valid {
+<a href=#208 id=208 data-nosnippet>208</a>                            <span class="kw">continue</span>;
+<a href=#209 id=209 data-nosnippet>209</a>                        }
+<a href=#210 id=210 data-nosnippet>210</a>                        values.insert(合成);
+<a href=#211 id=211 data-nosnippet>211</a>                    }
+<a href=#212 id=212 data-nosnippet>212</a>                }
+<a href=#213 id=213 data-nosnippet>213</a>                <span class="kw">for </span>value <span class="kw">in </span>values {
+<a href=#214 id=214 data-nosnippet>214</a>                    <span class="kw">let </span>新原始安排 = 安排描述 {
+<a href=#215 id=215 data-nosnippet>215</a>                        value: 安排::Advanced(value),
+<a href=#216 id=216 data-nosnippet>216</a>                        score: 生成器.value.score,
+<a href=#217 id=217 data-nosnippet>217</a>                        condition: 生成器.value.condition.clone(),
+<a href=#218 id=218 data-nosnippet>218</a>                    };
+<a href=#219 id=219 data-nosnippet>219</a>                    原始安排列表.push(新原始安排);
+<a href=#220 id=220 data-nosnippet>220</a>                }
+<a href=#221 id=221 data-nosnippet>221</a>            } <span class="kw">else </span>{
+<a href=#222 id=222 data-nosnippet>222</a>                原始安排列表.push(生成器.value.clone());
+<a href=#223 id=223 data-nosnippet>223</a>            }
+<a href=#224 id=224 data-nosnippet>224</a>        }
+<a href=#225 id=225 data-nosnippet>225</a>    }
+<a href=#226 id=226 data-nosnippet>226</a>}
+</code></pre></div></section></main></body></html>

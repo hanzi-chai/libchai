@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["简码配置","编码空间","编码配置","默认编码器"],"type":["线性化决策"]};
+window.SIDEBAR_ITEMS = {"struct":["简码数量","编码空间","编码配置","默认编码器"],"type":["线性化决策"]};

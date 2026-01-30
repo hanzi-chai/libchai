@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/objectives/cache.rs`."><title>cache.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0 (ded5c06cf 2025-12-08)" data-channel="1.92.0" data-search-js="search-d69d8955.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/objectives/</div>cache.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>rustc_hash::FxHashMap;
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/objectives/cache.rs`."><title>cache.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="chai" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">chai/objectives/</div>cache.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>rustc_hash::FxHashMap;
 <a href=#2 id=2 data-nosnippet>2</a>
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">super</span>::default::默认目标函数参数;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span><span class="kw">super</span>::metric::FingeringMetric;
@@ -7,7 +7,7 @@
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span><span class="kw">super</span>::metric::分组指标;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">super</span>::metric::层级指标;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span><span class="kw">super</span>::metric::键长指标;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span><span class="kw">crate</span>::config::PartialWeights;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span><span class="kw">crate</span>::config::部分权重;
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use crate</span>::{
 <a href=#12 id=12 data-nosnippet>12</a>    最大按键组合长度, 编码, 部分编码信息, 键位分布损失函数
 <a href=#13 id=13 data-nosnippet>13</a>};
@@ -16,7 +16,7 @@
 <a href=#16 id=16 data-nosnippet>16</a><span class="comment">// 用于缓存计算目标函数的中间结果，方便实现增量计算
 <a href=#17 id=17 data-nosnippet>17</a></span><span class="attr">#[derive(Debug, Clone)]
 <a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub struct </span>缓存 {
-<a href=#19 id=19 data-nosnippet>19</a>    partial_weights: PartialWeights,
+<a href=#19 id=19 data-nosnippet>19</a>    partial_weights: 部分权重,
 <a href=#20 id=20 data-nosnippet>20</a>    total_count: usize,
 <a href=#21 id=21 data-nosnippet>21</a>    total_frequency: i64,
 <a href=#22 id=22 data-nosnippet>22</a>    total_pairs: i64,
@@ -199,7 +199,7 @@
 <a href=#199 id=199 data-nosnippet>199</a>
 <a href=#200 id=200 data-nosnippet>200</a><span class="kw">impl </span>缓存 {
 <a href=#201 id=201 data-nosnippet>201</a>    <span class="kw">pub fn </span>new(
-<a href=#202 id=202 data-nosnippet>202</a>        partial_weights: <span class="kw-2">&amp;</span>PartialWeights,
+<a href=#202 id=202 data-nosnippet>202</a>        partial_weights: <span class="kw-2">&amp;</span>部分权重,
 <a href=#203 id=203 data-nosnippet>203</a>        radix: u64,
 <a href=#204 id=204 data-nosnippet>204</a>        total_count: usize,
 <a href=#205 id=205 data-nosnippet>205</a>        max_index: u64,
@@ -261,11 +261,11 @@
 <a href=#261 id=261 data-nosnippet>261</a>    ) -&gt; f64 {
 <a href=#262 id=262 data-nosnippet>262</a>        <span class="kw">let </span><span class="kw-2">mut </span>distance = <span class="number">0.0</span>;
 <a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">for </span>(frequency, loss) <span class="kw">in </span>zip(distribution, ideal_distribution) {
-<a href=#264 id=264 data-nosnippet>264</a>            <span class="kw">let </span>diff = frequency - loss.ideal;
+<a href=#264 id=264 data-nosnippet>264</a>            <span class="kw">let </span>diff = frequency - loss.理想值;
 <a href=#265 id=265 data-nosnippet>265</a>            <span class="kw">if </span>diff &gt; <span class="number">0.0 </span>{
-<a href=#266 id=266 data-nosnippet>266</a>                distance += loss.gt_penalty * diff;
+<a href=#266 id=266 data-nosnippet>266</a>                distance += loss.高于惩罚 * diff;
 <a href=#267 id=267 data-nosnippet>267</a>            } <span class="kw">else </span>{
-<a href=#268 id=268 data-nosnippet>268</a>                distance -= loss.lt_penalty * diff;
+<a href=#268 id=268 data-nosnippet>268</a>                distance -= loss.低于惩罚 * diff;
 <a href=#269 id=269 data-nosnippet>269</a>            }
 <a href=#270 id=270 data-nosnippet>270</a>        }
 <a href=#271 id=271 data-nosnippet>271</a>        distance
@@ -371,4 +371,5 @@
 <a href=#371 id=371 data-nosnippet>371</a>            }
 <a href=#372 id=372 data-nosnippet>372</a>        }
 <a href=#373 id=373 data-nosnippet>373</a>    }
-<a href=#374 id=374 data-nosnippet>374</a>}</code></pre></div></section></main></body></html>
+<a href=#374 id=374 data-nosnippet>374</a>}
+</code></pre></div></section></main></body></html>
