@@ -3,7 +3,7 @@ New-Item -ItemType Directory -Force -Path "examples"
 New-Item -ItemType Directory -Force -Path "assets"
 
 # 下载 assets 目录下的文件
-$assetsFiles = @("key_distribution.txt", "pair_equivalence.txt")
+$assetsFiles = @("distribution.txt", "equivalence.txt")
 foreach ($file in $assetsFiles) {
     $url = "https://assets.chaifen.app/$file"
     $output = "assets/$file"

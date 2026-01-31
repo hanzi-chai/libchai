@@ -24,3 +24,4 @@ package
 *.yaml
 *.txt
 *.svg
+client

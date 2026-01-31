@@ -10,8 +10,8 @@
 
 - `examples/米十五笔.yaml`: 配置文件示例，具体的格式解释参见 [config.yaml 详解](https://docs.chaifen.app/docs/tutorial/config)；这个文件也可以由[汉字自动拆分系统](https://chaifen.app/)生成；
 - `examples/米十五笔.txt`: 词信息文件示例，每个字一行，每行的内容依次为汉字、空格分隔的汉字拆分序列；这个文件也可由自动拆分系统生成；
-- `assets/key_distribution.txt`：用指分布文件示例，每个按键一行，每行的内容为以制表符分隔的按键、目标频率、低频率惩罚系数、高频率惩罚系数；
-- `assets/pair_equivalence.txt`：双键速度当量文件示例，每个按键组合一行，每行的内容为以制表符分隔的按键组合和当量；
+- `assets/distribution.txt`：用指分布文件示例，每个按键一行，每行的内容为以制表符分隔的按键、目标频率、低频率惩罚系数、高频率惩罚系数；
+- `assets/equivalence.txt`：双键速度当量文件示例，每个按键组合一行，每行的内容为以制表符分隔的按键组合和当量；
 
 命令行程序基本的用法为：
 

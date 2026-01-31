@@ -5,7 +5,7 @@ mkdir -p examples
 mkdir -p assets
 
 # 下载 assets 目录下的文件
-for file in key_distribution.txt pair_equivalence.txt; do
+for file in distribution.txt equivalence.txt; do
     curl "https://assets.chaifen.app/$file" -o "assets/$file"
 done
 

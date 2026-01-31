@@ -42,10 +42,10 @@ pub struct 数据参数 {
     /// 频率序列表，默认为 elements.txt
     #[arg(short, long, value_name = "FILE")]
     pub encodables: Option<PathBuf>,
-    /// 单键用指分布表，默认为 assets 目录下的 key_distribution.txt
+    /// 单键用指分布表，默认为 assets 目录下的 distribution.txt
     #[arg(short, long, value_name = "FILE")]
     pub key_distribution: Option<PathBuf>,
-    /// 双键速度当量表，默认为 assets 目录下的 pair_equivalence.txt
+    /// 双键速度当量表，默认为 assets 目录下的 equivalence.txt
     #[arg(short, long, value_name = "FILE")]
     pub pair_equivalence: Option<PathBuf>,
 }
@@ -163,9 +163,9 @@ pub fn 从命令行参数创建(参数: &默认命令行参数) -> 默认输入 
     let elements_path = encodables.unwrap_or(PathBuf::from("elements.txt"));
     let encodables: Vec<原始可编码对象> = 读取文本文件(elements_path);
     let assets_dir = Path::new("assets");
-    let keq_path = key_distribution.unwrap_or(assets_dir.join("key_distribution.txt"));
+    let keq_path = key_distribution.unwrap_or(assets_dir.join("distribution.txt"));
     let key_distribution: 原始键位分布信息 = 读取文本文件(keq_path);
-    let peq_path = pair_equivalence.unwrap_or(assets_dir.join("pair_equivalence.txt"));
+    let peq_path = pair_equivalence.unwrap_or(assets_dir.join("equivalence.txt"));
     let pair_equivalence: 原始当量信息 = 读取文本文件(peq_path);
     默认输入 {
         配置: config,
