@@ -224,4 +224,40 @@
 <a href=#224 id=224 data-nosnippet>224</a>        }
 <a href=#225 id=225 data-nosnippet>225</a>    }
 <a href=#226 id=226 data-nosnippet>226</a>}
-</code></pre></div></section></main></body></html>
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a><span class="kw">pub fn </span>补充存在性条件(原始决策空间: <span class="kw-2">&amp;mut </span>IndexMap&lt;String, Vec&lt;安排描述&gt;&gt;) {
+<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">for </span>(<span class="kw">_</span>, 原始安排列表) <span class="kw">in </span>原始决策空间.iter_mut() {
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="kw">for </span>安排描述 <span class="kw">in </span>原始安排列表.iter_mut() {
+<a href=#231 id=231 data-nosnippet>231</a>            <span class="kw">let </span><span class="kw-2">mut </span>需要存在的元素 = FxHashSet::default();
+<a href=#232 id=232 data-nosnippet>232</a>            <span class="kw">match </span><span class="kw-2">&amp;</span>安排描述.value {
+<a href=#233 id=233 data-nosnippet>233</a>                安排::Grouped { element } =&gt; {
+<a href=#234 id=234 data-nosnippet>234</a>                    需要存在的元素.insert(element.clone());
+<a href=#235 id=235 data-nosnippet>235</a>                }
+<a href=#236 id=236 data-nosnippet>236</a>                安排::Advanced(<span class="kw-2">ref </span>keys) =&gt; {
+<a href=#237 id=237 data-nosnippet>237</a>                    <span class="kw">for </span>k <span class="kw">in </span>keys {
+<a href=#238 id=238 data-nosnippet>238</a>                        <span class="kw">if let </span>广义码位::Reference { element, .. } = k {
+<a href=#239 id=239 data-nosnippet>239</a>                            需要存在的元素.insert(element.clone()); 
+<a href=#240 id=240 data-nosnippet>240</a>                        }
+<a href=#241 id=241 data-nosnippet>241</a>                    }
+<a href=#242 id=242 data-nosnippet>242</a>                }
+<a href=#243 id=243 data-nosnippet>243</a>                <span class="kw">_ </span>=&gt; {}
+<a href=#244 id=244 data-nosnippet>244</a>            }
+<a href=#245 id=245 data-nosnippet>245</a>            <span class="kw">if </span>需要存在的元素.is_empty() {
+<a href=#246 id=246 data-nosnippet>246</a>                <span class="kw">continue</span>;
+<a href=#247 id=247 data-nosnippet>247</a>            }
+<a href=#248 id=248 data-nosnippet>248</a>            <span class="kw">let </span><span class="kw-2">mut </span>condition = <span class="macro">vec!</span>[];
+<a href=#249 id=249 data-nosnippet>249</a>            <span class="kw">for </span>元素 <span class="kw">in </span><span class="kw-2">&amp;</span>需要存在的元素 {
+<a href=#250 id=250 data-nosnippet>250</a>                condition.push(<span class="kw">crate</span>::config::条件 {
+<a href=#251 id=251 data-nosnippet>251</a>                    element: 元素.clone(),
+<a href=#252 id=252 data-nosnippet>252</a>                    op: <span class="string">"不是"</span>.to_string(),
+<a href=#253 id=253 data-nosnippet>253</a>                    value: 安排::Unused(())
+<a href=#254 id=254 data-nosnippet>254</a>                });
+<a href=#255 id=255 data-nosnippet>255</a>            }
+<a href=#256 id=256 data-nosnippet>256</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(existing_condition) = <span class="kw-2">&amp;mut </span>安排描述.condition {
+<a href=#257 id=257 data-nosnippet>257</a>                existing_condition.extend(condition);
+<a href=#258 id=258 data-nosnippet>258</a>            } <span class="kw">else </span>{
+<a href=#259 id=259 data-nosnippet>259</a>                安排描述.condition = <span class="prelude-val">Some</span>(condition);
+<a href=#260 id=260 data-nosnippet>260</a>            }
+<a href=#261 id=261 data-nosnippet>261</a>        }
+<a href=#262 id=262 data-nosnippet>262</a>    }
+<a href=#263 id=263 data-nosnippet>263</a>}</code></pre></div></section></main></body></html>
