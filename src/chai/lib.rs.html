@@ -491,4 +491,25 @@
 <a href=#491 id=491 data-nosnippet>491</a>        JsError::new(<span class="kw-2">&amp;</span>value.message)
 <a href=#492 id=492 data-nosnippet>492</a>    }
 <a href=#493 id=493 data-nosnippet>493</a>}
+<a href=#494 id=494 data-nosnippet>494</a>
+<a href=#495 id=495 data-nosnippet>495</a><span class="attr">#[cfg(target_arch = <span class="string">"wasm32"</span>)]
+<a href=#496 id=496 data-nosnippet>496</a></span><span class="kw">pub fn </span>formatted_local_now() -&gt; String {
+<a href=#497 id=497 data-nosnippet>497</a>    <span class="kw">use </span>js_sys::Date;
+<a href=#498 id=498 data-nosnippet>498</a>    <span class="kw">let </span>date = Date::new_0();
+<a href=#499 id=499 data-nosnippet>499</a>    <span class="kw">let </span>month = date.get_month() <span class="kw">as </span>u32 + <span class="number">1</span>; <span class="comment">// JS 月份从 0 开始
+<a href=#500 id=500 data-nosnippet>500</a>    </span><span class="kw">let </span>day = date.get_date() <span class="kw">as </span>u32;
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="kw">let </span>hour = date.get_hours() <span class="kw">as </span>u32;
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">let </span>minute = date.get_minutes() <span class="kw">as </span>u32;
+<a href=#503 id=503 data-nosnippet>503</a>    <span class="kw">let </span>second = date.get_seconds() <span class="kw">as </span>u32;
+<a href=#504 id=504 data-nosnippet>504</a>    <span class="macro">format!</span>(
+<a href=#505 id=505 data-nosnippet>505</a>        <span class="string">"{:02}-{:02}+{:02}_{:02}_{:02}"</span>,
+<a href=#506 id=506 data-nosnippet>506</a>        month, day, hour, minute, second
+<a href=#507 id=507 data-nosnippet>507</a>    )
+<a href=#508 id=508 data-nosnippet>508</a>}
+<a href=#509 id=509 data-nosnippet>509</a>
+<a href=#510 id=510 data-nosnippet>510</a><span class="attr">#[cfg(not(target_arch = <span class="string">"wasm32"</span>))]
+<a href=#511 id=511 data-nosnippet>511</a></span><span class="kw">pub fn </span>formatted_local_now() -&gt; String {
+<a href=#512 id=512 data-nosnippet>512</a>    <span class="kw">use </span>chrono::Local;
+<a href=#513 id=513 data-nosnippet>513</a>    Local::now().format(<span class="string">"%m-%d+%H_%M_%S"</span>).to_string()
+<a href=#514 id=514 data-nosnippet>514</a>}
 </code></pre></div></section></main></body></html>

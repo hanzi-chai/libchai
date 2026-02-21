@@ -67,7 +67,7 @@
 <a href=#67 id=67 data-nosnippet>67</a>        <span class="kw">let </span><span class="kw-2">mut </span>目标函数 = 默认目标函数::新建(<span class="kw-2">&amp;</span>上下文, 编码器)<span class="question-mark">?</span>;
 <a href=#68 id=68 data-nosnippet>68</a>        <span class="kw">let </span><span class="kw-2">mut </span>操作 = 默认操作::新建(<span class="kw-2">&amp;</span>上下文)<span class="question-mark">?</span>;
 <a href=#69 id=69 data-nosnippet>69</a>        <span class="kw">let </span>求解器配置::SimulatedAnnealing(退火) = 优化方法配置;
-<a href=#70 id=70 data-nosnippet>70</a>        退火.优化(<span class="kw-2">&amp;</span>上下文.初始决策, <span class="kw-2">&amp;mut </span>目标函数, <span class="kw-2">&amp;mut </span>操作, <span class="kw-2">&amp;</span>上下文, <span class="self">self</span>);
+<a href=#70 id=70 data-nosnippet>70</a>        退火.优化(<span class="kw-2">&amp;</span>上下文.初始决策, <span class="kw-2">&amp;mut </span>目标函数, <span class="kw-2">&amp;mut </span>操作, <span class="kw-2">&amp;</span>上下文, <span class="self">self</span>, <span class="prelude-val">None</span>);
 <a href=#71 id=71 data-nosnippet>71</a>        <span class="prelude-val">Ok</span>(())
 <a href=#72 id=72 data-nosnippet>72</a>    }
 <a href=#73 id=73 data-nosnippet>73</a>}

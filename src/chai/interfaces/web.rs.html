@@ -55,15 +55,15 @@
 <a href=#55 id=55 data-nosnippet>55</a>        <span class="prelude-val">Ok</span>(to_value(<span class="kw-2">&amp;</span>(码表, 指标))<span class="question-mark">?</span>)
 <a href=#56 id=56 data-nosnippet>56</a>    }
 <a href=#57 id=57 data-nosnippet>57</a>
-<a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">pub fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), JsError&gt; {
+<a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">pub fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue, JsError&gt; {
 <a href=#59 id=59 data-nosnippet>59</a>        <span class="kw">let </span>优化方法配置 = <span class="self">self</span>.参数.配置.clone().optimization.unwrap().metaheuristic.unwrap();
 <a href=#60 id=60 data-nosnippet>60</a>        <span class="kw">let </span>上下文 = 默认上下文::新建(<span class="self">self</span>.参数.clone())<span class="question-mark">?</span>;
 <a href=#61 id=61 data-nosnippet>61</a>        <span class="kw">let </span>编码器 = 默认编码器::新建(<span class="kw-2">&amp;</span>上下文)<span class="question-mark">?</span>;
 <a href=#62 id=62 data-nosnippet>62</a>        <span class="kw">let </span><span class="kw-2">mut </span>目标函数 = 默认目标函数::新建(<span class="kw-2">&amp;</span>上下文, 编码器)<span class="question-mark">?</span>;
 <a href=#63 id=63 data-nosnippet>63</a>        <span class="kw">let </span><span class="kw-2">mut </span>操作 = 默认操作::新建(<span class="kw-2">&amp;</span>上下文)<span class="question-mark">?</span>;
 <a href=#64 id=64 data-nosnippet>64</a>        <span class="kw">let </span>求解器配置::SimulatedAnnealing(退火) = 优化方法配置;
-<a href=#65 id=65 data-nosnippet>65</a>        退火.优化(<span class="kw-2">&amp;</span>上下文.初始决策, <span class="kw-2">&amp;mut </span>目标函数, <span class="kw-2">&amp;mut </span>操作, <span class="kw-2">&amp;</span>上下文, <span class="self">self</span>);
-<a href=#66 id=66 data-nosnippet>66</a>        <span class="prelude-val">Ok</span>(())
+<a href=#65 id=65 data-nosnippet>65</a>        <span class="kw">let </span>优化结果 = 退火.优化(<span class="kw-2">&amp;</span>上下文.初始决策, <span class="kw-2">&amp;mut </span>目标函数, <span class="kw-2">&amp;mut </span>操作, <span class="kw-2">&amp;</span>上下文, <span class="self">self</span>, <span class="prelude-val">None</span>);
+<a href=#66 id=66 data-nosnippet>66</a>        <span class="prelude-val">Ok</span>(to_value(<span class="kw-2">&amp;</span>优化结果)<span class="question-mark">?</span>)
 <a href=#67 id=67 data-nosnippet>67</a>    }
 <a href=#68 id=68 data-nosnippet>68</a>}
 <a href=#69 id=69 data-nosnippet>69</a>
