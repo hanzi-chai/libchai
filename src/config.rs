@@ -25,8 +25,16 @@ pub struct 基本信息 {
 pub struct 数据配置 {
     pub character_set: Option<String>,
     pub repertoire: Option<原始字库>,
-    pub glyph_customization: Option<IndexMap<String, 字形>>,
+    pub glyph_customization: Option<IndexMap<String, 字形自定义>>,
     pub transformers: Option<Vec<变换器>>,
+    pub glyph_sources: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum 字形自定义 {
+    One(字形),
+    Multiple(Vec<字形>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

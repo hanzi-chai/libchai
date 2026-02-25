@@ -637,8 +637,6 @@ async fn bind_available_port(
 
 /// 启动服务器
 pub async fn start_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
-
     let app = create_app();
 
     // 尝试绑定端口，如果失败则尝试其他端口
