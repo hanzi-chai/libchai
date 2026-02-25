@@ -637,23 +637,21 @@
 <a href=#637 id=637 data-nosnippet>637</a>
 <a href=#638 id=638 data-nosnippet>638</a><span class="doccomment">/// 启动服务器
 <a href=#639 id=639 data-nosnippet>639</a></span><span class="kw">pub async fn </span>start_server(port: u16) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
-<a href=#640 id=640 data-nosnippet>640</a>    tracing_subscriber::fmt::init();
+<a href=#640 id=640 data-nosnippet>640</a>    <span class="kw">let </span>app = create_app();
 <a href=#641 id=641 data-nosnippet>641</a>
-<a href=#642 id=642 data-nosnippet>642</a>    <span class="kw">let </span>app = create_app();
-<a href=#643 id=643 data-nosnippet>643</a>
-<a href=#644 id=644 data-nosnippet>644</a>    <span class="comment">// 尝试绑定端口，如果失败则尝试其他端口
-<a href=#645 id=645 data-nosnippet>645</a>    </span><span class="kw">let </span>(listener, actual_port) = bind_available_port(port).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#646 id=646 data-nosnippet>646</a>
-<a href=#647 id=647 data-nosnippet>647</a>    <span class="macro">info!</span>(<span class="string">"Listening on: http://127.0.0.1:{}"</span>, actual_port);
-<a href=#648 id=648 data-nosnippet>648</a>    <span class="macro">info!</span>(<span class="string">"API Endpoints:"</span>);
-<a href=#649 id=649 data-nosnippet>649</a>    <span class="macro">info!</span>(<span class="string">"   POST /api/validate    - 验证配置"</span>);
-<a href=#650 id=650 data-nosnippet>650</a>    <span class="macro">info!</span>(<span class="string">"   POST /api/sync        - 同步参数"</span>);
-<a href=#651 id=651 data-nosnippet>651</a>    <span class="macro">info!</span>(<span class="string">"   POST /api/encode      - 编码评估"</span>);
-<a href=#652 id=652 data-nosnippet>652</a>    <span class="macro">info!</span>(<span class="string">"   POST /api/optimize    - 开始优化"</span>);
-<a href=#653 id=653 data-nosnippet>653</a>    <span class="macro">info!</span>(<span class="string">"   GET  /sse/status      - SSE 实时状态推送"</span>);
+<a href=#642 id=642 data-nosnippet>642</a>    <span class="comment">// 尝试绑定端口，如果失败则尝试其他端口
+<a href=#643 id=643 data-nosnippet>643</a>    </span><span class="kw">let </span>(listener, actual_port) = bind_available_port(port).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#644 id=644 data-nosnippet>644</a>
+<a href=#645 id=645 data-nosnippet>645</a>    <span class="macro">info!</span>(<span class="string">"Listening on: http://127.0.0.1:{}"</span>, actual_port);
+<a href=#646 id=646 data-nosnippet>646</a>    <span class="macro">info!</span>(<span class="string">"API Endpoints:"</span>);
+<a href=#647 id=647 data-nosnippet>647</a>    <span class="macro">info!</span>(<span class="string">"   POST /api/validate    - 验证配置"</span>);
+<a href=#648 id=648 data-nosnippet>648</a>    <span class="macro">info!</span>(<span class="string">"   POST /api/sync        - 同步参数"</span>);
+<a href=#649 id=649 data-nosnippet>649</a>    <span class="macro">info!</span>(<span class="string">"   POST /api/encode      - 编码评估"</span>);
+<a href=#650 id=650 data-nosnippet>650</a>    <span class="macro">info!</span>(<span class="string">"   POST /api/optimize    - 开始优化"</span>);
+<a href=#651 id=651 data-nosnippet>651</a>    <span class="macro">info!</span>(<span class="string">"   GET  /sse/status      - SSE 实时状态推送"</span>);
+<a href=#652 id=652 data-nosnippet>652</a>
+<a href=#653 id=653 data-nosnippet>653</a>    axum::serve(listener, app).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#654 id=654 data-nosnippet>654</a>
-<a href=#655 id=655 data-nosnippet>655</a>    axum::serve(listener, app).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#656 id=656 data-nosnippet>656</a>
-<a href=#657 id=657 data-nosnippet>657</a>    <span class="prelude-val">Ok</span>(())
-<a href=#658 id=658 data-nosnippet>658</a>}
+<a href=#655 id=655 data-nosnippet>655</a>    <span class="prelude-val">Ok</span>(())
+<a href=#656 id=656 data-nosnippet>656</a>}
 </code></pre></div></section></main></body></html>
