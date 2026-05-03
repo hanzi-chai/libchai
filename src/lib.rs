@@ -20,17 +20,30 @@ use std::cmp::Reverse;
 use std::io;
 use wasm_bindgen::JsError;
 
+use crate::config::条件;
+
 /// 只考虑长度为 1 到 10 的词
 pub const 最大词长: usize = 10;
 
 /// 只对低于最大按键组合长度的编码预先计算当量
 pub const 最大按键组合长度: usize = 4;
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct 原始元素序列及条件列表 {
+    pub 元素序列: Vec<广义码位>,
+    pub 条件列表: Vec<条件>,
+}
+
 /// 从配置文件中读取的原始可编码对象
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct 原始可编码对象 {
     pub 词: String,
-    pub 元素序列: String,
+    /// 简单格式：单个元素序列，无条件
+    #[serde(default)]
+    pub 元素序列: Option<Vec<广义码位>>,
+    /// 复杂格式：多个带条件的元素序列
+    #[serde(default)]
+    pub 全部元素序列: Option<Vec<原始元素序列及条件列表>>,
     pub 频率: u64,
     #[serde(default = "原始可编码对象::默认级别")]
     pub 简码长度: u64,
@@ -64,7 +77,8 @@ pub type 元素位 = usize;
 /// 最大元素序列长度，超过这个长度的编码会被拒绝
 pub const 最大元素序列长度: usize = 8;
 
-/// 最大元素数量，超过这个数量的元素会被拒绝
+/// 可选元素（安排可能为 未选取 的元素）的最大数量，超过这个数量会被拒绝
+/// 这个限制来自位图的大小：16 * 64 = 1024 位
 pub const 最大元素数量: usize = 1024;
 
 /// 可编码对象的序列
@@ -102,12 +116,20 @@ impl 位图 {
         Self { 位图: [0; 16] }
     }
 
-    pub fn 从元素序列创建(元素序列: &[元素位], 棱镜: &棱镜) -> Self {
+    pub fn 从条件列表创建(条件列表: &[条件], 棱镜: &棱镜) -> Self {
         let mut bitmap = Self::new();
-        for 元素位 in 元素序列 {
-            let 元素 = *元素位 % 棱镜.元素总数(); // 取模得到元素编号，位置不影响位图
-            if 元素 != 0 {
-                bitmap.insert(元素);
+        for 条件 in 条件列表 {
+            if let Some(&元素) = 棱镜.元素转数字.get(&条件.element) {
+                if let Some(&位图索引) = 棱镜.可选元素位图索引.get(&元素) {
+                    bitmap.insert(位图索引);
+                } else {
+                    // 如果条件中的元素不在棱镜中，说明配置文件有问题，直接忽略这个条件
+                    // 也可以选择抛出错误，但考虑到健壮性，这里选择忽略
+                    eprintln!(
+                        "警告：条件中的元素「{}」在棱镜中未找到，已忽略这个条件",
+                        条件.element
+                    );
+                }
             }
         }
         bitmap
@@ -239,6 +261,9 @@ pub struct 棱镜 {
     pub 元素转数字: FxHashMap<String, 元素>,
     pub 数字转元素: FxHashMap<元素, String>,
     pub 进制: u64,
+    /// 安排可能为 未选取 的元素的紧凑位图索引，仅包含这些元素
+    /// 键为棱镜中的元素编号，值为位图中的紧凑索引（0, 1, 2, ...）
+    pub 可选元素位图索引: FxHashMap<元素, usize>,
 }
 
 impl 棱镜 {
@@ -265,10 +290,9 @@ impl 棱镜 {
     pub fn 预处理元素序列(
         &self,
         词: &String,
-        原始元素序列字符串: &String,
+        原始元素序列: &[广义码位],
         最大码长: usize,
     ) -> Result<元素序列, 错误> {
-        let 原始元素序列: Vec<_> = 原始元素序列字符串.split(' ').collect();
         let mut 元素序列 = 元素序列::default();
         let 原始元素序列长度 = 原始元素序列.len();
         if 原始元素序列长度 > 最大码长 {
@@ -277,43 +301,21 @@ impl 棱镜 {
             )
             .into());
         }
-        for (i, &原始元素) in 原始元素序列.iter().enumerate() {
-            let (元素, 位置) = if 原始元素.contains(".") {
-                let parts: Vec<_> = 原始元素.split('.').collect();
-                if parts.len() != 2 {
-                    return Err(
-                        format!("编码对象「{词}」包含的元素「{原始元素}」格式不正确").into(),
-                    );
-                }
-                let 元素名称 = parts[0];
-                let index: usize = match parts[1].parse() {
-                    Ok(v) => v,
-                    Err(_) => {
-                        return Err(
-                            format!("编码对象「{词}」包含的元素「{原始元素}」格式不正确").into(),
-                        );
+        for (i, 码位) in 原始元素序列.iter().enumerate() {
+            let 元素位 = match 码位 {
+                广义码位::Reference { element, index } => {
+                    if let Some(&元素) = self.元素转数字.get(element) {
+                        元素 + index * self.元素总数()
+                    } else {
+                        return Err(format!(
+                            "编码对象「{词}」包含的元素「{element}」无法在键盘映射中找到"
+                        )
+                        .into());
                     }
-                };
-                if let Some(元素) = self.元素转数字.get(元素名称) {
-                    (*元素, index)
-                } else {
-                    return Err(format!(
-                        "编码对象「{词}」包含的元素「{原始元素}」无法在键盘映射中找到"
-                    )
-                    .into());
                 }
-            } else {
-                let 元素名称 = 原始元素;
-                if let Some(元素) = self.元素转数字.get(元素名称) {
-                    (*元素, 0)
-                } else {
-                    return Err(format!(
-                        "编码对象「{词}」包含的元素「{原始元素}」无法在键盘映射中找到"
-                    )
-                    .into());
-                }
+                _ => 0,
             };
-            元素序列[i] = 元素 + 位置 * self.元素总数();
+            元素序列[i] = 元素位;
         }
         return Ok(元素序列);
     }
@@ -328,15 +330,21 @@ impl 棱镜 {
             let 原始可编码对象 {
                 词,
                 频率,
-                元素序列,
+                元素序列: 原始单一元素序列,
+                全部元素序列: 原始全部元素序列,
                 简码长度,
             } = 原始可编码对象;
+            let 原始全部元素序列: Vec<原始元素序列及条件列表> = match (原始单一元素序列, 原始全部元素序列) {
+                (Some(seq), None) => vec![原始元素序列及条件列表 { 元素序列: seq, 条件列表: vec![] }],
+                (None, Some(list)) => list,
+                _ => panic!("编码对象「{词}」必须恰好提供「元素序列」或「全部元素序列」之一", 词 = 词),
+            };
             let mut 全部元素序列 = vec![];
-            // 用全角空格分隔
-            for 原始元素序列字符串 in 元素序列.split('　') {
-                let 元素序列 =
-                    self.预处理元素序列(&词, &原始元素序列字符串.to_string(), 最大码长)?;
-                let 位图 = 位图::从元素序列创建(&元素序列, self);
+            assert!(!原始全部元素序列.is_empty(), "编码对象「{词}」至少需要一个元素序列", 词 = 词);
+            assert!(原始全部元素序列.last().unwrap().条件列表.is_empty(), "编码对象「{词}」的最后一个元素序列必须没有任何条件", 词 = 词);
+            for 原始元素序列及条件列表 { 元素序列: 原始元素序列, 条件列表 } in 原始全部元素序列 {
+                let 元素序列 = self.预处理元素序列(&词, &原始元素序列, 最大码长)?;
+                let 位图 = 位图::从条件列表创建(&条件列表, self);
                 全部元素序列.push((元素序列, 位图));
             }
             let c = 可编码对象 {

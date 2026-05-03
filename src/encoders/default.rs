@@ -169,9 +169,11 @@ impl 默认编码器 {
     fn 刷新元素序列表(&mut self, 映射: &线性化决策) {
         let mut 位图 = 位图::new();
         for (元素位, 键位) in 映射.iter().enumerate() {
-            let 元素 = 元素位 % self.棱镜.元素总数(); // 取模得到元素编号，位置不影响位图
+            let 元素 = 元素位 % self.棱镜.元素总数();
             if *键位 != 0 {
-                位图.insert(元素);
+                if let Some(&位图索引) = self.棱镜.可选元素位图索引.get(&元素) {
+                    位图.insert(位图索引);
+                }
             }
         }
         for 词信息 in &mut self.词信息 {

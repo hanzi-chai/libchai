@@ -196,8 +196,10 @@ pub fn 从命令行参数创建(参数: &默认命令行参数) -> 默认输入 
     let config_content = read_to_string(&config_path)
         .unwrap_or_else(|_| panic!("文件 {} 不存在", config_path.display()));
     let config: 配置 = serde_yaml::from_str(&config_content).unwrap();
-    let elements_path = encodables.unwrap_or(PathBuf::from("elements.txt"));
-    let encodables: Vec<原始可编码对象> = 读取文本文件(elements_path);
+    let elements_path = encodables.unwrap_or(PathBuf::from("elements.yaml"));
+    let elements_content = read_to_string(&elements_path)
+        .unwrap_or_else(|_| panic!("文件 {} 不存在", elements_path.display()));
+    let encodables: Vec<原始可编码对象> = serde_yaml::from_str(&elements_content).unwrap();
     let assets_dir = Path::new("assets");
     let keq_path = key_distribution.unwrap_or(assets_dir.join("distribution.txt"));
     let key_distribution: 原始键位分布信息 = 读取文本文件(keq_path);
