@@ -125,6 +125,7 @@ pub type FingeringMetricUniform = [Option<u64>; 8];
 pub struct 层级指标 {
     pub top: Option<usize>,
     pub duplication: Option<u64>,
+    pub duplication_squared: Option<u64>,
     pub levels: Option<Vec<LevelMetricUniform>>,
     pub fingering: Option<FingeringMetricUniform>,
 }
@@ -139,6 +140,9 @@ impl Display for 层级指标 {
         };
         if let Some(duplication) = self.duplication {
             f.write_str(&format!("{specifier}选重：{duplication}；"))?;
+        }
+        if let Some(duplication_squared) = self.duplication_squared {
+            f.write_str(&format!("{specifier}选重平方：{duplication_squared}；"))?;
         }
         if let Some(levels) = &self.levels {
             for LevelMetricUniform { length, frequency } in levels {

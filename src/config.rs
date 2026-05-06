@@ -351,6 +351,7 @@ pub struct 码长权重 {
 pub struct 层级权重 {
     pub top: Option<usize>,
     pub duplication: Option<f64>,
+    pub duplication_squared: Option<f64>,
     pub levels: Option<Vec<码长权重>>,
     pub fingering: Option<指法权重>,
 }

@@ -181,13 +181,13 @@ pub fn 应用生成器(
                 let mut values = FxHashSet::default();
                 for 现有安排 in 原始安排列表.iter() {
                     if matches!(&现有安排.value, 安排::Basic(_) | 安排::Advanced(_)) {
-                        let 现有键 = &现有安排.value.normalize();
+                        let 现有码位列表 = &现有安排.value.normalize();
                         let mut valid = true;
                         let mut 合成 = vec![];
                         for (i, 码位) in 码位列表.iter().enumerate() {
-                            if let Some(现有码位) = 现有键.get(i) {
-                                // 引用不能被替换为变量
-                                if matches!(现有码位, 广义码位::Reference { .. })
+                            if let Some(现有码位) = 现有码位列表.get(i) {
+                                // 只有 ASCII 码位能被替换为变量
+                                if !matches!(现有码位, 广义码位::Ascii(..))
                                     && matches!(码位, 广义码位::Variable { .. })
                                 {
                                     valid = false;
@@ -236,7 +236,7 @@ pub fn 补充存在性条件(原始决策空间: &mut IndexMap<String, Vec<安�
                 安排::Advanced(ref keys) => {
                     for k in keys {
                         if let 广义码位::Reference { element, .. } = k {
-                            需要存在的元素.insert(element.clone()); 
+                            需要存在的元素.insert(element.clone());
                         }
                     }
                 }
@@ -250,7 +250,7 @@ pub fn 补充存在性条件(原始决策空间: &mut IndexMap<String, Vec<安�
                 condition.push(crate::config::条件 {
                     element: 元素.clone(),
                     op: "不是".to_string(),
-                    value: 安排::Unused(())
+                    value: 安排::Unused(()),
                 });
             }
             if let Some(existing_condition) = &mut 安排描述.condition {

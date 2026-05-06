@@ -28,6 +28,7 @@ pub struct 缓存 {
     total_fingering: [i64; 8],
     total_levels: Vec<i64>,
     tiers_duplication: Vec<i64>,
+    tiers_duplication_squared: Vec<i64>,
     tiers_levels: Vec<Vec<i64>>,
     tiers_fingering: Vec<[i64; 8]>,
     max_index: u64,
@@ -149,6 +150,7 @@ impl 缓存 {
                 .map(|x| 层级指标 {
                     top: x.top,
                     duplication: None,
+                    duplication_squared: None,
                     levels: None,
                     fingering: None,
                 })
@@ -160,6 +162,12 @@ impl 缓存 {
                     let duplication = self.tiers_duplication[itier];
                     损失函数 += duplication as f64 / count * duplication_weight;
                     tiers[itier].duplication = Some(duplication as u64);
+                }
+                // 1b. 选重平方
+                if let Some(duplication_squared_weight) = tier_weights.duplication_squared {
+                    let duplication_squared = self.tiers_duplication_squared[itier];
+                    损失函数 += duplication_squared as f64 / count * duplication_squared_weight;
+                    tiers[itier].duplication_squared = Some(duplication_squared as u64);
                 }
                 // 2. 简码
                 if let Some(level_weight) = &tier_weights.levels {
@@ -220,6 +228,7 @@ impl 缓存 {
         // 初始化分级指标的变量
         let ntier = partial_weights.tiers.as_ref().map_or(0, |v| v.len());
         let tiers_duplication = vec![0; ntier];
+        let tiers_duplication_squared = vec![0; ntier];
         let mut tiers_levels = vec![];
         if let Some(tiers) = &partial_weights.tiers {
             for tier in tiers {
@@ -244,6 +253,7 @@ impl 缓存 {
             total_fingering,
             total_levels,
             tiers_duplication,
+            tiers_duplication_squared,
             tiers_levels,
             tiers_fingering,
             max_index,
@@ -277,7 +287,7 @@ impl 缓存 {
         index: usize,
         frequency: u64,
         code: 编码,
-        duplicate: bool,
+        duplicate: u8,
         parameters: &默认目标函数参数,
         sign: i64,
     ) {
@@ -326,7 +336,7 @@ impl 缓存 {
             }
         }
         // 5. 重码
-        if duplicate {
+        if duplicate > 0 {
             self.total_duplication += frequency;
         }
         // 6. 简码
@@ -344,8 +354,9 @@ impl 缓存 {
                     continue;
                 }
                 // 1. 重码
-                if duplicate {
+                if duplicate > 0 {
                     self.tiers_duplication[itier] += sign;
+                    self.tiers_duplication_squared[itier] += sign * (2 * duplicate as i64 - 1);
                 }
                 // 2. 简码
                 if let Some(levels) = &tier.levels {
