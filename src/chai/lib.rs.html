@@ -177,15 +177,15 @@
 <a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">pub </span>原始编码: 编码,       <span class="comment">// 原始编码
 <a href=#178 id=178 data-nosnippet>178</a>    </span><span class="kw">pub </span>原始编码候选位置: u8, <span class="comment">// 原始编码上的选重位置
 <a href=#179 id=179 data-nosnippet>179</a>    </span><span class="kw">pub </span>实际编码: 编码,       <span class="comment">// 实际编码
-<a href=#180 id=180 data-nosnippet>180</a>    </span><span class="kw">pub </span>选重标记: bool,       <span class="comment">// 实际编码是否算作重码
+<a href=#180 id=180 data-nosnippet>180</a>    </span><span class="kw">pub </span>选重标记: u8,         <span class="comment">// 实际编码的候选位置（0 表示首选，&gt;0 表示选重）
 <a href=#181 id=181 data-nosnippet>181</a>    </span><span class="kw">pub </span>上一个实际编码: 编码, <span class="comment">// 前一个实际编码
-<a href=#182 id=182 data-nosnippet>182</a>    </span><span class="kw">pub </span>上一个选重标记: bool, <span class="comment">// 前一个实际编码是否算作重码
+<a href=#182 id=182 data-nosnippet>182</a>    </span><span class="kw">pub </span>上一个选重标记: u8,   <span class="comment">// 前一个实际编码的候选位置
 <a href=#183 id=183 data-nosnippet>183</a>    </span><span class="kw">pub </span>有变化: bool,         <span class="comment">// 编码是否发生了变化
 <a href=#184 id=184 data-nosnippet>184</a></span>}
 <a href=#185 id=185 data-nosnippet>185</a>
 <a href=#186 id=186 data-nosnippet>186</a><span class="kw">impl </span>部分编码信息 {
 <a href=#187 id=187 data-nosnippet>187</a>    <span class="attr">#[inline(always)]
-<a href=#188 id=188 data-nosnippet>188</a>    </span><span class="kw">pub fn </span>更新(<span class="kw-2">&amp;mut </span><span class="self">self</span>, 编码: 编码, 选重标记: bool) {
+<a href=#188 id=188 data-nosnippet>188</a>    </span><span class="kw">pub fn </span>更新(<span class="kw-2">&amp;mut </span><span class="self">self</span>, 编码: 编码, 选重标记: u8) {
 <a href=#189 id=189 data-nosnippet>189</a>        <span class="kw">if </span><span class="self">self</span>.实际编码 == 编码 &amp;&amp; <span class="self">self</span>.选重标记 == 选重标记 {
 <a href=#190 id=190 data-nosnippet>190</a>            <span class="kw">return</span>;
 <a href=#191 id=191 data-nosnippet>191</a>        }
