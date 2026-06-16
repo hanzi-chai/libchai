@@ -450,6 +450,7 @@ pub struct 配置 {
     pub encoder: 编码配置,
     pub optimization: Option<优化配置>,
     pub diagram: Option<图示配置>,
+    pub generated_mapping_space: Option<IndexMap<String, Vec<安排描述>>>,
 }
 
 impl Default for 配置 {
@@ -483,6 +484,7 @@ impl Default for 配置 {
             },
             optimization: None,
             diagram: None,
+            generated_mapping_space: None,
         }
     }
 }

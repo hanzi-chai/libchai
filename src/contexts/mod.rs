@@ -1,10 +1,9 @@
 use crate::{
-    config::{决策生成器规则, 变量规则, 安排, 安排描述, 广义码位},
+    config::{安排, 安排描述, 广义码位},
     optimizers::决策,
     元素, 错误,
 };
 use indexmap::IndexMap;
-use regex::Regex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 pub mod default;
@@ -27,75 +26,6 @@ pub struct 条件安排<T> {
     pub 安排: T,
     pub 分数: f64,
     pub 条件: Vec<条件<T>>,
-}
-
-pub fn 合并初始决策(
-    原始决策空间: &mut IndexMap<String, Vec<安排描述>>,
-    原始决策: &mut IndexMap<String, 安排>,
-) {
-    // 确保每个元素在决策和决策空间中都有对应项
-    for 元素名称 in 原始决策.keys() {
-        if !原始决策空间.contains_key(元素名称) {
-            原始决策空间.insert(元素名称.clone(), vec![]);
-        }
-    }
-    for 元素名称 in 原始决策空间.keys() {
-        if !原始决策.contains_key(元素名称) {
-            原始决策.insert(元素名称.clone(), 安排::Unused(()));
-        }
-    }
-    // 确保每个元素的当前决策都在决策空间中
-    for (元素名称, 原始安排列表) in 原始决策空间.iter_mut() {
-        let 原始安排 = 原始决策[元素名称].clone();
-        if !原始安排列表.iter().any(|x| &x.value == &原始安排) {
-            原始安排列表.insert(
-                0,
-                安排描述 {
-                    value: 原始安排,
-                    score: 0.0,
-                    condition: None,
-                },
-            );
-        }
-    }
-}
-
-pub fn 展开变量(
-    原始决策空间: &mut IndexMap<String, Vec<安排描述>>,
-    原始变量映射: &IndexMap<String, 变量规则>,
-) {
-    for (_, 原始安排列表) in 原始决策空间.iter_mut() {
-        let mut 队列 = VecDeque::from(原始安排列表.clone());
-        原始安排列表.clear();
-        while let Some(原始安排) = 队列.pop_front() {
-            let mut 是否展开 = false;
-            if let 安排::Advanced(keys) = &原始安排.value {
-                for (序号, 映射键) in keys.iter().enumerate() {
-                    if let 广义码位::Variable {
-                        variable: generator,
-                    } = 映射键
-                    {
-                        let 变量取值列表 = 原始变量映射.get(generator).unwrap();
-                        for 变量取值 in &变量取值列表.keys {
-                            let mut 新映射键列表 = keys.clone();
-                            新映射键列表[序号] = 广义码位::Ascii(*变量取值);
-                            let 新原始安排 = 安排描述 {
-                                value: 安排::Advanced(新映射键列表),
-                                score: 原始安排.score,
-                                condition: 原始安排.condition.clone(),
-                            };
-                            队列.push_back(新原始安排);
-                        }
-                        是否展开 = true;
-                        break;
-                    }
-                }
-            }
-            if !是否展开 {
-                原始安排列表.push(原始安排);
-            }
-        }
-    }
 }
 
 pub fn 拓扑排序(
@@ -165,99 +95,4 @@ pub fn 拓扑排序(
     }
 
     Ok((排序后元素名称, 元素图))
-}
-
-pub fn 应用生成器(
-    原始决策空间: &mut IndexMap<String, Vec<安排描述>>,
-    原始生成器列表: &Vec<决策生成器规则>,
-) {
-    for 生成器 in 原始生成器列表 {
-        let regex = Regex::new(&生成器.regex).unwrap();
-        for (元素名称, 原始安排列表) in 原始决策空间.iter_mut() {
-            if !regex.is_match(元素名称) {
-                continue;
-            }
-            if let 安排::Advanced(码位列表) = &生成器.value.value {
-                let mut values = FxHashSet::default();
-                for 现有安排 in 原始安排列表.iter() {
-                    if matches!(&现有安排.value, 安排::Basic(_) | 安排::Advanced(_)) {
-                        let 现有码位列表 = &现有安排.value.normalize();
-                        let mut valid = true;
-                        let mut 合成 = vec![];
-                        for (i, 码位) in 码位列表.iter().enumerate() {
-                            if let Some(现有码位) = 现有码位列表.get(i) {
-                                // 只有 ASCII 码位能被替换为变量
-                                if !matches!(现有码位, 广义码位::Ascii(..))
-                                    && matches!(码位, 广义码位::Variable { .. })
-                                {
-                                    valid = false;
-                                    break;
-                                }
-                                let 替换后 = if let 广义码位::Placeholder(_) = 码位 {
-                                    现有码位.clone()
-                                } else {
-                                    码位.clone()
-                                };
-                                合成.push(替换后);
-                            } else {
-                                valid = false;
-                                break;
-                            }
-                        }
-                        if !valid {
-                            continue;
-                        }
-                        values.insert(合成);
-                    }
-                }
-                for value in values {
-                    let 新原始安排 = 安排描述 {
-                        value: 安排::Advanced(value),
-                        score: 生成器.value.score,
-                        condition: 生成器.value.condition.clone(),
-                    };
-                    原始安排列表.push(新原始安排);
-                }
-            } else {
-                原始安排列表.push(生成器.value.clone());
-            }
-        }
-    }
-}
-
-pub fn 补充存在性条件(原始决策空间: &mut IndexMap<String, Vec<安排描述>>) {
-    for (_, 原始安排列表) in 原始决策空间.iter_mut() {
-        for 安排描述 in 原始安排列表.iter_mut() {
-            let mut 需要存在的元素 = FxHashSet::default();
-            match &安排描述.value {
-                安排::Grouped { element } => {
-                    需要存在的元素.insert(element.clone());
-                }
-                安排::Advanced(ref keys) => {
-                    for k in keys {
-                        if let 广义码位::Reference { element, .. } = k {
-                            需要存在的元素.insert(element.clone());
-                        }
-                    }
-                }
-                _ => {}
-            }
-            if 需要存在的元素.is_empty() {
-                continue;
-            }
-            let mut condition = vec![];
-            for 元素 in &需要存在的元素 {
-                condition.push(crate::config::条件 {
-                    element: 元素.clone(),
-                    op: "不是".to_string(),
-                    value: 安排::Unused(()),
-                });
-            }
-            if let Some(existing_condition) = &mut 安排描述.condition {
-                existing_condition.extend(condition);
-            } else {
-                安排描述.condition = Some(condition);
-            }
-        }
-    }
 }

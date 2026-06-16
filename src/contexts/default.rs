@@ -1,14 +1,15 @@
 //! 数据结构的定义
 
-use crate::config::{基本信息, 安排, 安排描述, 广义码位, 简码模式, 简码规则, 配置};
-use crate::contexts::{
-    上下文, 合并初始决策, 展开变量, 应用生成器, 拓扑排序, 条件, 条件安排, 补充存在性条件
+use crate::config::{
+    基本信息, 安排, 安排描述, 广义码位, 简码模式, 简码规则, 配置
 };
+use crate::contexts::{上下文, 拓扑排序, 条件, 条件安排};
 use crate::encoders::default::简码数量;
 use crate::interfaces::默认输入;
 use crate::optimizers::决策;
 use crate::{
-    formatted_local_now, 元素, 元素图, 原始当量信息, 原始键位分布信息, 可编码对象, 最大元素数量, 最大按键组合长度, 最大词长, 棱镜, 码表项, 编码, 编码信息, 键
+    formatted_local_now, 元素, 元素图, 原始当量信息, 原始键位分布信息, 可编码对象, 最大元素数量,
+    最大按键组合长度, 最大词长, 棱镜, 码表项, 编码, 编码信息, 键,
 };
 use crate::{最大元素编码长度, 错误};
 use indexmap::IndexMap;
@@ -28,7 +29,6 @@ pub struct 默认上下文 {
     pub 棱镜: 棱镜,
     pub 选择键: Vec<键>,
     pub 元素图: 元素图,
-    pub 保存原始决策空间: IndexMap<String, Vec<安排描述>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,14 +210,15 @@ impl 上下文 for 默认上下文 {
             }
         }
         新配置.form.mapping = mapping;
-        新配置.form.mapping_space = Some(self.保存原始决策空间.clone());
+        新配置.form.mapping_space = None;
+        新配置.generated_mapping_space = None;
         to_string(&新配置).unwrap()
     }
 }
 
 impl 默认上下文 {
     pub fn 新建(输入: 默认输入) -> Result<Self, 错误> {
-        let (初始决策, 决策空间, 元素图, 选择键, 棱镜, 保存原始决策空间) =
+        let (初始决策, 决策空间, 元素图, 选择键, 棱镜) =
             Self::构建棱镜和初始决策(&输入.配置)?;
         let 最大码长 = 输入.配置.encoder.max_length;
         let 词列表 = 棱镜.预处理词列表(输入.词列表, 最大码长)?;
@@ -231,28 +232,20 @@ impl 默认上下文 {
             选择键,
             决策空间,
             元素图,
-            保存原始决策空间,
         })
     }
 
     pub fn 构建棱镜和初始决策(
         配置: &配置,
-    ) -> Result<(默认决策, 默认决策空间, 元素图, Vec<键>, 棱镜, IndexMap<String, Vec<安排描述>>), 错误> {
+    ) -> Result<(默认决策, 默认决策空间, 元素图, Vec<键>, 棱镜), 错误> {
         // 1. 构建初始决策和决策空间
         let mut 原始决策 = 配置.form.mapping.clone();
-        let mut 原始决策空间 = 配置.form.mapping_space.clone().unwrap_or_default();
-        let 原始变量映射 = 配置.form.mapping_variables.clone().unwrap_or_default();
-        let 原始生成器列表 = 配置.form.mapping_generators.clone().unwrap_or_default();
-        // 合并初始决策
-        合并初始决策(&mut 原始决策空间, &mut 原始决策);
-        // 在合并之后克隆一份原始决策空间，以便后续使用
-        let 保存原始决策空间 = 原始决策空间.clone();
-        // 应用生成器
-        应用生成器(&mut 原始决策空间, &原始生成器列表);
-        // 展开变量
-        展开变量(&mut 原始决策空间, &原始变量映射);
-        // 补充存在性条件
-        补充存在性条件(&mut 原始决策空间);
+        let 原始决策空间 = 配置.generated_mapping_space.clone().unwrap_or_default();
+        for 元素名称 in 原始决策空间.keys() {
+            if !原始决策.contains_key(元素名称) {
+                原始决策.insert(元素名称.clone(), 安排::Unused(()));
+            }
+        }
         // 拓扑排序
         let (排序后元素名称, 原始元素图) = 拓扑排序(&原始决策空间)?;
 
@@ -316,7 +309,7 @@ impl 默认上下文 {
             .into());
         }
 
-        Ok((初始决策, 决策空间, 元素图, 选择键, 棱镜, 保存原始决策空间))
+        Ok((初始决策, 决策空间, 元素图, 选择键, 棱镜))
     }
 
     pub fn 构建初始决策和决策空间(
