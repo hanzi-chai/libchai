@@ -290,6 +290,7 @@ pub struct 源节点配置 {
     pub index: Option<usize>,
     #[serialize_always] // JavaScript null
     pub next: Option<String>,
+    pub notes: Option<String>,
 }
 
 #[skip_serializing_none]
@@ -302,6 +303,7 @@ pub struct 条件节点配置 {
     pub positive: Option<String>,
     #[serialize_always] // JavaScript null
     pub negative: Option<String>,
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
