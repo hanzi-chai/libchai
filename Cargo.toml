@@ -32,7 +32,7 @@ inherits = "dev"
 opt-level = 3
 
 [dependencies]
-rand = { version = "0.9" }
+rand = { version = "0.10" }
 clap = { version = "4.0", features = ["derive"] }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_yaml = "0.9.27"
